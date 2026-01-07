@@ -1,0 +1,82 @@
+﻿(function() {
+  'use strict';
+
+  // --- 設定値 ---
+  const INTERVAL_MS = 60000; // 更新間隔（60秒）
+  const IDLE_WAIT_MS = 5000; // 操作したあと、更新を再開するまでの待機時間（5秒）
+
+  let lastActivityTime = Date.now();
+
+  // ユーザーの操作（マウス移動、クリック、キー入力）を検知して記録する
+  const updateActivity = function() {
+    lastActivityTime = Date.now();
+  };
+
+  window.addEventListener('mousemove', updateActivity);
+  window.addEventListener('mousedown', updateActivity);
+  window.addEventListener('keydown', updateActivity);
+  window.addEventListener('scroll', updateActivity);
+
+  // レコード一覧画面が表示された時に実行
+  kintone.events.on('app.record.index.show', function(event) {
+    
+    if (window.myKintoneAutoRefreshTimer) {
+      clearInterval(window.myKintoneAutoRefreshTimer);
+    }
+
+    console.log('[AutoRefresh] 監視を開始しました。操作がない時に ' + (INTERVAL_MS / 1000) + '秒間隔で更新します。');
+
+    window.myKintoneAutoRefreshTimer = setInterval(function() {
+      
+      // 1. 編集・追加画面ではないか（URLハッシュで判定）
+      const hash = window.location.hash;
+      if (hash.includes('/edit') || hash.includes('/add')) {
+        console.log('[AutoRefresh] 編集・追加画面のため、更新を停止しています。');
+        return;
+      }
+
+      // 2. 最後に操作してから IDLE_WAIT_MS 以上経過しているか
+      const now = Date.now();
+      if (now - lastActivityTime < IDLE_WAIT_MS) {
+        console.log('[AutoRefresh] ユーザーが操作中のため、今回の更新をスキップします。');
+        return;
+      }
+
+      // 3. 検索窓などの入力要素にフォーカスが当たっていないか
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+        console.log('[AutoRefresh] 入力フォーカスを検知したため、更新をスキップします。');
+        return;
+      }
+
+      // 4. インライン編集（一覧画面での直接編集）が行われていないか確認
+      if (document.querySelectorAll('.kintone-app-record-index-edit-save').length > 0) {
+        console.log('[AutoRefresh] 一覧でのインライン編集を検知したため、更新を中止します。');
+        return;
+      }
+
+      // すべてのチェックを通過した場合のみ更新を実行
+      console.log('[AutoRefresh] 操作がないことを確認しました。表示を最新化します。');
+      const currentUrl = window.location.href;
+      window.location.replace(currentUrl);
+
+    }, INTERVAL_MS);
+
+    return event;
+  });
+
+  // アプリを離れる時にタイマーとイベントリスナーを解除
+  kintone.events.on('app.record.index.hide', function(event) {
+    if (window.myKintoneAutoRefreshTimer) {
+      clearInterval(window.myKintoneAutoRefreshTimer);
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('mousedown', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('scroll', updateActivity);
+      console.log('[AutoRefresh] タイマーと監視を停止しました。');
+      delete window.myKintoneAutoRefreshTimer;
+    }
+    return event;
+  });
+
+})();
