@@ -18,6 +18,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   let publishedRecordsMap = new Map();
   let publishedDescriptions = {};
   let publishedDepartmentSettings = {}; // ★追加: 診療科単位の設定キャッシュ
+  let publishedCommonSettings = {}; // ★追加: 病院共通の設定キャッシュ
   let lastPublishedAt = null;
   let isDataOldFormat = false;
 
@@ -31,10 +32,12 @@ window.ShinryoApp = window.ShinryoApp || {};
     updateStatusBatch: updateStatusBatch,
     updateDepartmentStatus: updateDepartmentStatus,
     updateDepartmentTerm: updateDepartmentTerm, // ★追加
+    updateCommonTerm: updateCommonTerm, // ★追加
     getLastPublishedAt: () => lastPublishedAt,
     getPublishedDescriptions: () => publishedDescriptions,
     getDepartmentSettings: () => publishedDepartmentSettings, // ★追加
-    isOldFormat: () => isDataOldFormat
+    getCommonSettings: () => publishedCommonSettings, // ★追加
+    isOldFormat: () => isDataOldFormat,
   };
 
   function initConfigManager() {
@@ -64,9 +67,20 @@ window.ShinryoApp = window.ShinryoApp || {};
         lastPublishedAt = resp.records[0]['更新日時'].value;
         
         // フィールドの存在チェックを行い、存在しない場合は空文字として扱う
-        const jsonField = resp.records[0][STORAGE_JSON_FIELD];
+        let jsonField = resp.records[0][STORAGE_JSON_FIELD];
         if (!jsonField) {
-            console.warn(`ConfigManager: Field '${STORAGE_JSON_FIELD}' not found in App ${STORAGE_APP_ID}. Treating as empty.`);
+            console.warn(`ConfigManager: Field '${STORAGE_JSON_FIELD}' not found in App ${STORAGE_APP_ID}. Searching for alternative...`);
+            // ★追加: フィールドコードが異なる場合のフォールバック探索
+            const keys = Object.keys(resp.records[0]);
+            for (const key of keys) {
+                const val = resp.records[0][key];
+                // 文字列（複数行）で、かつJSONっぽい（{で始まる）値を探す
+                if (val && val.type === 'MULTI_LINE_TEXT' && val.value && val.value.trim().startsWith('{')) {
+                    console.log(`ConfigManager: Found potential JSON in field '${key}'`);
+                    jsonField = val;
+                    break;
+                }
+            }
         }
         const jsonStr = jsonField ? jsonField.value : null;
         const data = JSON.parse(jsonStr || '{}');
@@ -82,23 +96,35 @@ window.ShinryoApp = window.ShinryoApp || {};
             records = data;
             publishedDescriptions = {};
             publishedDepartmentSettings = {};
+            publishedCommonSettings = {};
             isDataOldFormat = true;
         } else {
             records = data.records || [];
             publishedDescriptions = data.descriptions || {};
             publishedDepartmentSettings = data.departmentSettings || {}; // ★追加: 読み込み
+            publishedCommonSettings = data.commonSettings || {}; // ★追加: 読み込み
             isDataOldFormat = false;
-        }
-
-di        // ★★★ 一時的対応: データ量が多すぎるため、取得時に一部のみに制限する ★★★
-        if (records.length > 10) {
-            console.warn('ConfigManager: [DEBUG] Fetching only top 10 records for debugging.');
-            records = records.slice(0, 10);
         }
 
         publishedRecordsMap = new Map(records.map(r => [String(r.$id.value), r])); // ★変更: IDを文字列に統一
 
+        // ★デバッグ: 読込直後のデータ確認（診療分野のみ）
+        console.groupCollapsed('ConfigManager: [DEBUG] Read Data (診療分野)');
+        records.forEach(r => {
+            const v = r['診療分野']?.value || '';
+            console.log(`ID:${r.$id.value} Val:'${v}' (len:${v.length})`);
+        });
+        console.groupEnd();
+
         console.log('ConfigManager: Published data fetched.', data);
+
+        // ★修正: 取得成功時にデータを返却する（これがないと下の初期化処理に流れて空になる）
+        return { 
+            records: records, 
+            descriptions: publishedDescriptions, 
+            departmentSettings: publishedDepartmentSettings,
+            commonSettings: publishedCommonSettings
+        };
       }
     } catch (e) {
       console.error('ConfigManager: Failed to fetch published data.', e);
@@ -109,28 +135,136 @@ di        // ★★★ 一時的対応: データ量が多すぎるため、取�
     publishedRecordsMap = new Map();
     publishedDescriptions = {};
     publishedDepartmentSettings = {};
+    publishedCommonSettings = {};
     lastPublishedAt = null;
     isDataOldFormat = false;
-    return { records: [], descriptions: {}, departmentSettings: {} };
+    return { records: [], descriptions: {}, departmentSettings: {}, commonSettings: {} };
   }
 
   /**
    * 現在のアプリの状態をJSONとして共通設定保管アプリに保存（公開）する
    */
-  async function saveConfig(currentRecords, currentDescriptions, currentDeptSettings) {
+  async function saveConfig(currentRecords, currentDescriptions, currentDeptSettings, currentCommonSettings) {
     const myAppId = kintone.app.getId();
 
-    // ★★★ 一時的対応: データ量が多すぎるため、保存時に一部のみに制限する ★★★
-    let recordsToSave = currentRecords;
-    if (recordsToSave.length > 10) {
-        console.warn('ConfigManager: [DEBUG] Saving only top 10 records for debugging.');
-        recordsToSave = recordsToSave.slice(0, 10);
+    // 設定の解決
+    const deptSettings = currentDeptSettings || publishedDepartmentSettings;
+    const commonSettings = currentCommonSettings || publishedCommonSettings;
+
+    // ★Webフォーム互換対応: レコード内の「予約開始」「予約可能期間」フィールドを設定値で上書き同期する
+    if (currentRecords && Array.isArray(currentRecords)) {
+        currentRecords.forEach(r => {
+            const dept = r['診療科']?.value;
+            let s = null, d = null;
+
+            // 1. 個別設定
+            if (dept && deptSettings[dept] && deptSettings[dept].start !== undefined && deptSettings[dept].start !== null) {
+                s = deptSettings[dept].start;
+                d = deptSettings[dept].duration;
+            } 
+            // 2. 共通設定
+            else if (commonSettings && commonSettings.start !== undefined && commonSettings.start !== null) {
+                s = commonSettings.start;
+                d = commonSettings.duration;
+            }
+
+            // ★修正: 医師個人の着任日・離任日を考慮して、予約開始日・期間を補正する
+            // 設定値がない場合はデフォルト(0日後, 365日間)として計算開始
+            let sInt = (s !== null && s !== undefined && s !== '') ? parseInt(s, 10) : 0;
+            let dInt = (d !== null && d !== undefined && d !== '') ? parseInt(d, 10) : 365;
+
+            {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                // 基準となる予約期間（診療科設定）
+                const baseStartDate = new Date(today);
+                baseStartDate.setDate(baseStartDate.getDate() + sInt);
+                
+                const baseEndDate = new Date(baseStartDate);
+                baseEndDate.setDate(baseEndDate.getDate() + dInt);
+                
+                // 補正後の開始日（着任日が未来なら遅らせる）
+                let actualStartDate = new Date(baseStartDate);
+                if (r['着任日']?.value) {
+                    // "YYYY-MM-DD" を分解してDate生成（タイムゾーン影響回避）
+                    const parts = r['着任日'].value.split('-');
+                    const arrDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                    if (arrDate > actualStartDate) {
+                        actualStartDate = arrDate;
+                    }
+                }
+                
+                // 補正後の終了日（離任日が期間内なら早める）
+                let actualEndDate = new Date(baseEndDate);
+                if (r['離任日']?.value) {
+                    const parts = r['離任日'].value.split('-');
+                    const depDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                    if (depDate < actualEndDate) {
+                        actualEndDate = depDate;
+                    }
+                }
+                
+                // 新しい開始日・期間を計算（日数）
+                const diffTimeStart = actualStartDate.getTime() - today.getTime();
+                s = Math.max(0, Math.ceil(diffTimeStart / (1000 * 60 * 60 * 24)));
+                
+                const diffTimeDuration = actualEndDate.getTime() - actualStartDate.getTime();
+                d = Math.max(0, Math.ceil(diffTimeDuration / (1000 * 60 * 60 * 24)));
+
+                // ★追加: 安全策 - 着任日が未来の場合、予約開始日(s)が着任日までの日数より短くならないように強制補正
+                if (r['着任日']?.value) {
+                    const parts = r['着任日'].value.split('-');
+                    const arrDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                    const now = new Date();
+                    now.setHours(0, 0, 0, 0);
+                    
+                    if (arrDate > now) {
+                        const minDays = Math.ceil((arrDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        if (s < minDays) {
+                            console.warn(`[ConfigManager] Force correction for ${r['医師名']?.value}: s=${s} -> ${minDays} (Arrival: ${r['着任日'].value})`);
+                            s = minDays;
+                        }
+                    }
+                }
+
+                // デバッグログ（鈴木医師など）
+                if (r['医師名']?.value?.indexOf('鈴木') > -1) {
+                    console.group(`[ConfigManager] Debug: ${r['医師名'].value}`);
+                    console.log(`Arrival Date: ${r['着任日']?.value}`);
+                    console.log(`Base Start Date: ${baseStartDate.toLocaleString()}`);
+                    console.log(`Actual Start Date: ${actualStartDate.toLocaleString()}`);
+                    console.log(`Today: ${today.toLocaleString()}`);
+                    console.log(`Calculated s (offset): ${s}`);
+                    console.log(`Calculated d (duration): ${d}`);
+                    console.groupEnd();
+                }
+            }
+
+            // フィールド更新
+            if (!r['予約開始']) r['予約開始'] = { type: 'NUMBER', value: '' };
+            r['予約開始'].value = (s !== null && s !== undefined && s !== '') ? String(s) : '';
+
+            if (!r['予約可能期間']) r['予約可能期間'] = { type: 'NUMBER', value: '' };
+            r['予約可能期間'].value = (d !== null && d !== undefined && d !== '') ? String(d) : '';
+
+            // ★追加: Webフォームデバッグ用情報（JSONにのみ保存され、Kintoneアプリには影響しません）
+            r['_debug_info'] = {
+                doctor: r['医師名']?.value,
+                calculated_start_days: s,
+                calculated_duration: d,
+                arrival_date: r['着任日']?.value,
+                base_start_days: sInt,
+                calc_time: new Date().toISOString()
+            };
+        });
     }
 
     const data = {
-      records: recordsToSave,
+      records: currentRecords,
       descriptions: currentDescriptions,
-      departmentSettings: currentDeptSettings || publishedDepartmentSettings // ★追加: 指定がなければキャッシュを使用
+      departmentSettings: deptSettings,
+      commonSettings: commonSettings
     };
     const jsonStr = JSON.stringify(data);
 
@@ -138,6 +272,14 @@ di        // ★★★ 一時的対応: データ量が多すぎるため、取�
     console.group('ConfigManager: saveConfig Debug');
     console.log('[[DEBUG]] Data Object to be saved (Local):', data);
     console.log('[[DEBUG]] JSON String to be saved (Length):', jsonStr.length);
+    console.groupEnd();
+
+    // ★デバッグ: 保存直前のデータ確認（診療分野のみ）
+    console.groupCollapsed('ConfigManager: [DEBUG] Write Data (診療分野)');
+    currentRecords.forEach(r => {
+        const v = r['診療分野']?.value || '';
+        console.log(`ID:${r.$id.value} Val:'${v}' (len:${v.length})`);
+    });
     console.groupEnd();
 
     try {
@@ -185,6 +327,9 @@ di        // ★★★ 一時的対応: データ量が多すぎるため、取�
 
       const [saveBody, saveStatus] = await kintone.proxy(apiUrl, method, saveHeaders, JSON.stringify(bodyParams));
       if (saveStatus !== 200) throw new Error(`Save failed. Status: ${saveStatus}, Body: ${saveBody}`);
+
+      // ★追加: 保存成功時に最終更新日時を現在時刻で更新
+      lastPublishedAt = new Date().toISOString();
 
       console.log('ConfigManager: Config saved successfully.');
     } catch (e) {
@@ -299,13 +444,35 @@ di        // ★★★ 一時的対応: データ量が多すぎるため、取�
       const currentPublished = await fetchPublishedData();
       if (currentPublished) {
         const settings = currentPublished.departmentSettings || {};
-        settings[deptName] = { start: start, duration: duration };
+        // startがnullの場合は設定を削除（共通設定に戻す）
+        if (start === null) {
+            delete settings[deptName];
+        } else {
+            settings[deptName] = { start: start, duration: duration };
+        }
         
-        await saveConfig(currentPublished.records, currentPublished.descriptions, settings);
-        console.log(`ConfigManager: Department ${deptName} term updated to start:${start}, duration:${duration}`);
+        await saveConfig(currentPublished.records, currentPublished.descriptions, settings, currentPublished.commonSettings);
+        console.log(`ConfigManager: Department ${deptName} term updated.`);
       }
     } catch (e) {
       console.error('ConfigManager: Failed to update department term.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: 病院共通の予約開始・期間設定を更新し、公開データに保存する
+   */
+  async function updateCommonTerm(start, duration) {
+    try {
+      const currentPublished = await fetchPublishedData();
+      if (currentPublished) {
+        const common = { start: start, duration: duration };
+        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common);
+        console.log(`ConfigManager: Common term updated to start:${start}, duration:${duration}`);
+      }
+    } catch (e) {
+      console.error('ConfigManager: Failed to update common term.', e);
       throw e;
     }
   }
@@ -340,7 +507,7 @@ di        // ★★★ 一時的対応: データ量が多すぎるため、取�
     }
 
     // 2. 変更・追加のチェック
-    const simpleFields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '表示順'];
+    const simpleFields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '表示順', '着任日', '離任日', '集合'];
     
     for (const rec of currentRecords) {
         const recId = String(rec.$id.value); // ★変更: IDを文字列に統一
@@ -412,8 +579,14 @@ di        // ★★★ 一時的対応: データ量が多すぎるため、取�
     if (field) {
       const v1 = normalize(rec1[field]?.value);
       const v2 = normalize(rec2[field]?.value);
+
+      // ★デバッグログ: 診療分野の比較詳細を出力
+      if (field === '診療分野') {
+          console.log(`[ConfigManager Diff] 診療分野 (ID:${rec1.$id.value}) Local:'${v1}' vs Remote:'${v2}' => ${v1===v2 ? 'Match' : 'Diff'}`);
+      }
+
       if (v1 !== v2) {
-          if(logDiff) console.warn(`[Diff] Field ${field} (ID:${rec1.$id.value}):`, v1, v2);
+          if(logDiff && field === '診療分野') console.warn(`[Diff] Field ${field} (ID:${rec1.$id.value}):`, v1, v2);
           return true;
       }
     }

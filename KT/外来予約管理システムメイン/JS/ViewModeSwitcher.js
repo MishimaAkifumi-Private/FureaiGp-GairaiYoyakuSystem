@@ -139,16 +139,6 @@
         div.style.alignItems = 'center';
         
         if (viewMode === 'overview') {
-            // ダッシュボードへ戻るボタン
-            const btnTop = document.createElement('button');
-            btnTop.className = 'mode-switch-btn';
-            btnTop.textContent = 'メインメニュー';
-            btnTop.style.backgroundColor = '#6c757d';
-            btnTop.style.marginRight = '10px';
-            btnTop.style.marginLeft = '0px';
-            btnTop.onclick = () => location.href = '?view_mode=dashboard';
-            div.appendChild(btnTop);
-
             const titleContainer = document.createElement('div');
             titleContainer.className = 'overview-title-container';
 
@@ -158,7 +148,7 @@
 
             const titleText = document.createElement('div');
             titleText.className = 'overview-title-text';
-            titleText.textContent = '診療シフト表';
+            titleText.textContent = '現在の予約受付状況';
             textWrapper.appendChild(titleText);
 
             const dateText = document.createElement('div');
@@ -174,21 +164,20 @@
             btnUpdate.style.display = 'none';
             titleContainer.appendChild(btnUpdate);
 
-            // 外来予約システム設定ボタン
-            const btnSettings = document.createElement('span');
-            btnSettings.textContent = '⚙️';
-            btnSettings.title = '外来予約システム設定';
-            btnSettings.style.position = 'absolute';
-            btnSettings.style.right = '20px';
-            btnSettings.style.top = '50%';
-            btnSettings.style.transform = 'translateY(-50%)';
-            btnSettings.style.zIndex = '10';
-            btnSettings.style.fontSize = '30px';
-            btnSettings.style.cursor = 'pointer';
-            btnSettings.onclick = () => {
-                alert('システム設定画面へ移動します（未実装）');
-            };
-            div.appendChild(btnSettings);
+            // ★変更: 歯車ボタンを廃止し、メインメニューボタンを右側に配置
+            const btnMainMenu = document.createElement('button');
+            btnMainMenu.className = 'mode-switch-btn';
+            btnMainMenu.textContent = 'メインメニュー';
+            btnMainMenu.style.backgroundColor = '#28a745'; // ★変更: 緑色
+            btnMainMenu.style.position = 'absolute';
+            btnMainMenu.style.right = '20px';
+            btnMainMenu.style.top = '50%';
+            btnMainMenu.style.transform = 'translateY(-50%)';
+            btnMainMenu.style.marginLeft = '0';
+            btnMainMenu.style.marginTop = '5px'; // ★追加: 位置調整
+            btnMainMenu.style.zIndex = '10';
+            btnMainMenu.onclick = () => location.href = '?view_mode=dashboard';
+            div.appendChild(btnMainMenu);
 
             // 更新チェックロジック
             if (window.ShinryoApp.ConfigManager) {
@@ -215,7 +204,7 @@
 
                 btnUpdate.onclick = async () => {
                     const confirmed = await showCustomDialog(
-                        '表の点滅している個所で情報が更新されています。\n今すぐ予約フォームに公開しますか？\n（今すぐに更新しなくても、毎晩深夜には自動更新されます）。', 
+                        '表の点滅している個所で情報が更新されています。\n今すぐ予約フォームに公開しますか？', 
                         'confirm', 
                         { ok: '公開する', cancel: 'しない' }
                     );
@@ -431,6 +420,7 @@
       const menuList = [
           { label: '予約センター名の登録', action: () => { document.body.removeChild(overlay); showCenterNameInputDialog(); } },
           { label: '外来予約フォームURLの登録', action: () => { document.body.removeChild(overlay); showFormUrlInputDialog(); } },
+          { label: '病院共通 予約期間設定', action: () => { document.body.removeChild(overlay); showCommonTermInputDialog(); } }, // ★追加
           // 必要に応じてメニューを追加
       ];
 
@@ -544,6 +534,89 @@
 
       document.body.appendChild(overlay);
       input.focus();
+  }
+
+  // ★追加: 病院共通予約期間設定ダイアログ
+  async function showCommonTermInputDialog() {
+      const { overlay, box } = createModalBase();
+      
+      const title = document.createElement('h2');
+      title.textContent = '病院共通 予約期間設定';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #333;';
+      box.appendChild(title);
+
+      // 現在の設定を取得
+      let currentStart = '', currentDuration = '';
+      if (window.ShinryoApp.ConfigManager) {
+          await window.ShinryoApp.ConfigManager.fetchPublishedData();
+          const common = window.ShinryoApp.ConfigManager.getCommonSettings();
+          if (common) {
+              currentStart = common.start || '';
+              currentDuration = common.duration || '';
+          }
+      }
+
+      const createInput = (label, val) => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '15px';
+          div.innerHTML = `<div style="font-weight:bold;margin-bottom:5px;text-align:left;">${label}</div>`;
+          const inp = document.createElement('input');
+          inp.className = 'custom-modal-input';
+          inp.style.marginBottom = '0';
+          inp.type = 'number';
+          inp.value = val;
+          div.appendChild(inp);
+          box.appendChild(div);
+          return inp;
+      };
+
+      const startInput = createInput('予約開始 (日後)', currentStart);
+      const durationInput = createInput('予約可能期間 (日間)', currentDuration);
+
+      // 説明文の追加
+      const expl = document.createElement('div');
+      expl.style.cssText = 'text-align: left; font-size: 11px; color: #666; margin-bottom: 20px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; line-height: 1.5;';
+      expl.innerHTML = `
+        <div style="margin-bottom: 8px;">
+            <strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br>例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）
+        </div>
+        <div><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）</div>
+      `;
+      box.appendChild(expl);
+
+      const btnGroup = document.createElement('div');
+      btnGroup.className = 'custom-modal-btn-group';
+      btnGroup.style.marginTop = '20px';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+      cancelBtn.textContent = 'キャンセル';
+      cancelBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(); };
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+      saveBtn.textContent = '保存';
+      saveBtn.onclick = async () => {
+          const newStart = startInput.value;
+          const newDuration = durationInput.value;
+          document.body.removeChild(overlay);
+          try {
+              await window.ShinryoApp.ConfigManager.updateCommonTerm(newStart, newDuration);
+              await showCustomDialog('共通設定を保存し、予約フォームに反映しました。', 'alert');
+              // ★追加: 画面とLast Form Updateを更新
+              if (window.ShinryoApp.Viewer && window.ShinryoApp.Viewer.renderOverview) {
+                  window.ShinryoApp.Viewer.renderOverview();
+              }
+          } catch(e) {
+              await showCustomDialog('保存に失敗しました。', 'alert');
+          }
+      };
+
+      btnGroup.appendChild(cancelBtn);
+      btnGroup.appendChild(saveBtn);
+      box.appendChild(btnGroup);
+
+      document.body.appendChild(overlay);
   }
 
   // 公開実行処理
