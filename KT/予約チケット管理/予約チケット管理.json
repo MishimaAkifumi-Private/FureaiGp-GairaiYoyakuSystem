@@ -1,0 +1,938 @@
+{
+  "meta": {
+    "exported_at": "2026-01-11T04:28:05.128Z",
+    "executor": "akifumi.mishima@gmail.com",
+    "domain": "w60013hke2ct.cybozu.com",
+    "is_guest_space": true,
+    "guest_space_id": "11",
+    "app_id": 142,
+    "app_name": "予約チケット管理 Version1.0"
+  },
+  "app_info": {
+    "properties": {
+      "appId": "142",
+      "code": "",
+      "name": "予約チケット管理 Version1.0",
+      "description": "",
+      "createdAt": "2025-05-07T06:28:58.000Z",
+      "creator": {
+        "code": "akifumi.mishima@gmail.com",
+        "name": "情報システム室 室長"
+      },
+      "modifiedAt": "2026-01-07T08:58:13.000Z",
+      "modifier": {
+        "code": "akifumi.mishima@gmail.com",
+        "name": "情報システム室 室長"
+      },
+      "spaceId": "11",
+      "threadId": "19"
+    },
+    "fields": {
+      "revision": "348",
+      "properties": {
+        "SYSTEM": {
+          "type": "GROUP",
+          "code": "SYSTEM",
+          "label": "内部処理",
+          "noLabel": false,
+          "openGroup": false
+        },
+        "担当者送信日時": {
+          "type": "DATETIME",
+          "code": "担当者送信日時",
+          "label": "担当者送信日時",
+          "noLabel": false,
+          "required": false,
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
+        },
+        "第4希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第4希望日時",
+          "label": "第4希望日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "レコード番号": {
+          "type": "RECORD_NUMBER",
+          "code": "レコード番号",
+          "label": "管理番号",
+          "noLabel": true
+        },
+        "依頼者既読日時": {
+          "type": "DATETIME",
+          "code": "依頼者既読日時",
+          "label": "依頼者既読日時",
+          "noLabel": false,
+          "required": false,
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
+        },
+        "ステータス": {
+          "type": "STATUS",
+          "code": "ステータス",
+          "label": "ステータス",
+          "enabled": false
+        },
+        "名漢字": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "名漢字",
+          "label": "名漢字",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "確定予約時刻": {
+          "type": "DROP_DOWN",
+          "code": "確定予約時刻",
+          "label": "確定予約時刻",
+          "noLabel": false,
+          "required": false,
+          "options": {
+            "10:30": {
+              "label": "10:30",
+              "index": "3"
+            },
+            "10:00": {
+              "label": "10:00",
+              "index": "2"
+            },
+            "11:00": {
+              "label": "11:00",
+              "index": "4"
+            },
+            "9:30": {
+              "label": "9:30",
+              "index": "1"
+            },
+            "15:30": {
+              "label": "15:30",
+              "index": "9"
+            },
+            "16:30": {
+              "label": "16:30",
+              "index": "11"
+            },
+            "9:00": {
+              "label": "9:00",
+              "index": "0"
+            },
+            "14:00": {
+              "label": "14:00",
+              "index": "6"
+            },
+            "15:00": {
+              "label": "15:00",
+              "index": "8"
+            },
+            "11:30": {
+              "label": "11:30",
+              "index": "5"
+            },
+            "16:00": {
+              "label": "16:00",
+              "index": "10"
+            },
+            "14:30": {
+              "label": "14:30",
+              "index": "7"
+            }
+          },
+          "defaultValue": ""
+        },
+        "名かな": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "名かな",
+          "label": "名かな",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "管理ステータス": {
+          "type": "DROP_DOWN",
+          "code": "管理ステータス",
+          "label": "管理ステータス",
+          "noLabel": false,
+          "required": false,
+          "options": {
+            "完了": {
+              "label": "完了",
+              "index": "6"
+            },
+            "メール送信済": {
+              "label": "メール送信済",
+              "index": "3"
+            },
+            "メール既読検知": {
+              "label": "メール既読検知",
+              "index": "4"
+            },
+            "未着手": {
+              "label": "未着手",
+              "index": "0"
+            },
+            "担当設定": {
+              "label": "担当設定",
+              "index": "1"
+            },
+            "予約枠確保": {
+              "label": "予約枠確保",
+              "index": "2"
+            },
+            "予約日時経過": {
+              "label": "予約日時経過",
+              "index": "5"
+            }
+          },
+          "defaultValue": "未着手"
+        },
+        "メール既読日時": {
+          "type": "DATETIME",
+          "code": "メール既読日時",
+          "label": "メール既読日時",
+          "noLabel": false,
+          "required": false,
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
+        },
+        "カテゴリー": {
+          "type": "CATEGORY",
+          "code": "カテゴリー",
+          "label": "カテゴリー",
+          "enabled": false
+        },
+        "紹介元医療機関電話番号": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "紹介元医療機関電話番号",
+          "label": "紹介元医療機関電話番号",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "メール送信日時": {
+          "type": "DATETIME",
+          "code": "メール送信日時",
+          "label": "メール送信日時",
+          "noLabel": false,
+          "required": false,
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
+        },
+        "紹介元医療機関名": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "紹介元医療機関名",
+          "label": "紹介元医療機関名",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "第3希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第3希望日時",
+          "label": "第3希望日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "診療科": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "診療科",
+          "label": "診療科",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "業務連絡": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "業務連絡",
+          "label": "業務連絡",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "imgtext": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "imgtext",
+          "label": "画像テキスト",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "希望指定方法": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "希望指定方法",
+          "label": "希望指定方法",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "作業者": {
+          "type": "STATUS_ASSIGNEE",
+          "code": "作業者",
+          "label": "作業者",
+          "enabled": false
+        },
+        "建物": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "建物",
+          "label": "建物",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "担当医師": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "担当医師",
+          "label": "担当医師",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "個人情報同意": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "個人情報同意",
+          "label": "個人情報同意",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "第5希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第5希望日時",
+          "label": "第5希望日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "その他備考": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "その他備考",
+          "label": "その他備考",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "作成日時": {
+          "type": "CREATED_TIME",
+          "code": "作成日時",
+          "label": "作成日時",
+          "noLabel": false
+        },
+        "用件": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "用件",
+          "label": "用件",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "症状": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "症状",
+          "label": "症状",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "SMS作成日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "SMS作成日時",
+          "label": "SMS作成日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "カルテNo": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "カルテNo",
+          "label": "カルテNo",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "姓かな": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "姓かな",
+          "label": "姓かな",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "更新者": {
+          "type": "MODIFIER",
+          "code": "更新者",
+          "label": "更新者",
+          "noLabel": false
+        },
+        "申込者補足": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "申込者補足",
+          "label": "申込者補足",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "メールアドレス": {
+          "type": "LINK",
+          "code": "メールアドレス",
+          "label": "メールアドレス",
+          "noLabel": false,
+          "required": false,
+          "protocol": "MAIL",
+          "minLength": "",
+          "maxLength": "",
+          "unique": false,
+          "defaultValue": ""
+        },
+        "電話調整": {
+          "type": "RADIO_BUTTON",
+          "code": "電話調整",
+          "label": "電話調整",
+          "noLabel": false,
+          "required": true,
+          "options": {
+            "なし": {
+              "label": "なし",
+              "index": "1"
+            },
+            "あり": {
+              "label": "あり",
+              "index": "0"
+            }
+          },
+          "defaultValue": "なし",
+          "align": "HORIZONTAL"
+        },
+        "確定予約日": {
+          "type": "DATE",
+          "code": "確定予約日",
+          "label": "確定予約日",
+          "noLabel": false,
+          "required": false,
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
+        },
+        "性別": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "性別",
+          "label": "性別",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "連絡時間帯": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "連絡時間帯",
+          "label": "連絡時間帯",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "姓漢字": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "姓漢字",
+          "label": "姓漢字",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "住所": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "住所",
+          "label": "住所",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "電話2": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "電話2",
+          "label": "電話2",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "電話1": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "電話1",
+          "label": "電話1",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "丁目番地等": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "丁目番地等",
+          "label": "丁目番地等",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "理由": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "理由",
+          "label": "理由",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "作成者": {
+          "type": "CREATOR",
+          "code": "作成者",
+          "label": "作成者",
+          "noLabel": false
+        },
+        "第2希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第2希望日時",
+          "label": "第2希望日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "担当者": {
+          "type": "DROP_DOWN",
+          "code": "担当者",
+          "label": "担当者",
+          "noLabel": false,
+          "required": false,
+          "options": {
+            "🍌バナナ": {
+              "label": "🍌バナナ",
+              "index": "6"
+            },
+            "🧑‍💼矢原": {
+              "label": "🧑‍💼矢原",
+              "index": "0"
+            },
+            "🍓イチゴ": {
+              "label": "🍓イチゴ",
+              "index": "5"
+            },
+            "🍈メロン": {
+              "label": "🍈メロン",
+              "index": "4"
+            },
+            "🍇ブドウ": {
+              "label": "🍇ブドウ",
+              "index": "8"
+            },
+            "🍊ミカン": {
+              "label": "🍊ミカン",
+              "index": "1"
+            },
+            "🍎リンゴ": {
+              "label": "🍎リンゴ",
+              "index": "2"
+            },
+            "🍉スイカ": {
+              "label": "🍉スイカ",
+              "index": "3"
+            },
+            "🍋レモン": {
+              "label": "🍋レモン",
+              "index": "7"
+            }
+          },
+          "defaultValue": ""
+        },
+        "おまかせ希望時間帯": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "おまかせ希望時間帯",
+          "label": "おまかせ希望時間帯",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "予約日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "予約日時",
+          "label": "予約日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "更新日時": {
+          "type": "UPDATED_TIME",
+          "code": "更新日時",
+          "label": "更新日時",
+          "noLabel": false
+        },
+        "文字列__1行__2": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "文字列__1行__2",
+          "label": "既読日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "文字列__1行__3": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "文字列__1行__3",
+          "label": "連絡日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "施設名": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "施設名",
+          "label": "施設名",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "申込者": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "申込者",
+          "label": "申込者",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "持参画像CD": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "持参画像CD",
+          "label": "持参画像CD",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "要注意": {
+          "type": "CHECK_BOX",
+          "code": "要注意",
+          "label": "要注意",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "要注意": {
+              "label": "要注意",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "HORIZONTAL"
+        },
+        "postal_code": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "postal_code",
+          "label": "郵便番号",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "第1希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第1希望日時",
+          "label": "第1希望日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "生年月日": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "生年月日",
+          "label": "生年月日",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "メール送信回数": {
+          "type": "NUMBER",
+          "code": "メール送信回数",
+          "label": "メール送信回数",
+          "noLabel": false,
+          "required": false,
+          "minValue": "",
+          "maxValue": "",
+          "digit": false,
+          "unique": false,
+          "defaultValue": "",
+          "displayScale": "",
+          "unit": "回",
+          "unitPosition": "AFTER"
+        }
+      }
+    },
+    "views": {
+      "views": {
+        "完了チケット一覧": {
+          "type": "LIST",
+          "name": "完了チケット一覧",
+          "id": "8247802",
+          "filterCond": "管理ステータス in (\"完了\")",
+          "sort": "レコード番号 desc",
+          "index": "1",
+          "fields": [
+            "レコード番号",
+            "管理ステータス",
+            "担当者",
+            "要注意",
+            "用件",
+            "姓漢字",
+            "名漢字",
+            "性別",
+            "カルテNo",
+            "確定予約日",
+            "文字列__1行__3",
+            "業務連絡",
+            "作成日時"
+          ]
+        },
+        "チケット一覧": {
+          "type": "LIST",
+          "name": "チケット一覧",
+          "id": "8238699",
+          "filterCond": "管理ステータス not in (\"完了\")",
+          "sort": "レコード番号 desc",
+          "index": "0",
+          "fields": [
+            "レコード番号",
+            "担当者",
+            "管理ステータス",
+            "メール送信回数",
+            "要注意",
+            "用件",
+            "姓漢字",
+            "名漢字",
+            "性別",
+            "カルテNo",
+            "確定予約日",
+            "文字列__1行__3",
+            "業務連絡",
+            "作成日時"
+          ]
+        }
+      },
+      "revision": "348"
+    },
+    "status": {
+      "enable": false,
+      "states": null,
+      "actions": null,
+      "revision": "348"
+    },
+    "acl_app": {
+      "rights": [
+        {
+          "entity": {
+            "type": "CREATOR",
+            "code": null
+          },
+          "includeSubs": false,
+          "appEditable": true,
+          "recordViewable": true,
+          "recordAddable": true,
+          "recordEditable": true,
+          "recordDeletable": true,
+          "recordImportable": true,
+          "recordExportable": true
+        },
+        {
+          "entity": {
+            "type": "GROUP",
+            "code": "everyone"
+          },
+          "includeSubs": false,
+          "appEditable": false,
+          "recordViewable": true,
+          "recordAddable": true,
+          "recordEditable": true,
+          "recordDeletable": true,
+          "recordImportable": false,
+          "recordExportable": false
+        }
+      ],
+      "revision": "348"
+    },
+    "acl_record": {
+      "rights": [],
+      "revision": "348"
+    },
+    "acl_field": {
+      "rights": [],
+      "revision": "348"
+    }
+  }
+}

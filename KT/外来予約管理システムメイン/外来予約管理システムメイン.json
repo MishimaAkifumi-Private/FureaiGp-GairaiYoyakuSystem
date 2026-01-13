@@ -1,0 +1,1091 @@
+{
+  "meta": {
+    "exported_at": "2026-01-11T04:26:22.656Z",
+    "executor": "akifumi.mishima@gmail.com",
+    "domain": "w60013hke2ct.cybozu.com",
+    "is_guest_space": true,
+    "guest_space_id": "11",
+    "app_id": 156,
+    "app_name": "診療シフト管理 Version1.0"
+  },
+  "app_info": {
+    "properties": {
+      "appId": "156",
+      "code": "",
+      "name": "診療シフト管理 Version1.0",
+      "description": "",
+      "createdAt": "2025-05-16T04:13:20.000Z",
+      "creator": {
+        "code": "akifumi.mishima@gmail.com",
+        "name": "情報システム室 室長"
+      },
+      "modifiedAt": "2026-01-11T04:03:35.000Z",
+      "modifier": {
+        "code": "akifumi.mishima@gmail.com",
+        "name": "情報システム室 室長"
+      },
+      "spaceId": "11",
+      "threadId": "19"
+    },
+    "fields": {
+      "revision": "294",
+      "properties": {
+        "木4": {
+          "type": "CHECK_BOX",
+          "code": "木4",
+          "label": "木曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "木5": {
+          "type": "CHECK_BOX",
+          "code": "木5",
+          "label": "木曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "レコード番号": {
+          "type": "RECORD_NUMBER",
+          "code": "レコード番号",
+          "label": "レコード番号",
+          "noLabel": false
+        },
+        "木1": {
+          "type": "CHECK_BOX",
+          "code": "木1",
+          "label": "木曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "予約開始": {
+          "type": "NUMBER",
+          "code": "予約開始",
+          "label": "予約開始日",
+          "noLabel": false,
+          "required": false,
+          "minValue": "",
+          "maxValue": "",
+          "digit": false,
+          "unique": false,
+          "defaultValue": "",
+          "displayScale": "",
+          "unit": "営業日後から",
+          "unitPosition": "AFTER"
+        },
+        "木2": {
+          "type": "CHECK_BOX",
+          "code": "木2",
+          "label": "木曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "木3": {
+          "type": "CHECK_BOX",
+          "code": "木3",
+          "label": "木曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "ステータス": {
+          "type": "STATUS",
+          "code": "ステータス",
+          "label": "ステータス",
+          "enabled": false
+        },
+        "水5": {
+          "type": "CHECK_BOX",
+          "code": "水5",
+          "label": "水曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "水4": {
+          "type": "CHECK_BOX",
+          "code": "水4",
+          "label": "水曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "金2": {
+          "type": "CHECK_BOX",
+          "code": "金2",
+          "label": "金曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "集合": {
+          "type": "DROP_DOWN",
+          "code": "集合",
+          "label": "タグ",
+          "noLabel": false,
+          "required": false,
+          "options": {
+            "🔷": {
+              "label": "🔷",
+              "index": "19"
+            },
+            "🔶": {
+              "label": "🔶",
+              "index": "18"
+            },
+            "🔵": {
+              "label": "🔵",
+              "index": "14"
+            },
+            "🤎": {
+              "label": "🤎",
+              "index": "29"
+            },
+            "🔴": {
+              "label": "🔴",
+              "index": "10"
+            },
+            "🟨": {
+              "label": "🟨",
+              "index": "3"
+            },
+            "⭐": {
+              "label": "⭐",
+              "index": "20"
+            },
+            "🟧": {
+              "label": "🟧",
+              "index": "2"
+            },
+            "🟦": {
+              "label": "🟦",
+              "index": "5"
+            },
+            "🟥": {
+              "label": "🟥",
+              "index": "1"
+            },
+            "🤍": {
+              "label": "🤍",
+              "index": "32"
+            },
+            "🟫": {
+              "label": "🟫",
+              "index": "7"
+            },
+            "⭕": {
+              "label": "⭕",
+              "index": "21"
+            },
+            "🟪": {
+              "label": "🟪",
+              "index": "6"
+            },
+            "🟩": {
+              "label": "🟩",
+              "index": "4"
+            },
+            "🟠": {
+              "label": "🟠",
+              "index": "11"
+            },
+            "⬛": {
+              "label": "⬛",
+              "index": "8"
+            },
+            "⬜": {
+              "label": "⬜",
+              "index": "0"
+            },
+            "🟤": {
+              "label": "🟤",
+              "index": "16"
+            },
+            "🖤": {
+              "label": "🖤",
+              "index": "30"
+            },
+            "🟣": {
+              "label": "🟣",
+              "index": "15"
+            },
+            "🟢": {
+              "label": "🟢",
+              "index": "13"
+            },
+            "🟡": {
+              "label": "🟡",
+              "index": "12"
+            },
+            "🔘": {
+              "label": "🔘",
+              "index": "9"
+            },
+            "🩷": {
+              "label": "🩷",
+              "index": "22"
+            },
+            "🩶": {
+              "label": "🩶",
+              "index": "31"
+            },
+            "💜": {
+              "label": "💜",
+              "index": "28"
+            },
+            "💛": {
+              "label": "💛",
+              "index": "24"
+            },
+            "💚": {
+              "label": "💚",
+              "index": "25"
+            },
+            "💙": {
+              "label": "💙",
+              "index": "26"
+            },
+            "⚫": {
+              "label": "⚫",
+              "index": "17"
+            },
+            "🩵": {
+              "label": "🩵",
+              "index": "27"
+            },
+            "🧡": {
+              "label": "🧡",
+              "index": "23"
+            }
+          },
+          "defaultValue": ""
+        },
+        "カテゴリー": {
+          "type": "CATEGORY",
+          "code": "カテゴリー",
+          "label": "カテゴリー",
+          "enabled": false
+        },
+        "金1": {
+          "type": "CHECK_BOX",
+          "code": "金1",
+          "label": "金曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "金4": {
+          "type": "CHECK_BOX",
+          "code": "金4",
+          "label": "金曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "金3": {
+          "type": "CHECK_BOX",
+          "code": "金3",
+          "label": "金曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "金5": {
+          "type": "CHECK_BOX",
+          "code": "金5",
+          "label": "金曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "掲載": {
+          "type": "RADIO_BUTTON",
+          "code": "掲載",
+          "label": "医師応診",
+          "noLabel": false,
+          "required": true,
+          "options": {
+            "受付": {
+              "label": "受付",
+              "index": "0"
+            },
+            "停止": {
+              "label": "停止",
+              "index": "1"
+            }
+          },
+          "defaultValue": "受付",
+          "align": "HORIZONTAL"
+        },
+        "診療科": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "診療科",
+          "label": "診療科",
+          "noLabel": false,
+          "required": true,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "月4": {
+          "type": "CHECK_BOX",
+          "code": "月4",
+          "label": "月曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "月5": {
+          "type": "CHECK_BOX",
+          "code": "月5",
+          "label": "月曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "作業者": {
+          "type": "STATUS_ASSIGNEE",
+          "code": "作業者",
+          "label": "作業者",
+          "enabled": false
+        },
+        "火4": {
+          "type": "CHECK_BOX",
+          "code": "火4",
+          "label": "火曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "月1": {
+          "type": "CHECK_BOX",
+          "code": "月1",
+          "label": "月曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "火3": {
+          "type": "CHECK_BOX",
+          "code": "火3",
+          "label": "火曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "月2": {
+          "type": "CHECK_BOX",
+          "code": "月2",
+          "label": "第２週",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "月3": {
+          "type": "CHECK_BOX",
+          "code": "月3",
+          "label": "月曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "火5": {
+          "type": "CHECK_BOX",
+          "code": "火5",
+          "label": "火曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "火2": {
+          "type": "CHECK_BOX",
+          "code": "火2",
+          "label": "火曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "火1": {
+          "type": "CHECK_BOX",
+          "code": "火1",
+          "label": "火曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "作成日時": {
+          "type": "CREATED_TIME",
+          "code": "作成日時",
+          "label": "作成日時",
+          "noLabel": false
+        },
+        "留意案内": {
+          "type": "RICH_TEXT",
+          "code": "留意案内",
+          "label": "ご案内",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "着任日": {
+          "type": "DATE",
+          "code": "着任日",
+          "label": "着任日",
+          "noLabel": false,
+          "required": false,
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
+        },
+        "更新者": {
+          "type": "MODIFIER",
+          "code": "更新者",
+          "label": "更新者",
+          "noLabel": false
+        },
+        "診療分野": {
+          "type": "RADIO_BUTTON",
+          "code": "診療分野",
+          "label": "診療分野",
+          "noLabel": false,
+          "required": true,
+          "options": {
+            "がん健診系": {
+              "label": "がん健診系",
+              "index": "3"
+            },
+            "小児・婦人系": {
+              "label": "小児・婦人系",
+              "index": "2"
+            },
+            "外科系": {
+              "label": "外科系",
+              "index": "1"
+            },
+            "内科系": {
+              "label": "内科系",
+              "index": "0"
+            },
+            "その他": {
+              "label": "その他",
+              "index": "4"
+            }
+          },
+          "defaultValue": "内科系",
+          "align": "HORIZONTAL"
+        },
+        "診療選択": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "診療選択",
+          "label": "診療選択",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "直近NG日指定": {
+          "type": "SUBTABLE",
+          "code": "直近NG日指定",
+          "noLabel": false,
+          "label": "直近NG日指定",
+          "fields": {
+            "NG時間帯": {
+              "type": "CHECK_BOX",
+              "code": "NG時間帯",
+              "label": "NG時間帯",
+              "noLabel": false,
+              "required": false,
+              "options": {
+                "AM": {
+                  "label": "AM",
+                  "index": "0"
+                },
+                "PM": {
+                  "label": "PM",
+                  "index": "1"
+                }
+              },
+              "defaultValue": [],
+              "align": "HORIZONTAL"
+            },
+            "日付": {
+              "type": "DATE",
+              "code": "日付",
+              "label": "日付",
+              "noLabel": false,
+              "required": false,
+              "unique": false,
+              "defaultValue": "",
+              "defaultNowValue": false
+            }
+          }
+        },
+        "予約可能期間": {
+          "type": "NUMBER",
+          "code": "予約可能期間",
+          "label": "予約可能期間",
+          "noLabel": false,
+          "required": false,
+          "minValue": "",
+          "maxValue": "",
+          "digit": false,
+          "unique": false,
+          "defaultValue": "",
+          "displayScale": "",
+          "unit": "日間",
+          "unitPosition": "AFTER"
+        },
+        "作成者": {
+          "type": "CREATOR",
+          "code": "作成者",
+          "label": "作成者",
+          "noLabel": false
+        },
+        "離任日": {
+          "type": "DATE",
+          "code": "離任日",
+          "label": "離任日",
+          "noLabel": false,
+          "required": false,
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
+        },
+        "更新日時": {
+          "type": "UPDATED_TIME",
+          "code": "更新日時",
+          "label": "更新日時",
+          "noLabel": false
+        },
+        "水1": {
+          "type": "CHECK_BOX",
+          "code": "水1",
+          "label": "水曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "水3": {
+          "type": "CHECK_BOX",
+          "code": "水3",
+          "label": "水曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "水2": {
+          "type": "CHECK_BOX",
+          "code": "水2",
+          "label": "水曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "施設名": {
+          "type": "RADIO_BUTTON",
+          "code": "施設名",
+          "label": "診察施設",
+          "noLabel": false,
+          "required": true,
+          "options": {
+            "湘南東部クリニック": {
+              "label": "湘南東部クリニック",
+              "index": "1"
+            },
+            "湘南東部総合病院": {
+              "label": "湘南東部総合病院",
+              "index": "0"
+            }
+          },
+          "defaultValue": "湘南東部総合病院",
+          "align": "HORIZONTAL"
+        },
+        "土1": {
+          "type": "CHECK_BOX",
+          "code": "土1",
+          "label": "土曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "土2": {
+          "type": "CHECK_BOX",
+          "code": "土2",
+          "label": "土曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "医師名": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "医師名",
+          "label": "医師名",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "表示順": {
+          "type": "NUMBER",
+          "code": "表示順",
+          "label": "表示順",
+          "noLabel": false,
+          "required": false,
+          "minValue": "0",
+          "maxValue": "",
+          "digit": false,
+          "unique": false,
+          "defaultValue": "",
+          "displayScale": "",
+          "unit": "",
+          "unitPosition": "BEFORE"
+        },
+        "土5": {
+          "type": "CHECK_BOX",
+          "code": "土5",
+          "label": "土曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "土3": {
+          "type": "CHECK_BOX",
+          "code": "土3",
+          "label": "土曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        },
+        "土4": {
+          "type": "CHECK_BOX",
+          "code": "土4",
+          "label": "土曜日",
+          "noLabel": true,
+          "required": false,
+          "options": {
+            "午後": {
+              "label": "午後",
+              "index": "1"
+            },
+            "午前": {
+              "label": "午前",
+              "index": "0"
+            }
+          },
+          "defaultValue": [],
+          "align": "VERTICAL"
+        }
+      }
+    },
+    "views": {
+      "views": {
+        "一覧1": {
+          "type": "LIST",
+          "name": "一覧1",
+          "id": "8245877",
+          "filterCond": "",
+          "sort": "表示順 asc",
+          "index": "0",
+          "fields": [
+            "表示順",
+            "掲載",
+            "診療分野",
+            "診療科",
+            "診療選択",
+            "施設名",
+            "集合",
+            "医師名",
+            "着任日",
+            "離任日",
+            "直近NG日指定",
+            "予約開始",
+            "予約可能期間",
+            "留意案内",
+            "レコード番号"
+          ]
+        }
+      },
+      "revision": "294"
+    },
+    "status": {
+      "enable": false,
+      "states": null,
+      "actions": null,
+      "revision": "294"
+    },
+    "acl_app": {
+      "rights": [
+        {
+          "entity": {
+            "type": "CREATOR",
+            "code": null
+          },
+          "includeSubs": false,
+          "appEditable": true,
+          "recordViewable": true,
+          "recordAddable": true,
+          "recordEditable": true,
+          "recordDeletable": true,
+          "recordImportable": true,
+          "recordExportable": true
+        },
+        {
+          "entity": {
+            "type": "GROUP",
+            "code": "everyone"
+          },
+          "includeSubs": false,
+          "appEditable": false,
+          "recordViewable": true,
+          "recordAddable": true,
+          "recordEditable": true,
+          "recordDeletable": true,
+          "recordImportable": false,
+          "recordExportable": false
+        }
+      ],
+      "revision": "294"
+    },
+    "acl_record": {
+      "rights": [],
+      "revision": "294"
+    },
+    "acl_field": {
+      "rights": [],
+      "revision": "294"
+    }
+  }
+}
