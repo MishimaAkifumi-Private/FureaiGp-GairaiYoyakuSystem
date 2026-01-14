@@ -51,25 +51,57 @@
             display: flex; justify-content: center; align-items: center;
         }
         .custom-modal-box {
-            background: #fff; padding: 25px; border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            min-width: 350px; max-width: 500px; text-align: center;
+            background: #fff; padding: 30px; border-radius: 12px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.25);
+            min-width: 400px; max-width: 600px; text-align: center;
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            border: 1px solid rgba(0,0,0,0.1);
         }
-        .custom-modal-msg { margin-bottom: 25px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; color: #333; }
-        .custom-modal-btn-group { display: flex; justify-content: center; gap: 15px; }
-        .custom-modal-btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; min-width: 80px; }
+        .custom-modal-msg { margin-bottom: 25px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; color: #555; }
+        .custom-modal-btn-group { display: flex; justify-content: center; gap: 15px; margin-top: 25px; }
+        .custom-modal-btn { 
+            padding: 10px 24px; border: none; border-radius: 6px; cursor: pointer; 
+            font-weight: 600; font-size: 14px; min-width: 100px; 
+            transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .custom-modal-btn:active { transform: translateY(1px); box-shadow: none; }
         .custom-modal-btn-ok { background: #3498db; color: #fff; }
+        .custom-modal-btn-ok:hover { background: #2980b9; }
         .custom-modal-btn-cancel { background: #95a5a6; color: #fff; }
+        .custom-modal-btn-cancel:hover { background: #7f8c8d; }
         
-        /* 追加: 設定メニュー用スタイル */
+        /* 追加: 設定メニュー用スタイル (Enhanced) */
         .custom-modal-menu-btn {
-            display: block; width: 100%; padding: 15px; margin-bottom: 10px;
-            background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px;
-            text-align: left; font-size: 16px; color: #333; cursor: pointer;
-            transition: background 0.2s;
+            display: flex; align-items: center; width: 100%; padding: 16px 20px; margin-bottom: 12px;
+            background: #fff; border: 1px solid #e1e4e8; border-radius: 8px;
+            text-align: left; cursor: pointer;
+            transition: all 0.2s ease; position: relative; overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
-        .custom-modal-menu-btn:hover { background: #e9ecef; }
-        .custom-modal-input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 20px; }
+        .custom-modal-menu-btn:hover { 
+            background: #f8fbff; border-color: #3498db; 
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.15);
+            transform: translateY(-2px);
+        }
+        .custom-modal-menu-btn::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+            background: #3498db; opacity: 0; transition: opacity 0.2s;
+            border-top-left-radius: 7px; border-bottom-left-radius: 7px;
+        }
+        .custom-modal-menu-btn:hover::before { opacity: 1; }
+        
+        .menu-btn-icon { font-size: 24px; margin-right: 15px; display: flex; align-items: center; justify-content: center; width: 30px; }
+        .menu-btn-content { flex: 1; }
+        .menu-btn-title { font-size: 16px; font-weight: bold; color: #2c3e50; margin-bottom: 3px; }
+        .menu-btn-desc { font-size: 12px; color: #7f8c8d; line-height: 1.3; }
+
+        .custom-modal-input { 
+            width: 100%; padding: 12px; font-size: 15px; 
+            border: 1px solid #dce1e6; border-radius: 6px; 
+            box-sizing: border-box; margin-bottom: 20px; 
+            background-color: #fcfcfc; transition: border-color 0.2s, background-color 0.2s;
+        }
+        .custom-modal-input:focus { border-color: #3498db; background-color: #fff; outline: none; }
       `;
       const style = document.createElement('style');
       style.id = INITIAL_HIDE_STYLE_ID;
@@ -148,7 +180,7 @@
 
             const titleText = document.createElement('div');
             titleText.className = 'overview-title-text';
-            titleText.textContent = '現在の予約受付状況';
+            titleText.textContent = '予約待ち受け状況';
             textWrapper.appendChild(titleText);
 
             const dateText = document.createElement('div');
@@ -220,7 +252,7 @@
         if (viewMode === 'input') {
              const btnOverview = document.createElement('button');
              btnOverview.className = 'mode-switch-btn btn-to-overview';
-             btnOverview.textContent = '診療シフト表';
+             btnOverview.textContent = '予約待ち受け管理';
              // ボタンを離して配置し、色を変えて誤操作防止
              btnOverview.style.marginRight = '0px';
              btnOverview.style.backgroundColor = '#28a745'; 
@@ -346,10 +378,9 @@
 
       const cards = [
           { title: '予約チケット管理', icon: '🎫', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約の申込状況を確認・管理します' },
-          { title: '診療シフト表', icon: '📅', url: '?view_mode=overview', target: '_self', desc: '医師の診療スケジュールを管理します' },
-          { title: '休診設定', icon: '💤', action: () => alert('現在開発中です'), desc: '病院固有の休診日の設定を行います' },
+          { title: '予約待ち受け管理', icon: '📅', url: '?view_mode=overview', target: '_self', desc: '個別医師の予定状況等から予約が受け付けられる選択肢を組み立てます' },
           { title: 'フォーム挿入ラベル', icon: '📑', action: () => alert('現在開発中です'), desc: '予約フォームに挿入するラベルの文言を編集します' },
-          { title: 'スタッフ登録', icon: '👥', action: () => alert('現在開発中です'), desc: 'システム利用者の登録・管理を行います' },
+          { title: 'スタッフ管理', icon: '👥', action: () => alert('現在開発中です'), desc: 'システム利用者の登録・管理を行います' },
           { title: '設定', icon: '⚙️', action: () => showSettingsMenu(), desc: '各種システム環境の設定' }
       ];
 
@@ -414,20 +445,28 @@
       
       const title = document.createElement('h2');
       title.textContent = 'システム設定';
-      title.style.cssText = 'margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #333;';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
       box.appendChild(title);
 
       const menuList = [
-          { label: '予約センター名の登録', action: () => { document.body.removeChild(overlay); showCenterNameInputDialog(); } },
-          { label: '外来予約フォームURLの登録', action: () => { document.body.removeChild(overlay); showFormUrlInputDialog(); } },
-          { label: '病院共通 予約期間設定', action: () => { document.body.removeChild(overlay); showCommonTermInputDialog(); } }, // ★追加
+          { label: '予約センター名の登録', icon: '🏥', desc: 'ダッシュボードに表示するセンター名を設定します', action: () => { document.body.removeChild(overlay); showCenterNameInputDialog(); } },
+          { label: '病院休診日設定', icon: '📅', desc: '病院固有の休診日カレンダーを設定します', action: () => { alert('現在開発中です'); } },
+          { label: '病院共通 予約期間設定', icon: '⏳', desc: 'デフォルトの予約受付開始日と期間を設定します', action: () => { document.body.removeChild(overlay); showCommonTermInputDialog(); } },
+          { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
+          { label: '各種URL設定', icon: '🔗', desc: 'フォームURLやロゴ画像URLなどを管理します', action: () => { document.body.removeChild(overlay); showUrlSettingDialog(); } },
           // 必要に応じてメニューを追加
       ];
 
       menuList.forEach(item => {
           const btn = document.createElement('button');
           btn.className = 'custom-modal-menu-btn';
-          btn.textContent = item.label;
+          btn.innerHTML = `
+            <div class="menu-btn-icon">${item.icon}</div>
+            <div class="menu-btn-content">
+                <div class="menu-btn-title">${item.label}</div>
+                <div class="menu-btn-desc">${item.desc}</div>
+            </div>
+          `;
           btn.onclick = item.action;
           box.appendChild(btn);
       });
@@ -447,7 +486,7 @@
       
       const title = document.createElement('h2');
       title.textContent = '予約センター名の登録';
-      title.style.cssText = 'margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #333;';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
       box.appendChild(title);
 
       const desc = document.createElement('p');
@@ -491,27 +530,269 @@
       input.focus();
   }
 
-  function showFormUrlInputDialog() {
+  function showTicketAppSettingDialog() {
       const { overlay, box } = createModalBase();
+      box.style.maxWidth = '500px';
+      box.style.maxHeight = '90vh';
+      box.style.overflowY = 'auto';
+      
+      // 設定値の読み込み
+      let config = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
+
+      // 共通スタイル
+      const titleStyle = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700; text-align: center;';
+
+      // --- 画面描画関数 ---
+
+      // メインメニュー
+      const renderMenu = () => {
+          box.innerHTML = '';
+          const title = document.createElement('h2');
+          title.textContent = '予約チケット管理アプリ設定';
+          title.style.cssText = titleStyle;
+          box.appendChild(title);
+
+          const menuList = [
+              { label: 'アプリ連携設定', icon: '🔗', desc: 'アプリ番号の設定', action: () => renderAppIdSettings() },
+              { label: 'メール設定', icon: '✉️', desc: 'サーバー・BCC・リマインド設定', action: () => renderMailMenu() },
+              { label: '未読警告設定', icon: '⚠️', desc: 'アラート時間の閾値設定', action: () => renderAlertSettings() }
+          ];
+
+          menuList.forEach(item => {
+              const btn = document.createElement('button');
+              btn.className = 'custom-modal-menu-btn';
+              btn.innerHTML = `
+                <div class="menu-btn-icon">${item.icon}</div>
+                <div class="menu-btn-content">
+                    <div class="menu-btn-title">${item.label}</div>
+                    <div class="menu-btn-desc">${item.desc}</div>
+                </div>
+              `;
+              btn.onclick = item.action;
+              box.appendChild(btn);
+          });
+
+          const closeBtn = document.createElement('button');
+          closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+          closeBtn.textContent = '閉じる';
+          closeBtn.style.marginTop = '15px';
+          closeBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(); };
+          box.appendChild(closeBtn);
+      };
+
+      // メール設定サブメニュー
+      const renderMailMenu = () => {
+          box.innerHTML = '';
+          const title = document.createElement('h2');
+          title.textContent = 'メール設定';
+          title.style.cssText = titleStyle;
+          box.appendChild(title);
+
+          const menuList = [
+              { label: 'メールサーバー設定', icon: '🖥️', desc: 'SMTPサーバー・認証情報の設定', action: () => renderMailServerSettings() },
+              { label: 'BCC設定', icon: '📬', desc: 'BCC の設定', action: () => renderMailDestSettings() },
+              { label: '予約日リマインド設定', icon: '⏰', desc: 'リマインドメールの送信設定', action: () => { alert('現在開発中です'); } }
+          ];
+
+          menuList.forEach(item => {
+              const btn = document.createElement('button');
+              btn.className = 'custom-modal-menu-btn';
+              btn.innerHTML = `
+                <div class="menu-btn-icon">${item.icon}</div>
+                <div class="menu-btn-content">
+                    <div class="menu-btn-title">${item.label}</div>
+                    <div class="menu-btn-desc">${item.desc}</div>
+                </div>
+              `;
+              btn.onclick = item.action;
+              box.appendChild(btn);
+          });
+
+          const backBtn = document.createElement('button');
+          backBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+          backBtn.textContent = '戻る';
+          backBtn.style.marginTop = '15px';
+          backBtn.onclick = () => renderMenu();
+          box.appendChild(backBtn);
+      };
+
+      // フォーム描画ヘルパー
+      const renderForm = (titleText, inputsDef, onSave, backAction = null) => {
+          box.innerHTML = '';
+          const title = document.createElement('h2');
+          title.textContent = titleText;
+          title.style.cssText = titleStyle;
+          box.appendChild(title);
+
+          const inputEls = {};
+
+          inputsDef.forEach(def => {
+              const div = document.createElement('div');
+              div.style.marginBottom = '15px';
+              div.style.textAlign = 'left';
+              
+              const lbl = document.createElement('label');
+              lbl.textContent = def.label;
+              lbl.style.display = 'block';
+              lbl.style.fontSize = '12px';
+              lbl.style.fontWeight = 'bold';
+              lbl.style.marginBottom = '4px';
+              div.appendChild(lbl);
+
+              let inp;
+              if (def.type === 'select') {
+                  inp = document.createElement('select');
+                  inp.className = 'custom-modal-input';
+                  inp.style.marginBottom = '0';
+                  def.options.forEach(opt => {
+                      const o = document.createElement('option');
+                      o.value = opt;
+                      o.textContent = opt;
+                      if (opt === (config[def.key] || def.default)) o.selected = true;
+                      inp.appendChild(o);
+                  });
+              } else {
+                  inp = document.createElement('input');
+                  inp.className = 'custom-modal-input';
+                  inp.style.marginBottom = '0';
+                  inp.type = def.type || 'text';
+                  // 値の取得（フォールバック対応）
+                  let val = config[def.key] || '';
+                  if (def.fallbackKey && !val) {
+                      val = config[def.fallbackKey] || '';
+                  }
+                  inp.value = val;
+                  if (def.placeholder) inp.placeholder = def.placeholder;
+              }
+              inputEls[def.key] = inp;
+              div.appendChild(inp);
+              box.appendChild(div);
+          });
+
+          const btnGroup = document.createElement('div');
+          btnGroup.className = 'custom-modal-btn-group';
+          btnGroup.style.marginTop = '20px';
+
+          const cancelBtn = document.createElement('button');
+          cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+          cancelBtn.textContent = '戻る';
+          cancelBtn.onclick = () => backAction ? backAction() : renderMenu();
+
+          const saveBtn = document.createElement('button');
+          saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+          saveBtn.textContent = '保存';
+          saveBtn.onclick = () => {
+              const newValues = {};
+              Object.keys(inputEls).forEach(key => {
+                  newValues[key] = inputEls[key].value;
+              });
+              
+              if (onSave(newValues)) {
+                  config = { ...config, ...newValues };
+                  localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
+                  backAction ? backAction() : renderMenu();
+              }
+          };
+
+          btnGroup.appendChild(cancelBtn);
+          btnGroup.appendChild(saveBtn);
+          box.appendChild(btnGroup);
+      };
+
+      // 各設定画面
+      const renderAppIdSettings = () => {
+          renderForm('アプリ連携設定', [
+              { label: 'アプリ番号', key: 'appId', type: 'number' }
+          ], () => true);
+      };
+
+      const renderMailServerSettings = () => {
+          renderForm('メールサーバー設定', [
+              { label: 'SMTPサーバー名', key: 'smtpServer' },
+              { label: 'ポート番号', key: 'smtpPort', type: 'number' },
+              { label: '暗号方式', key: 'encryption', type: 'select', options: ['None', 'SSL', 'TLS'], default: 'None' },
+              { label: 'ユーザー名', key: 'smtpUser' },
+              { label: 'パスワード', key: 'smtpPass', type: 'password' },
+              { label: '送信元メールアドレス', key: 'mailAddress', type: 'email' }
+          ], () => true, renderMailMenu);
+      };
+
+      const renderMailDestSettings = () => {
+          renderForm('BCC設定', [
+              { label: 'BCC', key: 'mailBcc', placeholder: '例: bcc@example.com' }
+          ], () => true, renderMailMenu);
+      };
+
+      const renderAlertSettings = () => {
+          renderForm('未読警告設定', [
+              { label: 'Yellow警告 (時間)', key: 'alertYellow', type: 'number' },
+              { label: 'Red警告 (時間)', key: 'alertRed', type: 'number' }
+          ], (vals) => {
+              const y = parseFloat(vals.alertYellow) || 0;
+              const r = parseFloat(vals.alertRed) || 0;
+              if (y >= r && r !== 0) {
+                  alert('Yellow警告の時間はRed警告より短く設定してください。');
+                  return false;
+              }
+              return true;
+          });
+      };
+
+      renderMenu();
+
+      document.body.appendChild(overlay);
+  }
+
+  function showUrlSettingDialog() {
+      const { overlay, box } = createModalBase();
+      box.style.maxWidth = '600px';
+      box.style.textAlign = 'left';
       
       const title = document.createElement('h2');
-      title.textContent = '外来予約フォームURLの登録';
-      title.style.cssText = 'margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #333;';
+      title.textContent = '各種URL設定';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700; text-align: center;';
       box.appendChild(title);
 
-      const desc = document.createElement('p');
-      desc.textContent = '「外来予約フォームを開く」ボタンの遷移先URLを入力してください。';
-      desc.style.cssText = 'text-align: left; font-size: 14px; color: #666; margin-bottom: 10px;';
-      box.appendChild(desc);
+      const createInput = (label, key, placeholder = '') => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '15px';
+          const lbl = document.createElement('label');
+          lbl.textContent = label;
+          lbl.style.display = 'block';
+          lbl.style.fontSize = '12px';
+          lbl.style.fontWeight = 'bold';
+          lbl.style.marginBottom = '4px';
+          const inp = document.createElement('input');
+          inp.className = 'custom-modal-input';
+          inp.style.marginBottom = '0';
+          // 既存の shinryo_form_url は特別扱い
+          if (key === 'shinryo_form_url') {
+              inp.value = localStorage.getItem(key) || '';
+          } else {
+              const urlConfig = JSON.parse(localStorage.getItem('shinryo_url_config') || '{}');
+              inp.value = urlConfig[key] || '';
+          }
+          inp.placeholder = placeholder;
+          div.appendChild(lbl);
+          div.appendChild(inp);
+          box.appendChild(div);
+          return { inp, key };
+      };
 
-      const input = document.createElement('input');
-      input.className = 'custom-modal-input';
-      input.value = localStorage.getItem('shinryo_form_url') || '';
-      input.placeholder = 'https://...';
-      box.appendChild(input);
+      const inputs = [
+          createInput('予約チケット管理アプリURL', 'ticketAppUrl'),
+          createInput('施設画像URL', 'facilityImgUrl'),
+          createInput('病院施設ロゴURL', 'hospitalLogoUrl'),
+          createInput('ふれあいGpロゴURL', 'groupLogoUrl'),
+          createInput('診察券サンプルURL', 'ticketSampleUrl'),
+          createInput('公開用 外来予約フォームURL', 'shinryo_form_url'),
+          createInput('プレビュー用 外来予約フォームURL', 'previewFormUrl'),
+          createInput('既読確定URL', 'readConfirmUrl')
+      ];
 
       const btnGroup = document.createElement('div');
       btnGroup.className = 'custom-modal-btn-group';
+      btnGroup.style.marginTop = '20px';
 
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
@@ -522,10 +803,19 @@
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
       saveBtn.onclick = () => {
-          const val = input.value.trim();
-          localStorage.setItem('shinryo_form_url', val);
+          const urlConfig = JSON.parse(localStorage.getItem('shinryo_url_config') || '{}');
+          
+          inputs.forEach(item => {
+              if (item.key === 'shinryo_form_url') {
+                  localStorage.setItem('shinryo_form_url', item.inp.value.trim());
+              } else {
+                  urlConfig[item.key] = item.inp.value.trim();
+              }
+          });
+          
+          localStorage.setItem('shinryo_url_config', JSON.stringify(urlConfig));
           document.body.removeChild(overlay);
-          location.reload();
+          location.reload(); // URL変更の影響を反映するためリロード
       };
 
       btnGroup.appendChild(cancelBtn);
@@ -533,7 +823,6 @@
       box.appendChild(btnGroup);
 
       document.body.appendChild(overlay);
-      input.focus();
   }
 
   // ★追加: 病院共通予約期間設定ダイアログ
@@ -542,7 +831,7 @@
       
       const title = document.createElement('h2');
       title.textContent = '病院共通 予約期間設定';
-      title.style.cssText = 'margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #333;';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
       box.appendChild(title);
 
       // 現在の設定を取得
@@ -712,7 +1001,6 @@
     };
 
     const filters = [
-        { label: '診療分野', field: '診療分野' },
         { label: '診療科', field: '診療科' },
         { label: '診察施設', field: '施設名' },
         { label: '医師', field: '医師名' }
@@ -808,6 +1096,7 @@
     autoContainer.appendChild(autoLabel);
 
     filters.forEach(f => {
+        if (f.label === '診療分野') return;
         const wrapper = document.createElement('div');
         wrapper.style.display = 'flex';
         wrapper.style.flexDirection = 'column';

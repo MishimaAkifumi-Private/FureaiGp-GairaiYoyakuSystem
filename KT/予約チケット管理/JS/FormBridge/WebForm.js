@@ -1,4 +1,4 @@
-﻿﻿(function() {
+﻿﻿﻿﻿(function() {
   "use strict";
 
   if (typeof window.fb === 'undefined') { window.fb = { events: { form: {} } }; }
@@ -62,7 +62,7 @@
           FACILITY_NAME: '施設名',
           OFFSET_DAYS: '予約開始',
           DURATION_DAYS: '予約可能期間',
-          NG_DATES: '直近NG指定',
+          NG_DATES: '直近NG日指定',
           SCHEDULE_MAP_SUFFIX: '週診療日',
           CHART_CARD_IMAGE: '診察券イメージ',
           PUBLICATION_STATUS: '掲載',
@@ -542,11 +542,14 @@ function getReservationSummaryHtml() {
       
       return records.some(record => {
           const ngDates = record[config.jsonKeys.NG_DATES]?.value;
-          if (ngDates) {
-              const ngList = ngDates.split('\n');
-              for(const ng of ngList) {
-                  const [ngDate, ngTime] = ng.split(' ');
-                  if (ngDate === dateStrYMD && (!ngTime || ngTime === time || ngTime === "終日")) return false;
+          if (Array.isArray(ngDates)) {
+              for (const row of ngDates) {
+                  const rowDate = row.value['日付']?.value;
+                  const rowTime = row.value['NG時間帯']?.value || [];
+                  if (rowDate === dateStrYMD) {
+                      if (time === '午前' && rowTime.includes('AM')) return false;
+                      if (time === '午後' && rowTime.includes('PM')) return false;
+                  }
               }
           }
           const weekOfMonth = Math.floor((date.getDate() - 1) / 7) + 1;

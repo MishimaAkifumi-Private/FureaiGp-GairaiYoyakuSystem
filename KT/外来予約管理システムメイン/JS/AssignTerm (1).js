@@ -45,8 +45,13 @@
         const department = rec['診療科']?.value || '';
         const selection = rec['診療選択']?.value || ''; 
         const doctor = rec['医師名']?.value || '';
-        // タイトルをFlexbox化し、フォントサイズを調整して長文に対応
-        let html = `<div style="text-align:center;font-weight:bold;margin-bottom:10px;font-size:16px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;"><span>${facility}</span><span>${department}</span>${selection ? `<span>${selection}</span>` : ''} <span>${doctor}</span></div>`;
+        
+        // ヘッダー表示形式を変更: [施設名]　[診療科]　[診療選択]　[医師名]
+        let headerText = `${facility}　${department}`;
+        if (selection) headerText += `　${selection}`;
+        headerText += `　${doctor}`;
+
+        let html = `<div style="text-align:center;font-weight:bold;margin-bottom:10px;font-size:16px;color:#333;">${headerText}</div>`;
         html += `<table class="schedule-table" style="table-layout: fixed; width: 100%;"><colgroup><col style="width: 50px;"><col><col><col><col><col><col></colgroup><thead><tr><th></th>`;
         days.forEach(d => html += `<th>${d}</th>`);
         html += `</tr></thead><tbody>`;
@@ -352,6 +357,88 @@
     };
 
     // -------------------------------------------------------
+    // 統合スケジュール表示ロジック (新規追加)
+    // -------------------------------------------------------
+    const renderMergedSchedule = (records) => {
+        const containerId = 'merged-schedule-container';
+        let container = document.getElementById(containerId);
+        
+        // レコードがない、または医師名が一意でない場合は非表示にして終了
+        if (!records || records.length === 0) {
+            if (container) container.style.display = 'none';
+            return;
+        }
+
+        const doctorNames = new Set(records.map(r => r['医師名'].value).filter(n => n));
+        if (doctorNames.size !== 1) {
+            if (container) container.style.display = 'none';
+            return;
+        }
+
+        // コンテナがなければ作成
+        if (!container) {
+            container = document.createElement('div');
+            container.id = containerId;
+            container.style.marginTop = '20px';
+            container.style.padding = '20px';
+            container.style.backgroundColor = '#f9f9f9';
+            container.style.border = '1px solid #ddd';
+            container.style.borderRadius = '5px';
+            container.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+            
+            // 挿入位置：一覧表の下（ページャーの下あたり）
+            const pager = document.querySelector('.gaia-argoui-app-index-pager');
+            if (pager && pager.parentNode) {
+                pager.parentNode.insertBefore(container, pager.nextSibling);
+            } else {
+                const main = document.querySelector('.gaia-argoui-app-index-contents');
+                if (main) main.appendChild(container);
+            }
+        }
+        container.style.display = 'block';
+        container.innerHTML = ''; // クリア
+
+        const doctorName = Array.from(doctorNames)[0];
+
+        // マージレコード作成
+        const mergedRec = {
+            '施設名': { value: Array.from(new Set(records.map(r => r['施設名'].value).filter(v => v))).join(', ') },
+            '診療科': { value: Array.from(new Set(records.map(r => r['診療科'].value).filter(v => v))).join(', ') },
+            '診療選択': { value: Array.from(new Set(records.map(r => r['診療選択'].value).filter(v => v))).join(', ') },
+            '医師名': { value: doctorName }
+        };
+
+        scheduleFields.forEach(field => {
+            const values = new Set();
+            records.forEach(r => {
+                const val = r[field]?.value || [];
+                val.forEach(v => values.add(v));
+            });
+            mergedRec[field] = { value: Array.from(values) };
+        });
+
+        // タイトル
+        const title = document.createElement('h3');
+        title.textContent = `${doctorName} 医師の月間診療曜日パターン`;
+        title.style.margin = '0 0 15px 0';
+        title.style.fontSize = '16px';
+        title.style.color = '#333';
+        title.style.borderBottom = '2px solid #3498db';
+        title.style.paddingBottom = '5px';
+        title.style.display = 'inline-block';
+        container.appendChild(title);
+
+        // スケジュール表
+        const content = document.createElement('div');
+        content.innerHTML = createScheduleTableHtml(mergedRec);
+        // 背景色を白にして見やすく
+        const table = content.querySelector('table');
+        if (table) table.style.backgroundColor = '#fff';
+        
+        container.appendChild(content);
+    };
+
+    // -------------------------------------------------------
     // イベント定義
     // -------------------------------------------------------
     kintone.events.on('app.record.index.show', (event) => {
@@ -360,6 +447,7 @@
         fetchAllRecordsCounts().then(() => {
             applyPeriodStyling();
             setupDropdownObserver();
+            renderMergedSchedule(cachedRecords);
         });
 
         const target = document.querySelector('.recordlist-contents-gaia') || document.body;
@@ -387,6 +475,7 @@
                 return fetchAllRecordsCounts();
             }).then(() => {
                 applyPeriodStyling();
+                renderMergedSchedule(cachedRecords);
             });
         }, 500);
         return event;

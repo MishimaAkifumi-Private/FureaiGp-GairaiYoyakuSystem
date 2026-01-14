@@ -580,13 +580,8 @@ window.ShinryoApp = window.ShinryoApp || {};
       const v1 = normalize(rec1[field]?.value);
       const v2 = normalize(rec2[field]?.value);
 
-      // ★デバッグログ: 診療分野の比較詳細を出力
-      if (field === '診療分野') {
-          console.log(`[ConfigManager Diff] 診療分野 (ID:${rec1.$id.value}) Local:'${v1}' vs Remote:'${v2}' => ${v1===v2 ? 'Match' : 'Diff'}`);
-      }
-
       if (v1 !== v2) {
-          if(logDiff && field === '診療分野') console.warn(`[Diff] Field ${field} (ID:${rec1.$id.value}):`, v1, v2);
+          if(logDiff) console.warn(`[Diff] Field ${field} (ID:${rec1.$id.value}):`, v1, v2);
           return true;
       }
     }

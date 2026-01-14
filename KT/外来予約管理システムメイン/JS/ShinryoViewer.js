@@ -238,6 +238,22 @@ window.ShinryoApp = window.ShinryoApp || {};
 
       /* --- 医師名セル --- */
       .doctor-name-cell { font-size: 1.5em; font-weight: bold; }
+      .doctor-name-cell { font-size: 16px; font-weight: bold; }
+
+      /* --- 詳細ボタン --- */
+      .btn-detail {
+        background-color: #3498db;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        margin-left: 5px;
+        transition: background-color 0.2s;
+        vertical-align: middle;
+      }
+      .btn-detail:hover { background-color: #2980b9; }
 
       /* --- 入力ダイアログ --- */
       .term-input-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; }
@@ -367,8 +383,23 @@ window.ShinryoApp = window.ShinryoApp || {};
                     let name = (rec['医師名']?.value || '〇') + getFacilityChar(rec['施設名']?.value);
                     const sel = rec['診療選択']?.value;
                     if (specMap.has(sel)) name += ` #${specMap.get(sel)}`;
-                    if (vals.includes('午前') && !scheduleByDate[key].am.includes(name)) scheduleByDate[key].am.push(name);
-                    if (vals.includes('午後') && !scheduleByDate[key].pm.includes(name)) scheduleByDate[key].pm.push(name);
+
+                    let isAmNg = false;
+                    let isPmNg = false;
+                    const ngTable = rec['直近NG日指定']?.value;
+                    if (ngTable && Array.isArray(ngTable)) {
+                        const targetDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        for (const row of ngTable) {
+                            if (row.value['日付']?.value === targetDateStr) {
+                                const ngTimes = row.value['NG時間帯']?.value || [];
+                                if (ngTimes.includes('AM')) isAmNg = true;
+                                if (ngTimes.includes('PM')) isPmNg = true;
+                            }
+                        }
+                    }
+
+                    if (vals.includes('午前') && !isAmNg && !scheduleByDate[key].am.includes(name)) scheduleByDate[key].am.push(name);
+                    if (vals.includes('午後') && !isPmNg && !scheduleByDate[key].pm.includes(name)) scheduleByDate[key].pm.push(name);
                     const fName = rec['施設名']?.value || '';
                     if (fName.includes('総合病院') || fName.includes('クリニック')) existsFacility = true;
                 }
@@ -429,7 +460,12 @@ window.ShinryoApp = window.ShinryoApp || {};
       const doctor = rec['医師名']?.value || '';
       
       // タイトル部
-      let html = `<div style="text-align:center;font-weight:bold;margin-bottom:10px;font-size:16px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;"><span>${facility}</span><span>${department}</span>${selection ? `<span>${selection}</span>` : ''} <span>${doctor}</span></div>`;
+      // ヘッダー表示形式を変更: [施設名]　[診療科]　[診療選択]　[医師名]
+      let headerText = `${facility}　${department}`;
+      if (selection) headerText += `　${selection}`;
+      headerText += `　${doctor}`;
+
+      let html = `<div style="text-align:center;font-weight:bold;margin-bottom:10px;font-size:16px;color:#333;">${headerText}</div>`;
       html += `<table class="schedule-table" style="table-layout: fixed; width: 100%;"><colgroup><col style="width: 50px;"><col><col><col><col><col><col></colgroup><thead><tr><th></th>`;
       days.forEach(d => html += `<th>${d}</th>`);
       html += `</tr></thead><tbody>`;
@@ -551,7 +587,7 @@ window.ShinryoApp = window.ShinryoApp || {};
         if (rec._selections && rec._selections.size > 0) {
             // 診療選択を結合して表示用に更新
             const sortedSels = Array.from(rec._selections).sort().filter(s => s);
-            if (sortedSels.length > 0) rec['診療選択'].value = sortedSels.join('・');
+            if (sortedSels.length > 0) rec['診療選択'].value = sortedSels.join('、');
         }
         if (rec._facilities && rec._facilities.size > 0) {
             // 施設名を結合して表示用に更新
@@ -692,13 +728,11 @@ window.ShinryoApp = window.ShinryoApp || {};
     table.className = 'shinryo-config-table';
     
     const columns = [
-      { header: '診療分野', field: '診療分野', width: '9%', merge: true, cls: 'large-font-cell bunya-cell align-top' },
       { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell' },
       { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
-      { header: '診療科', field: '診療科', width: '15%', merge: true, cls: 'large-font-cell' },
-      { header: '医師名', field: '医師名', width: '12%', cls: 'doctor-name-cell' },
-      { header: '診療選択', field: '診療選択', width: '12%' },
-      { header: '予約期間', type: 'term_group', width: '12%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' }
+      { header: '予約期間', type: 'term_group', width: '12%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
+      { header: '診療科', field: '診療科', width: '27%', merge: true, cls: 'large-font-cell' },
+      { header: '医師名', field: '医師名', width: '12%', cls: 'doctor-name-cell' }
     ];
 
     const thead = table.createTHead();
@@ -906,7 +940,50 @@ window.ShinryoApp = window.ShinryoApp || {};
                 cell.appendChild(iconSpan);
 
             } else if (col.field === '診療科') {
-                cell.textContent = rec[col.field]?.value || '';
+                // 診療科名
+                const nameDiv = document.createElement('div');
+                // nameDiv.textContent = rec[col.field]?.value || '';
+                
+                const textSpan = document.createElement('span');
+                textSpan.textContent = rec[col.field]?.value || '';
+                nameDiv.appendChild(textSpan);
+
+                const searchBtn = document.createElement('button');
+                searchBtn.className = 'btn-detail';
+                searchBtn.textContent = '詳細';
+                searchBtn.title = 'この診療科で絞り込んで編集';
+                searchBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const query = `診療科 in ("${currentDept}")`;
+                    window.location.href = `?view_mode=input&query=${encodeURIComponent(query)}`;
+                };
+                nameDiv.appendChild(searchBtn);
+
+                cell.appendChild(nameDiv);
+
+                // 診療選択を収集（マージされた全行分を重複なく取得）
+                const rowSpan = rec[`_rowspan_診療科`] || 1;
+                const selections = new Set();
+                for (let i = 0; i < rowSpan; i++) {
+                    const targetRec = records[idx + i];
+                    if (targetRec && targetRec['診療選択']?.value) {
+                        targetRec['診療選択'].value.split('、').forEach(s => {
+                            if (s.trim()) selections.add(s.trim());
+                        });
+                    }
+                }
+
+                // 診療選択がある場合、小さい文字で「～ 含む」と表示
+                if (selections.size > 0) {
+                    const selDiv = document.createElement('div');
+                    selDiv.style.fontSize = '10px';
+                    selDiv.style.fontWeight = 'normal';
+                    selDiv.style.marginTop = '4px';
+                    selDiv.style.color = '#666';
+                    const sortedSels = Array.from(selections).sort();
+                    selDiv.textContent = sortedSels.join('、') + ' を含む';
+                    cell.appendChild(selDiv);
+                }
 
                 const infoRow = document.createElement('div');
                 infoRow.className = 'dept-info-row';
@@ -939,7 +1016,30 @@ window.ShinryoApp = window.ShinryoApp || {};
                     window.ShinryoApp.Viewer.renderOverview();
                 });
             } else if (col.field === '医師名') {
-                cell.textContent = rec[col.field]?.value || '';
+                // cell.textContent = rec[col.field]?.value || '';
+                const doctorName = rec[col.field]?.value || '';
+                
+                const containerDiv = document.createElement('div');
+                containerDiv.style.display = 'flex';
+                containerDiv.style.alignItems = 'center';
+                containerDiv.style.justifyContent = 'center';
+
+                const textSpan = document.createElement('span');
+                textSpan.textContent = doctorName;
+                containerDiv.appendChild(textSpan);
+
+                const searchBtn = document.createElement('button');
+                searchBtn.className = 'btn-detail';
+                searchBtn.textContent = '詳細';
+                searchBtn.title = 'この医師で絞り込んで編集';
+                searchBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const query = `診療科 in ("${currentDept}") and 医師名 in ("${doctorName}")`;
+                    window.location.href = `?view_mode=input&query=${encodeURIComponent(query)}`;
+                };
+                containerDiv.appendChild(searchBtn);
+                cell.appendChild(containerDiv);
+
                 // 担当パターンをツールチップ表示
                 const tblHtml = createScheduleTableHtml(rec, true);
                 cell.onmouseenter = (e) => showTooltip(e, tblHtml);
@@ -1109,12 +1209,18 @@ window.ShinryoApp = window.ShinryoApp || {};
   function adjustTooltipPosition(e) {
       const tooltipRect = tooltipEl.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
       const offset = 15;
       let top = e.pageY + offset;
       let left = e.pageX + offset;
       if (top + tooltipRect.height > scrollTop + viewportHeight) {
           top = e.pageY - tooltipRect.height - offset;
+      }
+      // 右端からはみ出る場合は左側に表示
+      if (left + tooltipRect.width > scrollLeft + viewportWidth) {
+          left = e.pageX - tooltipRect.width - offset;
       }
       tooltipEl.style.top = top + 'px';
       tooltipEl.style.left = left + 'px';
