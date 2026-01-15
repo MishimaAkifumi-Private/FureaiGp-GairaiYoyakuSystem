@@ -426,9 +426,36 @@ function getReservationSummaryHtml() {
       }
   }
 
+  // ★追加: 圧縮レコードを復元するヘルパー
+  function inflateRecord(compressedRecord) {
+      const inflated = {};
+      // IDの復元
+      inflated.$id = { type: '__ID__', value: compressedRecord.$id || null };
+      
+      Object.keys(compressedRecord).forEach(key => {
+          if (key === '$id') return;
+          const val = compressedRecord[key];
+          
+          // 直近NG日指定(サブテーブル)の復元
+          if (key === '直近NG日指定' && Array.isArray(val)) {
+              inflated[key] = {
+                  type: 'SUBTABLE',
+                  value: val.map((row, idx) => ({
+                      id: String(idx),
+                      value: Object.keys(row).reduce((acc, k) => { acc[k] = { type: 'UNKNOWN', value: row[k] }; return acc; }, {})
+                  }))
+              };
+          } else {
+              // 通常フィールドの復元
+              inflated[key] = { type: 'UNKNOWN', value: val };
+          }
+      });
+      return inflated;
+  }
+
   async function fetchKintoneData() {
-      // キャッシュ対策: URLにタイムスタンプを付与して毎回最新データを取得する
-      const url = `${config.KVIEWER_API_URL}?t=${new Date().getTime()}`;
+      // キャッシュ有効化: タイムスタンプを削除してKViewer/ブラウザのキャッシュを利用する
+      const url = config.KVIEWER_API_URL;
       console.log(`[Gemini] Fetching Kintone data from: ${url}`);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`kViewer API request failed: ${response.status}`);
@@ -445,7 +472,8 @@ function getReservationSummaryHtml() {
       const parsedData = JSON.parse(jsonString);
       if (parsedData && !Array.isArray(parsedData) && parsedData.records) {
           console.log('[Gemini] Data format: NEW (Object)');
-          config.state.kintoneRecords = parsedData.records;
+          // ★変更: 圧縮データを復元して格納
+          config.state.kintoneRecords = parsedData.records.map(inflateRecord);
           config.state.descriptions = parsedData.descriptions || {};
       } else {
           console.log('[Gemini] Data format: OLD (Array). Descriptions will be empty.');

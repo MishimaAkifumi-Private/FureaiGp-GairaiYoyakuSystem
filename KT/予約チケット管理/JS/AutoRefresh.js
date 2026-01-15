@@ -1,11 +1,12 @@
-﻿(function() {
+﻿﻿(function() {
   'use strict';
 
   // --- 設定値 ---
-  const INTERVAL_MS = 60000; // 更新間隔（60秒）
+  const INTERVAL_MS = 180000; // 更新間隔（3分）
   const IDLE_WAIT_MS = 5000; // 操作したあと、更新を再開するまでの待機時間（5秒）
 
   let lastActivityTime = Date.now();
+  let pageLoadTime = new Date().toISOString(); // 画面を開いた時刻（差分チェック用）
 
   // ユーザーの操作（マウス移動、クリック、キー入力）を検知して記録する
   const updateActivity = function() {
@@ -26,7 +27,7 @@
 
     console.log('[AutoRefresh] 監視を開始しました。操作がない時に ' + (INTERVAL_MS / 1000) + '秒間隔で更新します。');
 
-    window.myKintoneAutoRefreshTimer = setInterval(function() {
+    window.myKintoneAutoRefreshTimer = setInterval(async function() {
       
       // 1. 編集・追加画面ではないか（URLハッシュで判定）
       const hash = window.location.hash;
@@ -55,10 +56,26 @@
         return;
       }
 
-      // すべてのチェックを通過した場合のみ更新を実行
-      console.log('[AutoRefresh] 操作がないことを確認しました。表示を最新化します。');
-      const currentUrl = window.location.href;
-      window.location.replace(currentUrl);
+      // 5. ★追加: 差分チェック（更新された未完了チケットがあるか確認）
+      try {
+        const appId = kintone.app.getId();
+        const query = `更新日時 > "${pageLoadTime}" and 管理ステータス not in ("完了") limit 1`;
+        
+        const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+          app: appId,
+          query: query,
+          fields: ['$id']
+        });
+
+        if (resp.records.length > 0) {
+          console.log('[AutoRefresh] 新しい更新を検知しました。リロードします。');
+          window.location.reload();
+        } else {
+          console.log('[AutoRefresh] 更新はありませんでした。');
+        }
+      } catch (e) {
+        console.error('[AutoRefresh] 差分チェックに失敗しました。', e);
+      }
 
     }, INTERVAL_MS);
 

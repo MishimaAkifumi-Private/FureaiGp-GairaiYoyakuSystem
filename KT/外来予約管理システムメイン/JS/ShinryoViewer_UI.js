@@ -187,21 +187,36 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       document.body.appendChild(overlay);
   }
 
-  function getFacilityChar(fullName) {
-    if (!fullName) return '';
-    if (fullName.includes('総合病院')) return '<span style="color:green; font-weight:bold; font-size:1.0em;">Ⓖ</span>';
-    if (fullName.includes('クリニック')) return '<span style="color:#007bff; font-weight:bold; font-size:1.0em;">Ⓒ</span>';
+  function getFacilityChar(fullName, facilities) {
+    if (!fullName || !facilities) return '';
+    // デフォルト色パレット
+    const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+    
+    for (let i = 0; i < facilities.length; i++) {
+        const fac = facilities[i];
+        if (fac.name && fullName.includes(fac.name)) {
+            const color = fac.color || defaultColors[i % defaultColors.length];
+            const sym = fac.shortName || '●';
+            return `<span style="color:${color}; font-weight:bold; font-size:1.0em;">${sym}</span>`;
+        }
+    }
     return '';
   }
 
-  function getHolidayName(dateObj) {
+  function getHolidayName(dateObj, customHolidays) {
     const y = dateObj.getFullYear(), m = dateObj.getMonth() + 1, d = dateObj.getDate();
     const key = `${y}-${m}-${d}`;
+    const keyPad = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+    if (customHolidays && customHolidays.includes(keyPad)) {
+        return '休診日';
+    }
+
     const holidays = { '2025-1-1': '元日', '2025-1-13': '成人の日', '2026-1-1': '元日' }; 
     return holidays[key] || null;
   }
 
-  function createCalendarHtml(targetDate, scheduleRecords) {
+  function createCalendarHtml(targetDate, scheduleRecords, commonSettings) {
     const year = targetDate.getFullYear();
     const month = targetDate.getMonth();
     const departmentName = scheduleRecords.length > 0 ? scheduleRecords[0]['診療科']?.value : '';
@@ -219,6 +234,9 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
             if (!specMap.has(sel)) specMap.set(sel, specCounter++);
         }
     });
+
+    const customHolidays = commonSettings ? (commonSettings.holidays || []) : [];
+    const facilities = commonSettings ? (commonSettings.facilities || []) : [];
 
     const scheduleByDate = {};
     let existsFacility = false;
@@ -249,7 +267,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
 
                 const vals = rec[fieldCode]?.value || [];
                 if (vals.length > 0) {
-                    let name = (rec['医師名']?.value || '〇') + getFacilityChar(rec['施設名']?.value);
+                    let name = (rec['医師名']?.value || '〇') + getFacilityChar(rec['施設名']?.value, facilities);
                     const sel = rec['診療選択']?.value;
                     if (specMap.has(sel)) name += ` #${specMap.get(sel)}`;
                     if (vals.includes('午前') && !scheduleByDate[key].am.includes(name)) scheduleByDate[key].am.push(name);
@@ -271,7 +289,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
              const isTarget = current.getMonth() === month;
              if(isTarget) hasDayInMonth = true;
              const dateKey = `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`;
-             const holidayName = getHolidayName(current);
+             const holidayName = getHolidayName(current, customHolidays);
              const sch = scheduleByDate[dateKey] || {am:[], pm:[]};
              let cls = isTarget ? "" : "past-date";
              if (holidayName) cls += " holiday-cell";
@@ -290,10 +308,12 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
     }
     let legendHtml = '';
     let legendParts = [];
-    if (existsFacility) {
-        legendParts.push(`<span style="color:#007bff;font-weight:bold;">Ⓒ</span> クリニック`);
-        legendParts.push(`<span style="color:green;font-weight:bold;">Ⓖ</span> 総合病院`);
-    }
+    const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+    facilities.forEach((fac, i) => {
+        const color = fac.color || defaultColors[i % defaultColors.length];
+        const sym = fac.shortName || '●';
+        legendParts.push(`<span style="color:${color};font-weight:bold;">${sym}</span> ${fac.name}`);
+    });
     legendParts.push(`<span style="background-color:#e0f7fa; border:1px solid #ccc; padding:0 4px;">午前</span>`);
     legendParts.push(`<span style="background-color:#fff9c4; border:1px solid #ccc; padding:0 4px;">午後</span>`);
     legendHtml += `<span class="legend-item">凡例: ${legendParts.join(' / ')}</span>`;
@@ -306,12 +326,13 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
     return html;
   }
 
-  function createScheduleTableHtml(rec, isMerged = false) {
+  function createScheduleTableHtml(rec, isMerged = false, commonSettings = null) {
       const days = ['月','火','水','木','金','土'];
       const facility = rec['施設名']?.value || '';
       const department = rec['診療科']?.value || '';
       const selection = rec['診療選択']?.value || ''; 
       const doctor = rec['医師名']?.value || '';
+      const facilities = commonSettings ? (commonSettings.facilities || []) : [];
       
       // ヘッダー表示形式を変更: [施設名]　[診療科]　[診療選択]　[医師名]
       let headerText = `${facility}　${department}`;
@@ -335,8 +356,13 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
               let icons = '';
               if (isMerged && rec._scheduleInfo && rec._scheduleInfo[field]) {
                   const info = rec._scheduleInfo[field];
-                  if (info.facilities.has('G')) icons += '<span class="icon-g">Ⓖ</span>';
-                  if (info.facilities.has('C')) icons += '<span class="icon-c">Ⓒ</span>';
+                  const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+                  facilities.forEach((fac, idx) => {
+                      if (info.facilities.has(fac.name)) {
+                          const color = fac.color || defaultColors[idx % defaultColors.length];
+                          icons += `<span style="color:${color};font-weight:bold;margin-right:2px;">${fac.shortName}</span>`;
+                      }
+                  });
                   if (info.notes.size > 0) {
                       const noteText = Array.from(info.notes).join('\n').replace(/"/g, '&quot;');
                       icons += `<span class="icon-note" title="${noteText}">!</span>`;
@@ -348,7 +374,13 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       });
       html += `</tbody></table>`;
       
-      html += `<div style="margin-top:8px; font-size:11px; text-align:left; color:#555;">凡例: <span class="icon-c">Ⓒ</span> クリニック / <span class="icon-g">Ⓖ</span> 総合病院 / <span class="icon-note">!</span> 医師別案内 (マウスオーバーで表示)</div>`;
+      const legendParts = [];
+      const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+      facilities.forEach((fac, i) => {
+          const color = fac.color || defaultColors[i % defaultColors.length];
+          legendParts.push(`<span style="color:${color};font-weight:bold;">${fac.shortName}</span> ${fac.name}`);
+      });
+      html += `<div style="margin-top:8px; font-size:11px; text-align:left; color:#555;">凡例: ${legendParts.join(' / ')} / <span class="icon-note">!</span> 医師別案内 (マウスオーバーで表示)</div>`;
 
       if (rec._debug_infos && rec._debug_infos.length > 0) {
           html += `<div style="margin-top:10px; border-top:1px dashed #ccc; padding-top:5px; text-align:left;">
@@ -420,10 +452,12 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
 
       const inputArea = document.createElement('div');
       
-      const createInputRow = (label, value, unit) => {
+      const createInputRow = (label, value, unit, maxVal) => {
           const row = document.createElement('div');
           row.className = 'term-input-row';
-          row.innerHTML = `<div class="term-input-label">${label}</div><input type="number" class="term-input-field" value="${value || ''}"><div>${unit}</div>`;
+          const maxAttr = maxVal ? `max="${maxVal}" oninput="if(this.value > ${maxVal}) this.value = ${maxVal}"` : '';
+          const maxAttr = maxVal ? `max="${maxVal}" oninput="if(parseInt(this.value, 10) > ${maxVal}) this.value = ${maxVal}"` : '';
+          row.innerHTML = `<div class="term-input-label">${label}</div><input type="number" class="term-input-field" value="${value || ''}" ${maxAttr}><div>${unit}</div>`;
           return row;
       };
 
@@ -431,7 +465,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       const initDuration = currentSetting ? currentSetting.duration : (commonSettings?.duration ?? '');
 
       const startRow = createInputRow('予約開始', initStart, '日後から');
-      const durationRow = createInputRow('予約可能期間', initDuration, '日間');
+      const durationRow = createInputRow('予約可能期間', initDuration, '日間', 60);
       
       inputArea.appendChild(startRow);
       inputArea.appendChild(durationRow);
@@ -446,7 +480,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       noteDiv.style.backgroundColor = '#f0f0f0';
       noteDiv.style.padding = '8px';
       noteDiv.style.borderRadius = '4px';
-      noteDiv.innerHTML = `<strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br><span style="color:#888; margin-left:1em;">例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）</span><br><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）`;
+      noteDiv.innerHTML = `<strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br><span style="color:#888; margin-left:1em;">例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）</span><br><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）<br><span style="color:#d9534f; font-weight:bold;">※負荷軽減のため、予約可能期間は最大60日までとしてください。</span>`;
       box.appendChild(noteDiv);
 
       const toggleInputs = () => {
@@ -480,6 +514,14 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
       saveBtn.onclick = async () => {
+          if (!switchInput.checked) {
+              const newDuration = durationRow.querySelector('input').value;
+              if (parseInt(newDuration, 10) > 60) {
+                  await showCustomDialog('予約可能期間は最大60日までです。\nシステム負荷軽減のため、60日以内で設定してください。', 'alert');
+                  return;
+              }
+          }
+
           document.body.removeChild(overlay);
           try {
               if (switchInput.checked) {
@@ -526,7 +568,11 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
   function showCalendarTooltip(e, records, isPersistent = false) {
       clearTimeout(hideTimer);
       if (currentCloseHandler) { document.removeEventListener('click', currentCloseHandler); currentCloseHandler = null; }
-      updateCalendarTooltip(new Date().getFullYear(), new Date().getMonth(), records);
+      
+      // UI版ではcommonSettingsを直接参照できないため、ConfigManagerから取得を試みる
+      const commonSettings = window.ShinryoApp.ConfigManager ? window.ShinryoApp.ConfigManager.getCommonSettings() : null;
+
+      updateCalendarTooltip(new Date().getFullYear(), new Date().getMonth(), records, commonSettings);
       tooltipEl.style.display = 'block';
       tooltipEl.style.left = (e.pageX + 15) + 'px';
       tooltipEl.style.top = (e.pageY + 15) + 'px';
@@ -547,12 +593,12 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       }
   }
   
-  function updateCalendarTooltip(year, month, records) {
-      tooltipEl.innerHTML = createCalendarHtml(new Date(year, month, 1), records);
+  function updateCalendarTooltip(year, month, records, commonSettings) {
+      tooltipEl.innerHTML = createCalendarHtml(new Date(year, month, 1), records, commonSettings);
       const prev = tooltipEl.querySelector('.prev-month');
       const next = tooltipEl.querySelector('.next-month');
-      if(prev) prev.onclick = (e) => { e.stopPropagation(); updateCalendarTooltip(month===0?year-1:year, month===0?11:month-1, records); };
-      if(next) next.onclick = (e) => { e.stopPropagation(); updateCalendarTooltip(month===11?year+1:year, month===11?0:month+1, records); };
+      if(prev) prev.onclick = (e) => { e.stopPropagation(); updateCalendarTooltip(month===0?year-1:year, month===0?11:month-1, records, commonSettings); };
+      if(next) next.onclick = (e) => { e.stopPropagation(); updateCalendarTooltip(month===11?year+1:year, month===11?0:month+1, records, commonSettings); };
   }
 
   function hideTooltip() {

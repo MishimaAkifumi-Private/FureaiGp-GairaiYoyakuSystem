@@ -126,4 +126,94 @@
 
     return event;
   });
+
+  // --- ★追加: 施設選択UIのカスタマイズ ---
+  kintone.events.on(['app.record.create.show', 'app.record.edit.show'], function(event) {
+    // ConfigManagerが利用可能かチェック
+    if (window.ShinryoApp && window.ShinryoApp.ConfigManager) {
+        // 非同期で設定を取得してUI構築
+        window.ShinryoApp.ConfigManager.fetchPublishedData().then(() => {
+            const common = window.ShinryoApp.ConfigManager.getCommonSettings();
+            const facilities = common ? (common.facilities || []) : [];
+            
+            if (facilities.length > 0) {
+                const facilityFieldCode = '施設名';
+                const originalFieldEl = kintone.app.record.getFieldElement(facilityFieldCode);
+                
+                if (originalFieldEl) {
+                    // 標準フィールドを視覚的に隠す（setFieldShownだとスペースごと消えることがあるためstyleで制御）
+                    originalFieldEl.style.display = 'none';
+                    
+                    const customContainer = document.createElement('div');
+                    customContainer.style.marginBottom = '10px';
+                    customContainer.style.padding = '10px';
+                    customContainer.style.backgroundColor = '#f9f9f9';
+                    customContainer.style.borderRadius = '4px';
+                    customContainer.style.border = '1px solid #e0e0e0';
+
+                    const label = document.createElement('div');
+                    label.textContent = '診察施設を選択してください:';
+                    label.style.fontWeight = 'bold';
+                    label.style.marginBottom = '8px';
+                    label.style.fontSize = '12px';
+                    label.style.color = '#555';
+                    customContainer.appendChild(label);
+
+                    const btnGroup = document.createElement('div');
+                    btnGroup.style.display = 'flex';
+                    btnGroup.style.gap = '10px';
+                    btnGroup.style.flexWrap = 'wrap';
+
+                    // デフォルト色パレット（設定がない場合用）
+                    const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+
+                    facilities.forEach((fac, idx) => {
+                        const btn = document.createElement('button');
+                        const color = fac.color || defaultColors[idx % defaultColors.length];
+                        btn.innerHTML = `<span style="font-weight:bold; font-size:1.2em; margin-right:5px;">${fac.shortName || '●'}</span> ${fac.name}`;
+                        btn.style.padding = '8px 16px';
+                        btn.style.border = `2px solid ${color}`;
+                        btn.style.borderRadius = '30px';
+                        btn.style.backgroundColor = '#fff';
+                        btn.style.color = color;
+                        btn.style.cursor = 'pointer';
+                        btn.style.fontWeight = 'bold';
+                        btn.style.transition = 'all 0.2s';
+                        
+                        // 現在の選択状態反映
+                        const currentVal = event.record[facilityFieldCode].value;
+                        if (currentVal === fac.name) {
+                            btn.style.backgroundColor = color;
+                            btn.style.color = '#fff';
+                        }
+
+                        btn.onclick = (e) => {
+                            e.preventDefault(); // サブミット防止
+                            // 選択状態更新
+                            const rec = kintone.app.record.get();
+                            rec.record[facilityFieldCode].value = fac.name;
+                            // ★追加: デフォルト診療科の自動セット
+                            if (fac.defaultDept && rec.record['診療科']) {
+                                rec.record['診療科'].value = fac.defaultDept;
+                            }
+                            kintone.app.record.set(rec);
+                            
+                            // UI更新
+                            Array.from(btnGroup.children).forEach(b => {
+                                b.style.backgroundColor = '#fff';
+                                b.style.color = b.style.borderColor;
+                            });
+                            btn.style.backgroundColor = color;
+                            btn.style.color = '#fff';
+                        };
+                        btnGroup.appendChild(btn);
+                    });
+                    customContainer.appendChild(btnGroup);
+                    originalFieldEl.parentNode.insertBefore(customContainer, originalFieldEl);
+                }
+            }
+        });
+    }
+    return event;
+  });
 })();

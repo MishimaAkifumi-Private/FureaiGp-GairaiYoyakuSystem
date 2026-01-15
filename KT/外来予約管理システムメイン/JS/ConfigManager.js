@@ -20,6 +20,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   let publishedDepartmentSettings = {}; // ★追加: 診療科単位の設定キャッシュ
   let publishedCommonSettings = {}; // ★追加: 病院共通の設定キャッシュ
   let lastPublishedAt = null;
+  let lastJsonLength = 0;
   let isDataOldFormat = false;
 
   window.ShinryoApp.ConfigManager = {
@@ -33,7 +34,18 @@ window.ShinryoApp = window.ShinryoApp || {};
     updateDepartmentStatus: updateDepartmentStatus,
     updateDepartmentTerm: updateDepartmentTerm, // ★追加
     updateCommonTerm: updateCommonTerm, // ★追加
-    getLastPublishedAt: () => lastPublishedAt,
+    updateCommonHolidays: updateCommonHolidays, // ★追加
+    updateCommonFacilities: updateCommonFacilities, // ★追加
+    updateCommonStaffs: updateCommonStaffs, // ★追加
+    syncAppDropdown: syncAppDropdown, // ★追加: アプリ設定同期用
+    syncExternalAppDropdown: syncExternalAppDropdown, // ★追加: 外部アプリ設定同期用
+    getStorageStatus: () => ({ 
+      length: lastJsonLength, 
+      limit: 64000, 
+      recordCount: publishedRecordsMap.size,
+      lastPublishedAt: lastPublishedAt,
+      isOldFormat: isDataOldFormat
+    }),
     getPublishedDescriptions: () => publishedDescriptions,
     getDepartmentSettings: () => publishedDepartmentSettings, // ★追加
     getCommonSettings: () => publishedCommonSettings, // ★追加
@@ -42,6 +54,58 @@ window.ShinryoApp = window.ShinryoApp || {};
 
   function initConfigManager() {
     console.log('ConfigManager initialized.');
+  }
+
+  // ★追加: レコード圧縮ヘルパー (保存用)
+  function compressRecord(kintoneRecord) {
+    const compressed = {};
+    if (kintoneRecord.$id) {
+        compressed.$id = kintoneRecord.$id.value;
+    }
+    Object.keys(kintoneRecord).forEach(key => {
+        // 不要なシステムフィールドとデバッグ情報を除外
+        if (['レコード番号', '作成者', '更新者', '作成日時', '更新日時', '$revision', '$id', '_debug_info'].includes(key)) {
+            return;
+        }
+        const field = kintoneRecord[key];
+        if (!field) return;
+
+        if (field.type === 'SUBTABLE') {
+            compressed[key] = field.value.map(row => {
+                const rowObj = {};
+                Object.keys(row.value).forEach(rowFieldKey => {
+                    rowObj[rowFieldKey] = row.value[rowFieldKey].value;
+                });
+                return rowObj;
+            });
+        } else {
+            compressed[key] = field.value;
+        }
+    });
+    return compressed;
+  }
+
+  // ★追加: レコード復元ヘルパー (読込用)
+  function inflateRecord(compressedRecord) {
+      const inflated = {};
+      inflated.$id = { type: '__ID__', value: compressedRecord.$id || null };
+      Object.keys(compressedRecord).forEach(key => {
+          if (key === '$id') return;
+          const val = compressedRecord[key];
+          // 直近NG日指定のみサブテーブルとして特別扱い、それ以外は汎用的な値として復元
+          if (key === '直近NG日指定' && Array.isArray(val)) {
+              inflated[key] = {
+                  type: 'SUBTABLE',
+                  value: val.map((row, idx) => ({
+                      id: String(idx),
+                      value: Object.keys(row).reduce((acc, k) => { acc[k] = { type: 'UNKNOWN', value: row[k] }; return acc; }, {})
+                  }))
+              };
+          } else {
+              inflated[key] = { type: 'UNKNOWN', value: val };
+          }
+      });
+      return inflated;
   }
 
   /**
@@ -83,6 +147,7 @@ window.ShinryoApp = window.ShinryoApp || {};
             }
         }
         const jsonStr = jsonField ? jsonField.value : null;
+        lastJsonLength = jsonStr ? jsonStr.length : 0;
         const data = JSON.parse(jsonStr || '{}');
         
         // ★★★ デバッグ用ログ出力（取得データ） ★★★
@@ -93,13 +158,14 @@ window.ShinryoApp = window.ShinryoApp || {};
 
         let records = [];
         if (Array.isArray(data)) {
-            records = data;
+            records = data; // 旧形式(配列)の場合はそのまま(互換性維持は困難だが、通常はここには来ない想定)
             publishedDescriptions = {};
             publishedDepartmentSettings = {};
             publishedCommonSettings = {};
             isDataOldFormat = true;
         } else {
-            records = data.records || [];
+            // ★変更: 圧縮されたレコードをKintone形式に復元して読み込む
+            records = (data.records || []).map(inflateRecord);
             publishedDescriptions = data.descriptions || {};
             publishedDepartmentSettings = data.departmentSettings || {}; // ★追加: 読み込み
             publishedCommonSettings = data.commonSettings || {}; // ★追加: 読み込み
@@ -261,12 +327,13 @@ window.ShinryoApp = window.ShinryoApp || {};
     }
 
     const data = {
-      records: currentRecords,
+      records: currentRecords.map(compressRecord), // ★変更: 圧縮して保存
       descriptions: currentDescriptions,
       departmentSettings: deptSettings,
       commonSettings: commonSettings
     };
     const jsonStr = JSON.stringify(data);
+    lastJsonLength = jsonStr.length;
 
     // ★★★ デバッグ用ログ出力（保存データ） ★★★
     console.group('ConfigManager: saveConfig Debug');
@@ -473,6 +540,189 @@ window.ShinryoApp = window.ShinryoApp || {};
       }
     } catch (e) {
       console.error('ConfigManager: Failed to update common term.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: 病院共通の休診日設定を更新し、公開データに保存する
+   */
+  async function updateCommonHolidays(holidays) {
+    try {
+      const currentPublished = await fetchPublishedData();
+      if (currentPublished) {
+        const common = currentPublished.commonSettings || {};
+        common.holidays = holidays;
+        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common);
+        console.log(`ConfigManager: Common holidays updated. Count: ${holidays ? holidays.length : 0}`);
+      }
+    } catch (e) {
+      console.error('ConfigManager: Failed to update common holidays.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: 病院共通の管轄施設設定を更新し、公開データに保存する
+   */
+  async function updateCommonFacilities(facilities) {
+    try {
+      const currentPublished = await fetchPublishedData();
+      if (currentPublished) {
+        const common = currentPublished.commonSettings || {};
+        common.facilities = facilities;
+        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common);
+        console.log(`ConfigManager: Common facilities updated. Count: ${facilities ? facilities.length : 0}`);
+      }
+    } catch (e) {
+      console.error('ConfigManager: Failed to update common facilities.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: 病院共通のスタッフ設定を更新し、公開データに保存する
+   */
+  async function updateCommonStaffs(staffs) {
+    try {
+      const currentPublished = await fetchPublishedData();
+      if (currentPublished) {
+        const common = currentPublished.commonSettings || {};
+        common.staffs = staffs;
+        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common);
+        console.log(`ConfigManager: Common staffs updated. Count: ${staffs ? staffs.length : 0}`);
+      }
+    } catch (e) {
+      console.error('ConfigManager: Failed to update common staffs.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: アプリのドロップダウンフィールドの選択肢を更新し、デプロイする
+   * ※実行にはアプリ管理者権限が必要です
+   */
+  async function syncAppDropdown(fieldCode, options) {
+    try {
+      const appId = kintone.app.getId();
+      
+      // 1. 現在のフィールド設定を取得（プレビュー）
+      const getResp = await kintone.api(kintone.api.url('/k/v1/preview/app/form/fields.json', true), 'GET', {
+          app: appId,
+          fields: [fieldCode]
+      });
+      
+      if (!getResp.properties || !getResp.properties[fieldCode]) {
+          throw new Error(`Field ${fieldCode} not found.`);
+      }
+      
+      const currentType = getResp.properties[fieldCode].type; // ★追加: 現在のフィールドタイプを取得
+      const currentDefault = getResp.properties[fieldCode].defaultValue; // ★追加: 現在のデフォルト値を取得
+
+      // 2. 選択肢を構築
+      const newOptions = {};
+      options.forEach((opt, idx) => {
+          // 既存の選択肢設定があれば引き継ぐことも可能だが、今回は順序通りに再構築
+          newOptions[opt] = { label: opt, index: idx };
+      });
+
+      // ★追加: デフォルト値の決定ロジック
+      let newDefault = "";
+      if (currentType === 'RADIO_BUTTON') {
+          // ラジオボタンは必須選択のため、選択肢がある場合は必ず値を設定する
+          if (options.length > 0) {
+              // 既存のデフォルト値が新しい選択肢に含まれていればそれを維持、なければ先頭を選択
+              newDefault = options.includes(currentDefault) ? currentDefault : options[0];
+          }
+          // 選択肢が0個の場合は空文字のままとする（通常ありえないがエラー回避）
+      } else {
+          // ドロップダウン等は空文字で選択解除が可能。既存値があれば維持。
+          if (options.includes(currentDefault)) {
+              newDefault = currentDefault;
+          }
+      }
+
+      // 3. フィールド設定を更新
+      await kintone.api(kintone.api.url('/k/v1/preview/app/form/fields.json', true), 'PUT', {
+          app: appId,
+          properties: { 
+              [fieldCode]: { 
+                  type: currentType, // ★変更: 取得したタイプ(RADIO_BUTTON等)をそのまま使う
+                  options: newOptions,
+                  defaultValue: newDefault // ★変更: 適切なデフォルト値を設定
+              } 
+          }
+      });
+
+      // 4. アプリをデプロイ
+      await kintone.api(kintone.api.url('/k/v1/preview/app/deploy.json', true), 'POST', {
+          apps: [{ app: appId }]
+      });
+
+      console.log('ConfigManager: App dropdown synced and deploy requested.');
+    } catch (e) {
+      console.error('ConfigManager: Failed to sync app dropdown.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: 指定したアプリのドロップダウンフィールドの選択肢を更新し、デプロイする
+   * ※実行にはアプリ管理者権限が必要です
+   */
+  async function syncExternalAppDropdown(targetAppId, fieldCode, options) {
+    try {
+      // 1. 現在のフィールド設定を取得（プレビュー）
+      const getResp = await kintone.api(kintone.api.url('/k/v1/preview/app/form/fields.json', true), 'GET', {
+          app: targetAppId,
+          fields: [fieldCode]
+      });
+      
+      if (!getResp.properties || !getResp.properties[fieldCode]) {
+          throw new Error(`Field ${fieldCode} not found in App ${targetAppId}.`);
+      }
+      
+      const currentType = getResp.properties[fieldCode].type;
+      const currentDefault = getResp.properties[fieldCode].defaultValue;
+
+      // 2. 選択肢を構築
+      const newOptions = {};
+      options.forEach((opt, idx) => {
+          newOptions[opt] = { label: opt, index: idx };
+      });
+
+      // デフォルト値の決定ロジック
+      let newDefault = "";
+      if (currentType === 'RADIO_BUTTON') {
+          if (options.length > 0) {
+              newDefault = options.includes(currentDefault) ? currentDefault : options[0];
+          }
+      } else {
+          if (options.includes(currentDefault)) {
+              newDefault = currentDefault;
+          }
+      }
+
+      // 3. フィールド設定を更新
+      await kintone.api(kintone.api.url('/k/v1/preview/app/form/fields.json', true), 'PUT', {
+          app: targetAppId,
+          properties: { 
+              [fieldCode]: { 
+                  type: currentType,
+                  options: newOptions,
+                  defaultValue: newDefault
+              } 
+          }
+      });
+
+      // 4. アプリをデプロイ
+      await kintone.api(kintone.api.url('/k/v1/preview/app/deploy.json', true), 'POST', {
+          apps: [{ app: targetAppId }]
+      });
+
+      console.log(`ConfigManager: App ${targetAppId} dropdown synced and deploy requested.`);
+    } catch (e) {
+      console.error(`ConfigManager: Failed to sync app ${targetAppId} dropdown.`, e);
       throw e;
     }
   }

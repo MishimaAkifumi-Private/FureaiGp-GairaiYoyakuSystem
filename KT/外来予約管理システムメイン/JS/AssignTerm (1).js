@@ -310,10 +310,17 @@
     const fetchAllRecordsCounts = (opt_offset, opt_records) => {
         const offset = opt_offset || 0;
         let allRecords = opt_records || [];
+
+        // ★追加: 3ヶ月前の日付を計算
+        const d = new Date();
+        d.setMonth(d.getMonth() - 3);
+        const threeMonthsAgoStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        // 離任日が3ヶ月前より新しい、または未設定（現職）のレコードのみ取得
+        const queryCondition = `(離任日 >= "${threeMonthsAgoStr}" or 離任日 = "")`;
         
         return kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
             app: kintone.app.getId(),
-            query: `limit 500 offset ${offset}`,
+            query: `${queryCondition} limit 500 offset ${offset}`,
             fields: ['$id', '集合', '着任日', '離任日', '施設名', '診療科', '診療選択', '医師名', ...scheduleFields] // 競合チェックに必要な全フィールドを取得
         }).then((resp) => {
             allRecords = allRecords.concat(resp.records);

@@ -317,21 +317,40 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
 
 
-  function getFacilityChar(fullName) {
-    if (!fullName) return '';
-    if (fullName.includes('総合病院')) return '<span style="color:green; font-weight:bold; font-size:1.0em;">Ⓖ</span>';
-    if (fullName.includes('クリニック')) return '<span style="color:#007bff; font-weight:bold; font-size:1.0em;">Ⓒ</span>';
+  function getFacilityChar(fullName, facilities) {
+    if (!fullName || !facilities) return '';
+    // デフォルト色パレット
+    const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+    
+    for (let i = 0; i < facilities.length; i++) {
+        const fac = facilities[i];
+        if (fac.name && fullName.includes(fac.name)) {
+            const color = fac.color || defaultColors[i % defaultColors.length];
+            const sym = fac.shortName || '●';
+            return `<span style="color:${color}; font-weight:bold; font-size:1.0em;">${sym}</span>`;
+        }
+    }
     return '';
   }
   function stripHtml(html) { const t = document.createElement('div'); t.innerHTML = html || ''; return t.textContent || t.innerText || ''; }
-  function getHolidayName(dateObj) {
+  
+  function getHolidayName(dateObj, customHolidays) {
     const y = dateObj.getFullYear(), m = dateObj.getMonth() + 1, d = dateObj.getDate();
-    const key = `${y}-${m}-${d}`;
+    // ゼロ埋めなしのキー（既存ロジック互換）
+    const key = `${y}-${m}-${d}`; 
+    // ゼロ埋めありのキー（設定保存用）
+    const keyPad = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+    // 1. カスタム休診日チェック
+    if (customHolidays && customHolidays.includes(keyPad)) {
+        return '休診日';
+    }
+    // 2. 固定祝日チェック
     const holidays = { '2025-1-1': '元日', '2025-1-13': '成人の日', '2026-1-1': '元日' }; 
     return holidays[key] || null;
   }
 
-  function createCalendarHtml(targetDate, scheduleRecords) {
+  function createCalendarHtml(targetDate, scheduleRecords, commonSettings) {
     const year = targetDate.getFullYear();
     const month = targetDate.getMonth();
     const departmentName = scheduleRecords.length > 0 ? scheduleRecords[0]['診療科']?.value : '';
@@ -349,6 +368,9 @@ window.ShinryoApp = window.ShinryoApp || {};
             if (!specMap.has(sel)) specMap.set(sel, specCounter++);
         }
     });
+
+    const customHolidays = commonSettings ? (commonSettings.holidays || []) : [];
+    const facilities = commonSettings ? (commonSettings.facilities || []) : [];
 
     const scheduleByDate = {};
     let existsFacility = false;
@@ -380,7 +402,7 @@ window.ShinryoApp = window.ShinryoApp || {};
 
                 const vals = rec[fieldCode]?.value || [];
                 if (vals.length > 0) {
-                    let name = (rec['医師名']?.value || '〇') + getFacilityChar(rec['施設名']?.value);
+                    let name = (rec['医師名']?.value || '〇') + getFacilityChar(rec['施設名']?.value, facilities);
                     const sel = rec['診療選択']?.value;
                     if (specMap.has(sel)) name += ` #${specMap.get(sel)}`;
 
@@ -401,7 +423,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                     if (vals.includes('午前') && !isAmNg && !scheduleByDate[key].am.includes(name)) scheduleByDate[key].am.push(name);
                     if (vals.includes('午後') && !isPmNg && !scheduleByDate[key].pm.includes(name)) scheduleByDate[key].pm.push(name);
                     const fName = rec['施設名']?.value || '';
-                    if (fName.includes('総合病院') || fName.includes('クリニック')) existsFacility = true;
+                    if (fName) existsFacility = true;
                 }
             });
         }
@@ -417,7 +439,7 @@ window.ShinryoApp = window.ShinryoApp || {};
              const isTarget = current.getMonth() === month;
              if(isTarget) hasDayInMonth = true;
              const dateKey = `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`;
-             const holidayName = getHolidayName(current);
+             const holidayName = getHolidayName(current, customHolidays);
              const sch = scheduleByDate[dateKey] || {am:[], pm:[]};
              let cls = isTarget ? "" : "past-date";
              if (holidayName) cls += " holiday-cell";
@@ -436,10 +458,12 @@ window.ShinryoApp = window.ShinryoApp || {};
     }
     let legendHtml = '';
     let legendParts = [];
-    if (existsFacility) {
-        legendParts.push(`<span style="color:#007bff;font-weight:bold;">Ⓒ</span> クリニック`);
-        legendParts.push(`<span style="color:green;font-weight:bold;">Ⓖ</span> 総合病院`);
-    }
+    const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+    facilities.forEach((fac, i) => {
+        const color = fac.color || defaultColors[i % defaultColors.length];
+        const sym = fac.shortName || '●';
+        legendParts.push(`<span style="color:${color};font-weight:bold;">${sym}</span> ${fac.name}`);
+    });
     legendParts.push(`<span style="background-color:#e0f7fa; border:1px solid #ccc; padding:0 4px;">午前</span>`);
     legendParts.push(`<span style="background-color:#fff9c4; border:1px solid #ccc; padding:0 4px;">午後</span>`);
     legendHtml += `<span class="legend-item">凡例: ${legendParts.join(' / ')}</span>`;
@@ -452,12 +476,13 @@ window.ShinryoApp = window.ShinryoApp || {};
     return html;
   }
 
-  function createScheduleTableHtml(rec, isMerged = false) {
+  function createScheduleTableHtml(rec, isMerged = false, commonSettings = null) {
       const days = ['月','火','水','木','金','土'];
       const facility = rec['施設名']?.value || '';
       const department = rec['診療科']?.value || '';
       const selection = rec['診療選択']?.value || ''; 
       const doctor = rec['医師名']?.value || '';
+      const facilities = commonSettings ? (commonSettings.facilities || []) : [];
       
       // タイトル部
       // ヘッダー表示形式を変更: [施設名]　[診療科]　[診療選択]　[医師名]
@@ -483,8 +508,14 @@ window.ShinryoApp = window.ShinryoApp || {};
               let icons = '';
               if (isMerged && rec._scheduleInfo && rec._scheduleInfo[field]) {
                   const info = rec._scheduleInfo[field];
-                  if (info.facilities.has('G')) icons += '<span class="icon-g">Ⓖ</span>';
-                  if (info.facilities.has('C')) icons += '<span class="icon-c">Ⓒ</span>';
+                  // 施設アイコンの動的生成
+                  const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+                  facilities.forEach((fac, idx) => {
+                      if (info.facilities.has(fac.name)) {
+                          const color = fac.color || defaultColors[idx % defaultColors.length];
+                          icons += `<span style="color:${color};font-weight:bold;margin-right:2px;">${fac.shortName}</span>`;
+                      }
+                  });
                   if (info.notes.size > 0) {
                       const noteText = Array.from(info.notes).join('\n').replace(/"/g, '&quot;');
                       icons += `<span class="icon-note" title="${noteText}">!</span>`;
@@ -498,13 +529,19 @@ window.ShinryoApp = window.ShinryoApp || {};
       html += `</tbody></table>`;
       
       // 凡例追加
-      html += `<div style="margin-top:8px; font-size:11px; text-align:left; color:#555;">凡例: <span class="icon-c">Ⓒ</span> クリニック / <span class="icon-g">Ⓖ</span> 総合病院 / <span class="icon-note">!</span> 医師別案内 (マウスオーバーで表示)</div>`;
+      const legendParts = [];
+      const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+      facilities.forEach((fac, i) => {
+          const color = fac.color || defaultColors[i % defaultColors.length];
+          legendParts.push(`<span style="color:${color};font-weight:bold;">${fac.shortName}</span> ${fac.name}`);
+      });
+      html += `<div style="margin-top:8px; font-size:11px; text-align:left; color:#555;">凡例: ${legendParts.join(' / ')} / <span class="icon-note">!</span> 医師別案内 (マウスオーバーで表示)</div>`;
       
       return html;
   }
 
   // ★追加: 同一医師・同一条件のレコードをマージする関数
-  function mergeSameDoctorRecords(records) {
+  function mergeSameDoctorRecords(records, commonSettings) {
     const map = new Map();
     const days = ['月', '火', '水', '木', '金', '土'];
     const weeks = ['1', '2', '3', '4', '5'];
@@ -512,6 +549,7 @@ window.ShinryoApp = window.ShinryoApp || {};
 
     // 正規化ヘルパー: 全角半角スペースを除去
     const normalize = (str) => (str || '').replace(/[\s\u3000]+/g, '');
+    const facilities = commonSettings ? (commonSettings.facilities || []) : [];
 
     records.forEach(rec => {
         // マージキー: 診療分野, 診療科, 医師名 (施設名、診療選択は除外してマージ対象とする)
@@ -521,8 +559,13 @@ window.ShinryoApp = window.ShinryoApp || {};
             normalize(rec['医師名']?.value)
         ].join('___');
 
-        // 施設コード判定用ヘルパー
-        const getFacCode = (val) => val.includes('総合病院') ? 'G' : (val.includes('クリニック') ? 'C' : '');
+        // 施設名判定用ヘルパー (動的)
+        const getFacName = (val) => {
+            for (const fac of facilities) {
+                if (val.includes(fac.name)) return fac.name;
+            }
+            return '';
+        };
 
         if (!map.has(key)) {
             // ベースレコード作成 (Deep Copy)
@@ -538,8 +581,8 @@ window.ShinryoApp = window.ShinryoApp || {};
             scheduleFields.forEach(f => {
                 if (rec[f]?.value?.length > 0) {
                     baseRec._scheduleInfo[f] = { facilities: new Set(), notes: new Set() };
-                    const facCode = getFacCode(rec['施設名']?.value || '');
-                    if (facCode) baseRec._scheduleInfo[f].facilities.add(facCode);
+                    const facName = getFacName(rec['施設名']?.value || '');
+                    if (facName) baseRec._scheduleInfo[f].facilities.add(facName);
                     if (rec['留意案内']?.value) baseRec._scheduleInfo[f].notes.add(rec['留意案内'].value);
                 }
             });
@@ -566,8 +609,8 @@ window.ShinryoApp = window.ShinryoApp || {};
                     if (!baseRec._scheduleInfo) baseRec._scheduleInfo = {};
                     if (!baseRec._scheduleInfo[field]) baseRec._scheduleInfo[field] = { facilities: new Set(), notes: new Set() };
                     
-                    const facCode = getFacCode(rec['施設名']?.value || '');
-                    if (facCode) baseRec._scheduleInfo[field].facilities.add(facCode);
+                    const facName = getFacName(rec['施設名']?.value || '');
+                    if (facName) baseRec._scheduleInfo[field].facilities.add(facName);
                     if (rec['留意案内']?.value) baseRec._scheduleInfo[field].notes.add(rec['留意案内'].value);
                 }
             });
@@ -685,13 +728,13 @@ window.ShinryoApp = window.ShinryoApp || {};
         validRecords.sort(sortFunc);
 
         // ★変更: レコードのマージ処理を実行
-        const mergedRecords = mergeSameDoctorRecords(validRecords);
+        const mergedRecords = mergeSameDoctorRecords(validRecords, commonSettings);
 
         // ★追加: 比較用（公開済みデータ）も同様にマージしてマップ化
         const pubAllRecords = publishedData.records || [];
         const validPubRecords = pubAllRecords.filter(createFilter(pubAllRecords)); // ★変更: 公開データも同じ条件でフィルタリング
         validPubRecords.sort(sortFunc);
-        const mergedPublishedRecords = mergeSameDoctorRecords(validPubRecords);
+        const mergedPublishedRecords = mergeSameDoctorRecords(validPubRecords, commonSettings);
         const publishedMap = new Map(mergedPublishedRecords.map(r => [String(r.$id.value), r])); // ★変更: IDを文字列に統一
 
         // ★デバッグ: マージ後のレコード数比較
@@ -934,7 +977,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 iconSpan.title = 'カレンダーを表示';
                 iconSpan.onclick = (e) => {
                     e.stopPropagation();
-                    showCalendarTooltip(e, groupRecs, true);
+                    showCalendarTooltip(e, groupRecs, true, commonSettings); // ★変更: commonSettingsを渡す
                 };
                 cell.style.textAlign = 'center';
                 cell.appendChild(iconSpan);
@@ -1041,7 +1084,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 cell.appendChild(containerDiv);
 
                 // 担当パターンをツールチップ表示
-                const tblHtml = createScheduleTableHtml(rec, true);
+                const tblHtml = createScheduleTableHtml(rec, true, commonSettings);
                 cell.onmouseenter = (e) => showTooltip(e, tblHtml);
                 cell.onmouseleave = hideTooltip;
                 cell.style.cursor = 'help';
@@ -1110,10 +1153,11 @@ window.ShinryoApp = window.ShinryoApp || {};
       // 入力エリア
       const inputArea = document.createElement('div');
       
-      const createInputRow = (label, value, unit) => {
+      const createInputRow = (label, value, unit, maxVal) => {
           const row = document.createElement('div');
           row.className = 'term-input-row';
-          row.innerHTML = `<div class="term-input-label">${label}</div><input type="number" class="term-input-field" value="${value || ''}"><div>${unit}</div>`;
+          const maxAttr = maxVal ? `max="${maxVal}" oninput="if(this.value > ${maxVal}) this.value = ${maxVal}"` : '';
+          row.innerHTML = `<div class="term-input-label">${label}</div><input type="number" class="term-input-field" value="${value || ''}" ${maxAttr}><div>${unit}</div>`;
           return row;
       };
 
@@ -1122,7 +1166,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       const initDuration = currentSetting ? currentSetting.duration : (commonSettings?.duration ?? '');
 
       const startRow = createInputRow('予約開始', initStart, '日後から');
-      const durationRow = createInputRow('予約可能期間', initDuration, '日間');
+      const durationRow = createInputRow('予約可能期間', initDuration, '日間', 60);
       
       inputArea.appendChild(startRow);
       inputArea.appendChild(durationRow);
@@ -1137,7 +1181,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       noteDiv.style.backgroundColor = '#f0f0f0';
       noteDiv.style.padding = '8px';
       noteDiv.style.borderRadius = '4px';
-      noteDiv.innerHTML = `<strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br><span style="color:#888; margin-left:1em;">例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）</span><br><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）`;
+      noteDiv.innerHTML = `<strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br><span style="color:#888; margin-left:1em;">例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）</span><br><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）<br><span style="color:#d9534f; font-weight:bold;">※負荷軽減のため、予約可能期間は最大60日までとしてください。</span>`;
       box.appendChild(noteDiv);
 
       // スイッチ切り替え時の制御
@@ -1173,6 +1217,14 @@ window.ShinryoApp = window.ShinryoApp || {};
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
       saveBtn.onclick = async () => {
+          if (!switchInput.checked) {
+              const newDuration = durationRow.querySelector('input').value;
+              if (parseInt(newDuration, 10) > 60) {
+                  await showCustomDialog('予約可能期間は最大60日までです。\nシステム負荷軽減のため、60日以内で設定してください。', 'alert');
+                  return;
+              }
+          }
+
           document.body.removeChild(overlay);
           try {
               if (switchInput.checked) {
@@ -1233,7 +1285,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       adjustTooltipPosition(e);
   }
 
-  function showCalendarTooltip(e, records, isPersistent = false) {
+  function showCalendarTooltip(e, records, isPersistent = false, commonSettings = null) {
       clearTimeout(hideTimer);
       
       if (currentCloseHandler) {
@@ -1242,7 +1294,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       }
 
       const today = new Date();
-      updateCalendarTooltip(today.getFullYear(), today.getMonth(), records);
+      updateCalendarTooltip(today.getFullYear(), today.getMonth(), records, commonSettings);
       tooltipEl.style.display = 'block';
       tooltipEl.style.left = (e.pageX + 15) + 'px';
       tooltipEl.style.top = (e.pageY + 15) + 'px';
@@ -1266,17 +1318,17 @@ window.ShinryoApp = window.ShinryoApp || {};
       }
   }
   
-  function updateCalendarTooltip(year, month, records) {
-      tooltipEl.innerHTML = createCalendarHtml(new Date(year, month, 1), records);
+  function updateCalendarTooltip(year, month, records, commonSettings) {
+      tooltipEl.innerHTML = createCalendarHtml(new Date(year, month, 1), records, commonSettings);
       const prev = tooltipEl.querySelector('.prev-month');
       const next = tooltipEl.querySelector('.next-month');
       if(prev) prev.onclick = (e) => {
           e.stopPropagation();
-          updateCalendarTooltip(month===0?year-1:year, month===0?11:month-1, records);
+          updateCalendarTooltip(month===0?year-1:year, month===0?11:month-1, records, commonSettings);
       };
       if(next) next.onclick = (e) => {
           e.stopPropagation();
-          updateCalendarTooltip(month===11?year+1:year, month===11?0:month+1, records);
+          updateCalendarTooltip(month===11?year+1:year, month===11?0:month+1, records, commonSettings);
       };
   }
 
