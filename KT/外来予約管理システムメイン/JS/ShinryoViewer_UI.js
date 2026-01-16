@@ -455,7 +455,6 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       const createInputRow = (label, value, unit, maxVal) => {
           const row = document.createElement('div');
           row.className = 'term-input-row';
-          const maxAttr = maxVal ? `max="${maxVal}" oninput="if(this.value > ${maxVal}) this.value = ${maxVal}"` : '';
           const maxAttr = maxVal ? `max="${maxVal}" oninput="if(parseInt(this.value, 10) > ${maxVal}) this.value = ${maxVal}"` : '';
           row.innerHTML = `<div class="term-input-label">${label}</div><input type="number" class="term-input-field" value="${value || ''}" ${maxAttr}><div>${unit}</div>`;
           return row;

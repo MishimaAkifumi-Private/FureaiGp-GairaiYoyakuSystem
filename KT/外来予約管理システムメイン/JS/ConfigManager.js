@@ -33,6 +33,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     updateStatusBatch: updateStatusBatch,
     updateDepartmentStatus: updateDepartmentStatus,
     updateDepartmentTerm: updateDepartmentTerm, // ★追加
+    updateDepartmentDescription: updateDepartmentDescription, // ★追加
     updateCommonTerm: updateCommonTerm, // ★追加
     updateCommonHolidays: updateCommonHolidays, // ★追加
     updateCommonFacilities: updateCommonFacilities, // ★追加
@@ -523,6 +524,25 @@ window.ShinryoApp = window.ShinryoApp || {};
       }
     } catch (e) {
       console.error('ConfigManager: Failed to update department term.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: 診療科ごとの案内ラベル(HTML)を更新し、公開データに保存する
+   */
+  async function updateDepartmentDescription(deptName, html) {
+    try {
+      const currentPublished = await fetchPublishedData();
+      if (currentPublished) {
+        const descriptions = currentPublished.descriptions || {};
+        descriptions[deptName] = html;
+        
+        await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings);
+        console.log(`ConfigManager: Department ${deptName} description updated.`);
+      }
+    } catch (e) {
+      console.error('ConfigManager: Failed to update department description.', e);
       throw e;
     }
   }

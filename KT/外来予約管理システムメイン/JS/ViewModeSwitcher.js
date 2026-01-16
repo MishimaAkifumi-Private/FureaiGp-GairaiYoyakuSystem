@@ -6,6 +6,8 @@
   'use strict';
   console.log('ViewModeSwitcher.js: Loading...');
 
+  const APP_VERSION = '0.90'; // システムのバージョン番号
+
   function getUrlParam(name) {
     const url = window.location.href;
     name = name.replace(/[\[\]]/g, "\\$&");
@@ -161,8 +163,8 @@
     console.log('ViewModeSwitcher.js: app.record.index.show triggered.');
 
     // ShinryoViewerが読み込まれているかチェック
-    if (!window.ShinryoApp || !window.ShinryoApp.Viewer) {
-        const errorMsg = '【エラー】ShinryoViewer.js が読み込まれていません。\n設定画面の「JavaScript / CSSでカスタマイズ」で、ShinryoViewer.js を ViewModeSwitcher.js より上に配置してください。';
+    if (!window.ShinryoApp || !window.ShinryoApp.Viewer || !window.ShinryoApp.Viewer.renderOverview) {
+        const errorMsg = '【エラー】ShinryoViewer.js が正しく読み込まれていません。\n設定画面の「JavaScript / CSSでカスタマイズ」で、ShinryoViewer.js がアップロードされているか、ViewModeSwitcher.js より上に配置されているか確認してください。';
         console.error(errorMsg);
         window.alert(errorMsg); // Fallback to standard alert for critical init error
         return event;
@@ -368,8 +370,14 @@
 
       const title = document.createElement('h1');
       title.textContent = '外来予約管理システム';
-      title.style.cssText = 'width: 100%; text-align: center; margin-bottom: 10px; font-size: 50px;  color: #444; text-shadow: 3px 3px 0px #fff, -1px -1px 0 #fff; letter-spacing: 2px; font-family: "HGP創英角ﾎﾟｯﾌﾟ体", "HGSoeiKakupoptai", "HGPSoeiKakupoptai", "Rounded Mplus 1c", "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", Osaka, "メイリオ", Meiryo, sans-serif;';
+      title.style.cssText = 'width: 100%; text-align: center; margin-bottom: 0px; font-size: 50px;  color: #444; text-shadow: 3px 3px 0px #fff, -1px -1px 0 #fff; letter-spacing: 2px; font-family: "HGP創英角ﾎﾟｯﾌﾟ体", "HGSoeiKakupoptai", "HGPSoeiKakupoptai", "Rounded Mplus 1c", "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", Osaka, "メイリオ", Meiryo, sans-serif;';
       container.appendChild(title);
+
+      // バージョン番号の表示
+      const version = document.createElement('div');
+      version.textContent = `Ver. ${APP_VERSION}`;
+      version.style.cssText = 'width: 100%; text-align: center; margin-top: -60px; margin-bottom: 15px; color: #888; font-size: 30px;';
+      container.appendChild(version);
 
       // 予約センター名表示
       const centerName = localStorage.getItem('shinryo_center_name') || '湘南東部外来予約センター';
@@ -510,7 +518,7 @@
       if (!skipWarning) {
           // ★追加: 警告ダイアログ
           const confirmed = await showCustomDialog(
-              '【重要】設定変更の注意\n\n他のスタッフがシステムを利用中に設定を変更すると、データの競合や消失が発生する可能性があります。\n設定変更は、診療時間外など他の利用者がいない時間帯に行うことを強く推奨します。\n\n設定メニューを開きますか？',
+              '【重要】設定変更の注意\n\n他のスタッフがシステムを利用中に設定を変更すると、データの競合や消失が発生する可能性があります。設定変更は、診療時間外など他の利用者がいない時間帯に行ってください。\n\n設定メニューを開きますか？',
               'confirm',
               { ok: '開く', cancel: 'キャンセル' }
           );
@@ -524,32 +532,11 @@
       title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
       content.appendChild(title);
 
-      // ★追加: ストレージ使用状況の表示
-      if (window.ShinryoApp.ConfigManager) {
-          const status = window.ShinryoApp.ConfigManager.getStorageStatus();
-          const percent = Math.min(100, Math.round((status.length / status.limit) * 100));
-          const colorClass = percent > 90 ? 'usage-red' : (percent > 70 ? 'usage-yellow' : 'usage-green');
-          
-          const usageContainer = document.createElement('div');
-          usageContainer.className = 'storage-usage-container';
-          usageContainer.innerHTML = `
-              <div class="storage-usage-label">
-                  <span>設定データ使用量 (Kintone制限: 64,000文字)</span>
-                  <span>${status.length.toLocaleString()} / ${status.limit.toLocaleString()} (${percent}%)</span>
-              </div>
-              <div class="storage-usage-bar-bg">
-                  <div class="storage-usage-bar-fg ${colorClass}" style="width: ${percent}%"></div>
-              </div>
-              ${percent > 90 ? '<div style="color:#dc3545; font-size:10px; margin-top:5px; font-weight:bold;">⚠️ 容量が限界に近いです。不要な過去レコードを削除してください。</div>' : ''}
-          `;
-          content.appendChild(usageContainer);
-      }
-
       const menuList = [
           { label: '予約センター登録', icon: '🏥', desc: 'センター名や管轄施設の設定を行います', action: () => { document.body.removeChild(overlay); showCenterRegistrationMenu(); } },
           { label: '予約待受期間設定', icon: '📅', desc: '休診日や予約受付期間の設定を行います', action: () => { document.body.removeChild(overlay); showReservationTermMenu(); } },
           { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
-          { label: '各種URL設定', icon: '🔗', desc: 'フォームURLやロゴ画像URLなどを管理します', action: () => { document.body.removeChild(overlay); showUrlSettingDialog(); } },
+          { label: 'システム管理者', icon: '🔐', desc: 'システム管理者専用の設定（パスワードが必要）', action: () => { document.body.removeChild(overlay); showAdminPasswordDialog(); } },
           // 必要に応じてメニューを追加
       ];
 
@@ -572,6 +559,96 @@
       closeBtn.textContent = '終了';
       closeBtn.onclick = () => document.body.removeChild(overlay);
       content.appendChild(closeBtn);
+
+      document.body.appendChild(overlay);
+  }
+
+  // ★追加: 管理者認証ダイアログ
+  async function showAdminPasswordDialog() {
+      const { overlay, box, content } = createModalBase();
+      
+      const title = document.createElement('h2');
+      title.textContent = '管理者認証';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 20px; font-size: 20px; color: #2c3e50; font-weight: 700;';
+      content.appendChild(title);
+
+      const desc = document.createElement('p');
+      desc.textContent = 'システム管理者パスワードを入力してください。';
+      desc.style.cssText = 'font-size: 14px; color: #666; margin-bottom: 15px;';
+      content.appendChild(desc);
+
+      const input = document.createElement('input');
+      input.type = 'password';
+      input.className = 'custom-modal-input';
+      input.placeholder = 'パスワード';
+      content.appendChild(input);
+
+      const btnGroup = document.createElement('div');
+      btnGroup.className = 'custom-modal-btn-group';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+      cancelBtn.textContent = 'キャンセル';
+      cancelBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
+
+      const okBtn = document.createElement('button');
+      okBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+      okBtn.textContent = '認証';
+      okBtn.onclick = () => {
+          if (input.value === '17320508') {
+              document.body.removeChild(overlay);
+              showAdminMenu();
+          } else {
+              alert('パスワードが違います。');
+              input.value = '';
+              input.focus();
+          }
+      };
+
+      btnGroup.appendChild(cancelBtn);
+      btnGroup.appendChild(okBtn);
+      content.appendChild(btnGroup);
+
+      document.body.appendChild(overlay);
+      input.focus();
+  }
+
+  // ★追加: システム管理者メニュー
+  async function showAdminMenu() {
+      const { overlay, box, content } = createModalBase();
+      
+      const title = document.createElement('h2');
+      title.textContent = 'システム管理者メニュー';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
+      content.appendChild(title);
+
+      const menuList = [
+          { label: 'メールサーバー設定', icon: '🖥️', desc: 'SMTPサーバー・認証情報の設定を行います', action: () => { document.body.removeChild(overlay); showMailServerSettingDialog(); } },
+          { label: 'アプリ連携設定', icon: '🔗', desc: '連携するKintoneアプリ番号の設定を行います', action: () => { document.body.removeChild(overlay); showAppIdSettingDialog(); } },
+          { label: '各種URL設定', icon: '🌐', desc: 'フォームURLやロゴ画像URLなどを管理します', action: () => { document.body.removeChild(overlay); showUrlSettingDialog(); } },
+          { label: 'システムヘルス情報', icon: '📊', desc: '詳細なシステム稼働状況を確認します', action: () => { document.body.removeChild(overlay); showSystemHealthDialog(); } },
+      ];
+
+      menuList.forEach(item => {
+          const btn = document.createElement('button');
+          btn.className = 'custom-modal-menu-btn';
+          btn.innerHTML = `
+            <div class="menu-btn-icon">${item.icon}</div>
+            <div class="menu-btn-content">
+                <div class="menu-btn-title">${item.label}</div>
+                <div class="menu-btn-desc">${item.desc}</div>
+            </div>
+          `;
+          btn.onclick = item.action;
+          content.appendChild(btn);
+      });
+
+      const backBtn = document.createElement('button');
+      backBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+      backBtn.textContent = '戻る';
+      backBtn.style.marginTop = '15px';
+      backBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
+      content.appendChild(backBtn);
 
       document.body.appendChild(overlay);
   }
@@ -646,12 +723,171 @@
       const closeBtn = document.createElement('button');
       closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       closeBtn.textContent = '戻る';
-      closeBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
+      closeBtn.onclick = () => { document.body.removeChild(overlay); showAdminMenu(); };
       
       btnGroup.appendChild(closeBtn);
       content.appendChild(btnGroup);
 
       document.body.appendChild(overlay);
+  }
+
+  // ★追加: メールサーバー設定ダイアログ (showTicketAppSettingDialogから移動・独立)
+  function showMailServerSettingDialog() {
+      let config = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
+      const inputRefs = {};
+
+      const checkDirty = (action) => {
+          let isDirty = false;
+          Object.keys(inputRefs).forEach(key => {
+              if (inputRefs[key].value != (config[key] || '')) isDirty = true;
+          });
+          checkDirtyAndConfirm(isDirty, action);
+      };
+
+      const { overlay, box, content } = createModalBase((doClose) => checkDirty(doClose));
+      box.style.maxWidth = '500px';
+      
+      const title = document.createElement('h2');
+      title.textContent = 'メールサーバー設定';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700; text-align: center;';
+      content.appendChild(title);
+
+      const createInput = (label, key, type = 'text', options = null) => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '15px';
+          const lbl = document.createElement('label');
+          lbl.textContent = label;
+          lbl.style.display = 'block';
+          lbl.style.fontSize = '12px';
+          lbl.style.fontWeight = 'bold';
+          lbl.style.marginBottom = '4px';
+          div.appendChild(lbl);
+
+          let inp;
+          if (type === 'select') {
+              inp = document.createElement('select');
+              inp.className = 'custom-modal-input';
+              options.forEach(opt => {
+                  const o = document.createElement('option');
+                  o.value = opt;
+                  o.textContent = opt;
+                  if (opt === (config[key] || 'None')) o.selected = true;
+                  inp.appendChild(o);
+              });
+          } else {
+              inp = document.createElement('input');
+              inp.className = 'custom-modal-input';
+              inp.type = type;
+              inp.value = config[key] || '';
+          }
+          inp.style.marginBottom = '0';
+          div.appendChild(inp);
+          content.appendChild(div);
+          inputRefs[key] = inp;
+      };
+
+      createInput('SMTPサーバー名', 'smtpServer');
+      createInput('ポート番号', 'smtpPort', 'number');
+      createInput('暗号方式', 'encryption', 'select', ['None', 'SSL', 'TLS']);
+      createInput('ユーザー名', 'smtpUser');
+      createInput('パスワード', 'smtpPass', 'password');
+      createInput('送信元メールアドレス', 'mailAddress', 'email');
+
+      const btnGroup = document.createElement('div');
+      btnGroup.className = 'custom-modal-btn-group';
+      btnGroup.style.marginTop = '20px';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+      cancelBtn.textContent = 'キャンセル';
+      cancelBtn.onclick = () => checkDirty(() => { document.body.removeChild(overlay); showAdminMenu(); });
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+      saveBtn.textContent = '保存';
+      saveBtn.onclick = () => {
+          Object.keys(inputRefs).forEach(key => {
+              config[key] = inputRefs[key].value;
+          });
+          localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
+          document.body.removeChild(overlay);
+          showAdminMenu();
+      };
+
+      btnGroup.appendChild(cancelBtn);
+      btnGroup.appendChild(saveBtn);
+      content.appendChild(btnGroup);
+
+      document.body.appendChild(overlay);
+  }
+
+  // ★追加: アプリ連携設定ダイアログ (システム管理者用)
+  function showAppIdSettingDialog() {
+      let config = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
+      const inputRefs = {};
+
+      const checkDirty = (action) => {
+          const isDirty = inputRefs.appId.value != (config.appId || '');
+          checkDirtyAndConfirm(isDirty, action);
+      };
+
+      const { overlay, box, content } = createModalBase((doClose) => checkDirty(doClose));
+      box.style.maxWidth = '400px';
+      
+      const title = document.createElement('h2');
+      title.textContent = 'アプリ連携設定';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700; text-align: center;';
+      content.appendChild(title);
+
+      const div = document.createElement('div');
+      div.style.marginBottom = '15px';
+      const lbl = document.createElement('label');
+      lbl.textContent = '予約チケット管理アプリ番号 (AppID)';
+      lbl.style.display = 'block';
+      lbl.style.fontSize = '12px';
+      lbl.style.fontWeight = 'bold';
+      lbl.style.marginBottom = '4px';
+      div.appendChild(lbl);
+
+      const inp = document.createElement('input');
+      inp.className = 'custom-modal-input';
+      inp.type = 'number';
+      inp.value = config.appId || '';
+      inp.style.marginBottom = '0';
+      div.appendChild(inp);
+      content.appendChild(div);
+      inputRefs.appId = inp;
+
+      const desc = document.createElement('p');
+      desc.textContent = '※通常は「142」が設定されています。アプリを移行した場合のみ変更してください。';
+      desc.style.cssText = 'font-size: 11px; color: #888; margin-top: 10px;';
+      content.appendChild(desc);
+
+      const btnGroup = document.createElement('div');
+      btnGroup.className = 'custom-modal-btn-group';
+      btnGroup.style.marginTop = '20px';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+      cancelBtn.textContent = 'キャンセル';
+      cancelBtn.onclick = () => checkDirty(() => { document.body.removeChild(overlay); showAdminMenu(); });
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+      saveBtn.textContent = '保存';
+      saveBtn.onclick = () => {
+          config.appId = inp.value;
+          localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
+          document.body.removeChild(overlay);
+          showAdminMenu();
+      };
+
+      btnGroup.appendChild(cancelBtn);
+      btnGroup.appendChild(saveBtn);
+      content.appendChild(btnGroup);
+
+      document.body.appendChild(overlay);
+      inp.focus();
   }
 
   // ★追加: 予約センター登録メニュー
@@ -815,8 +1051,7 @@
           content.appendChild(title);
 
           const menuList = [
-              { label: 'アプリ連携設定', icon: '🔗', desc: 'アプリ番号の設定', action: () => renderAppIdSettings() },
-              { label: 'メール設定', icon: '✉️', desc: 'サーバー・BCC・リマインド設定', action: () => renderMailMenu() },
+              { label: 'メール設定', icon: '✉️', desc: 'BCC・リマインド設定', action: () => renderMailMenu() },
               { label: '未読警告設定', icon: '⚠️', desc: 'アラート時間の閾値設定', action: () => renderAlertSettings() },
               { label: 'スタッフ管理', icon: '👥', desc: 'システム利用者の登録・管理を行います', action: () => showStaffSettingDialog() }
           ];
@@ -853,7 +1088,6 @@
           content.appendChild(title);
 
           const menuList = [
-              { label: 'メールサーバー設定', icon: '🖥️', desc: 'SMTPサーバー・認証情報の設定', action: () => renderMailServerSettings() },
               { label: 'BCC設定', icon: '📬', desc: 'BCC の設定', action: () => renderMailDestSettings() },
               { label: '予約日リマインド設定', icon: '⏰', desc: 'リマインドメールの送信設定', action: () => renderReminderSettings() }
           ];
@@ -982,24 +1216,6 @@
           btnGroup.appendChild(cancelBtn);
           btnGroup.appendChild(saveBtn);
           content.appendChild(btnGroup);
-      };
-
-      // 各設定画面
-      const renderAppIdSettings = () => {
-          renderForm('アプリ連携設定', [
-              { label: 'アプリ番号', key: 'appId', type: 'number' }
-          ], () => true);
-      };
-
-      const renderMailServerSettings = () => {
-          renderForm('メールサーバー設定', [
-              { label: 'SMTPサーバー名', key: 'smtpServer' },
-              { label: 'ポート番号', key: 'smtpPort', type: 'number' },
-              { label: '暗号方式', key: 'encryption', type: 'select', options: ['None', 'SSL', 'TLS'], default: 'None' },
-              { label: 'ユーザー名', key: 'smtpUser' },
-              { label: 'パスワード', key: 'smtpPass', type: 'password' },
-              { label: '送信元メールアドレス', key: 'mailAddress', type: 'email' }
-          ], () => true, renderMailMenu);
       };
 
       const renderMailDestSettings = () => {
@@ -1151,7 +1367,7 @@
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       cancelBtn.textContent = 'キャンセル';
-      cancelBtn.onclick = () => checkDirty(() => { document.body.removeChild(overlay); showSettingsMenu(true); });
+      cancelBtn.onclick = () => checkDirty(() => { document.body.removeChild(overlay); showAdminMenu(); });
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
@@ -1169,7 +1385,7 @@
           
           localStorage.setItem('shinryo_url_config', JSON.stringify(urlConfig));
           document.body.removeChild(overlay);
-          location.reload(); // URL変更の影響を反映するためリロード
+          showAdminMenu();
       };
 
       btnGroup.appendChild(cancelBtn);
@@ -1369,22 +1585,23 @@
       closeBtn.textContent = '保存して閉じる';
       closeBtn.onclick = async () => {
           const ticketConfig = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
-          const targetAppId = ticketConfig.appId || 142; // 設定がない場合はデフォルト142
-          // 確認ダイアログ
-          const confirmed = await showCustomDialog(
-              'スタッフ設定を保存します。\n同時に、予約チケット管理アプリ(App142)の「担当者」選択肢も更新しますか？',
-              `スタッフ設定を保存します。\n同時に、予約チケット管理アプリ(App${targetAppId})の「担当者」選択肢も更新しますか？`,
-              'confirm',
-              { ok: '保存して更新', cancel: 'キャンセル' }
-          );
-          if (!confirmed) return;
+          const targetAppId = ticketConfig.appId || 142;
 
           document.body.removeChild(overlay);
           try {
+              // ブラウザ利用者の保存
+              localStorage.setItem('shinryo_ticket_staff_name', tempUser);
+
+              // 共通設定の保存
               await window.ShinryoApp.ConfigManager.updateCommonStaffs(currentStaffs);
+
+              // 予約チケット管理アプリのドロップダウン同期
               const staffNames = currentStaffs.map(s => s.name);
               await window.ShinryoApp.ConfigManager.syncExternalAppDropdown(142, '担当者', staffNames);
-              await window.ShinryoApp.ConfigManager.syncExternalAppDropdown(targetAppId, '担当者', staffNames);
+              if (targetAppId != 142) {
+                  await window.ShinryoApp.ConfigManager.syncExternalAppDropdown(targetAppId, '担当者', staffNames);
+              }
+
               await showCustomDialog('保存と同期が完了しました。\n反映まで数分かかる場合があります。', 'alert');
               showTicketAppSettingDialog();
           } catch(e) {
