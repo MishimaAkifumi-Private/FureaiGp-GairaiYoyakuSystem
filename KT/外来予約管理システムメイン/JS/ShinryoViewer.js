@@ -15,6 +15,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   window.ShinryoApp.Viewer.showCustomDialog = showCustomDialog;
   window.ShinryoApp.Viewer.showTooltip = showTooltip;
   window.ShinryoApp.Viewer.hideTooltip = hideTooltip;
+  window.ShinryoApp.Viewer.showLabelEditor = showLabelEditor;
 
   // --- CSS適用 ---
   function applyStyles() {
@@ -123,8 +124,8 @@ window.ShinryoApp = window.ShinryoApp || {};
       /* --- 全体レイアウト --- */
       #overview-container { padding: 0 20px 20px; background-color: #fff; font-family: "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif; }
       .shinryo-config-table { width: 100%; border-collapse: collapse; border: 2px solid #555; table-layout: fixed; margin-top: 0px; }
-      .shinryo-config-table th, .shinryo-config-table td { border: 1px solid #ddd; padding: 6px; font-size: 12px; vertical-align: middle; text-align: center; }
-      .shinryo-config-table th { background-color: #e9e9e9; color: #333; font-weight: bold; font-size: 13px; height: 30px; }
+      .shinryo-config-table th, .shinryo-config-table td { border: 1px solid #ddd; padding: 6px; font-size: 16px; vertical-align: middle; text-align: center; }
+      .shinryo-config-table th { background-color: #e9e9e9; color: #333; font-weight: bold; font-size: 16px; height: 30px; }
       .shinryo-config-table tr.department-group-start > td { border-top: 2px solid #555; }
       .shinryo-config-table td.bunya-cell, .shinryo-config-table th.bunya-cell { border-right: 2px solid #555; }
       .shinryo-config-table td.large-font-cell { font-size: 1.3em; font-weight: bold; }
@@ -265,30 +266,18 @@ window.ShinryoApp = window.ShinryoApp || {};
       .icon-c { color: #007bff; font-weight: bold; font-size: 1.1em; margin-right: 2px; }
       .icon-note { color: #e74c3c; font-weight: bold; cursor: help; margin-left: 2px; font-size: 1.1em; }
 
-      /* --- 案内ラベル列用 --- */
-      .label-clipped-box {
-          max-height: 120px; /* 医師数名分の高さで制限し、それ以上は切り取る */
-          overflow: hidden;
-          font-size: 11px;
-          padding: 2px;
-          text-align: left;
-          cursor: help;
-          line-height: 1.4;
-          color: #333;
-      }
-      
       /* --- リッチテキスト表示補正 (Quill出力対応) --- */
-      .rich-text-content h1, .label-clipped-box h1 { font-size: 1.8em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
-      .rich-text-content h2, .label-clipped-box h2 { font-size: 1.5em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
-      .rich-text-content h3, .label-clipped-box h3 { font-size: 1.2em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
-      .rich-text-content p, .label-clipped-box p { margin: 0 0 0.5em 0; }
-      .rich-text-content ul, .label-clipped-box ul { padding-left: 1.5em; list-style-type: disc; margin: 0.5em 0; }
-      .rich-text-content ol, .label-clipped-box ol { padding-left: 1.5em; list-style-type: decimal; margin: 0.5em 0; }
-      .rich-text-content strong, .label-clipped-box strong { font-weight: bold; }
-      .rich-text-content em, .label-clipped-box em { font-style: italic; }
-      .rich-text-content u, .label-clipped-box u { text-decoration: underline; }
-      .rich-text-content blockquote, .label-clipped-box blockquote { border-left: 4px solid #ccc; margin: 5px 0; padding-left: 10px; color: #666; }
-      .rich-text-content pre, .label-clipped-box pre { background-color: #f0f0f0; padding: 5px; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
+      .rich-text-content h1 { font-size: 1.8em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+      .rich-text-content h2 { font-size: 1.5em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+      .rich-text-content h3 { font-size: 1.2em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+      .rich-text-content p { margin: 0 0 0.5em 0; }
+      .rich-text-content ul { padding-left: 1.5em; list-style-type: disc; margin: 0.5em 0; }
+      .rich-text-content ol { padding-left: 1.5em; list-style-type: decimal; margin: 0.5em 0; }
+      .rich-text-content strong { font-weight: bold; }
+      .rich-text-content em { font-style: italic; }
+      .rich-text-content u { text-decoration: underline; }
+      .rich-text-content blockquote { border-left: 4px solid #ccc; margin: 5px 0; padding-left: 10px; color: #666; }
+      .rich-text-content pre { background-color: #f0f0f0; padding: 5px; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
       /* --- リッチテキスト表示補正 (Quill出力対応 & エディタ共通) --- */
       /* プレビュー(.rich-text-content) と エディタ(.ql-editor) のベーススタイルを統一して折り返し位置を合わせる */
       .rich-text-content, .ql-editor {
@@ -301,17 +290,16 @@ window.ShinryoApp = window.ShinryoApp || {};
           box-sizing: border-box !important;
           padding: 15px !important; /* パディングを統一 */
       }
-      .rich-text-content h1, .label-clipped-box h1, .ql-editor h1 { font-size: 1.8em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
-      .rich-text-content h2, .label-clipped-box h2, .ql-editor h2 { font-size: 1.5em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
-      .rich-text-content h3, .label-clipped-box h3, .ql-editor h3 { font-size: 1.2em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
-      .rich-text-content p, .label-clipped-box p, .ql-editor p { margin: 0 0 0.5em 0; }
-      .rich-text-content ul, .label-clipped-box ul, .ql-editor ul { padding-left: 1.5em; list-style-type: disc; margin: 0.5em 0; }
-      .rich-text-content ol, .label-clipped-box ol, .ql-editor ol { padding-left: 1.5em; list-style-type: decimal; margin: 0.5em 0; }
-      .rich-text-content strong, .label-clipped-box strong, .ql-editor strong { font-weight: bold; }
-      .rich-text-content em, .label-clipped-box em, .ql-editor em { font-style: italic; }
-      .rich-text-content u, .label-clipped-box u, .ql-editor u { text-decoration: underline; }
-      .rich-text-content blockquote, .label-clipped-box blockquote, .ql-editor blockquote { border-left: 4px solid #ccc; margin: 5px 0; padding-left: 10px; color: #666; }
-      .rich-text-content pre, .label-clipped-box pre, .ql-editor pre { background-color: #f0f0f0; padding: 5px; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
+      .rich-text-content h1, .ql-editor h1 { font-size: 1.8em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+      .rich-text-content h2, .ql-editor h2 { font-size: 1.5em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+      .rich-text-content h3, .ql-editor h3 { font-size: 1.2em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+      .rich-text-content p, .ql-editor p { margin: 0 !important; padding: 0 !important; line-height: 1.5 !important; }
+      .rich-text-content ol, .ql-editor ol { padding-left: 1.5em; list-style-type: decimal; margin: 0.5em 0; }
+      .rich-text-content strong, .ql-editor strong { font-weight: bold; }
+      .rich-text-content em, .ql-editor em { font-style: italic; }
+      .rich-text-content u, .ql-editor u { text-decoration: underline; }
+      .rich-text-content blockquote, .ql-editor blockquote { border-left: 4px solid #ccc; margin: 5px 0; padding-left: 10px; color: #666; }
+      .rich-text-content pre, .ql-editor pre { background-color: #f0f0f0; padding: 5px; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
       
       /* --- 医師名セル（余白グレーアウト用） --- */
       .doctor-cell-filled {
@@ -845,17 +833,29 @@ window.ShinryoApp = window.ShinryoApp || {};
       { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
       { header: '予約期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
       { header: '診療科', field: '診療科', width: '15%', merge: true, cls: 'large-font-cell' },
-      { header: '医師名', field: '医師名', width: '8%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top' }, // ★修正: doctor-cell-voidを削除(TDのみに適用するため)
-      { header: '詳細', type: 'detail_btn', width: '6%', merge: true, mergeKey: '診療科', cls: 'align-top' }, // ★修正: doctor-cell-voidを削除
-      { header: '案内ラベル', type: 'label_text', width: '20%', merge: true, mergeKey: '診療科', cls: 'align-top' } // ★追加
+      { header: '医師', field: '医師名', width: '5%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top no-right-border', colspan: 2 },
+      { header: '詳細', type: 'detail_btn', width: '2%', merge: true, mergeKey: '診療科', cls: 'align-top no-left-border', skipHeader: true }
     ];
+
+    // ★追加: colgroupによる列幅制御
+    const colgroup = document.createElement('colgroup');
+    columns.forEach(col => {
+        const c = document.createElement('col');
+        if (col.width) c.style.width = col.width;
+        colgroup.appendChild(c);
+    });
+    table.appendChild(colgroup);
 
     const thead = table.createTHead();
     const hRow = thead.insertRow();
     columns.forEach(col => {
+        if (col.skipHeader) return; // ★追加: ヘッダー生成スキップ
+
         const th = document.createElement('th');
         th.textContent = col.header;
-        if (col.width) th.style.width = col.width;
+        // if (col.width) th.style.width = col.width; // colgroupに任せるため削除
+        if (col.colspan) th.colSpan = col.colspan; // ★追加: colspan設定
+
         if (col.cls) col.cls.split(' ').forEach(c => th.classList.add(c));
         hRow.appendChild(th);
     });
@@ -1045,7 +1045,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 const iconSpan = document.createElement('span');
                 iconSpan.textContent = '📅';
                 iconSpan.style.cursor = 'pointer';
-                iconSpan.style.fontSize = '1.2em';
+                iconSpan.style.fontSize = '1.6em';
                 iconSpan.title = 'カレンダーを表示';
                 iconSpan.onclick = (e) => {
                     e.stopPropagation();
@@ -1109,9 +1109,9 @@ window.ShinryoApp = window.ShinryoApp || {};
                 }
 
                 if (isInherited) {
-                    cell.innerHTML = `<div style="font-size:12px; color:#333;">${text}</div><div style="font-size:10px; color:#888;">(共通設定)</div>`;
+                    cell.innerHTML = `<div style="font-size:16px; color:#333;">${text}</div><div style="font-size:10px; color:#888;">(共通設定)</div>`;
                 } else {
-                    cell.innerHTML = `<div style="font-size:12px; color:#007bff; font-weight:bold;">${text}</div>`;
+                    cell.innerHTML = `<div style="font-size:16px; color:#007bff; font-weight:bold;">${text}</div>`;
                 }
                 cell.style.cursor = 'pointer';
                 cell.title = 'クリックして予約期間を編集';
@@ -1119,47 +1119,6 @@ window.ShinryoApp = window.ShinryoApp || {};
                     // 更新後のコールバック: 再描画
                     window.ShinryoApp.Viewer.renderOverview();
                 });
-            } else if (col.type === 'label_text') {
-                // ★追加: 案内ラベル列 (HTML直接表示 + スクロール)
-                const desc = descriptions[currentDept] || '';
-                // 空判定を厳密に行う (Quillの空タグ対策: テキストがなく、かつ画像タグもない場合を空とみなす)
-                const isEmpty = !desc || (stripHtml(desc).trim() === '' && !desc.includes('<img'));
-                
-                const labelDiv = document.createElement('div');
-                labelDiv.className = 'label-clipped-box';
-                // HTMLを直接表示（スクロールなし、溢れたら切り取り）
-                labelDiv.innerHTML = isEmpty ? '<span style="color:#ccc;">(未設定)</span>' : desc;
-                if (isEmpty) {
-                    labelDiv.innerHTML = '<div style="color:#ccc; text-align:center; padding:10px; cursor:pointer;"><div style="font-size:24px;">📝</div><div style="font-size:10px;">クリックして編集</div></div>';
-                    labelDiv.style.display = 'flex';
-                    labelDiv.style.alignItems = 'center';
-                    labelDiv.style.justifyContent = 'center';
-                    labelDiv.style.height = '100%';
-                } else {
-                    labelDiv.innerHTML = desc;
-                }
-                
-                // ★追加: 結合行数に応じて最大高さを調整
-                const rowSpan = rec[`_rowspan_label_text`] || 1;
-                // 医師1名分の高さを基準に設定 (約60px)
-                // 常に適用して高さを同期させることで、斜線(余白)が出ないようにする
-                const unitHeight = 60;
-                // TDのpadding(上下計12px)とdivのpadding(上下計4px)の合計16pxを差し引いて補正
-                const paddingOffset = 16;
-                const dynamicHeight = (rowSpan * unitHeight) - paddingOffset;
-                labelDiv.style.maxHeight = `${dynamicHeight}px`;
-                
-                // クリックで「確認ビューワー」を開く
-                labelDiv.onclick = (e) => {
-                    e.stopPropagation();
-                    hideTooltip(); // ツールチップを消す
-                    showLabelViewer(currentDept, desc, () => {
-                        window.ShinryoApp.Viewer.renderOverview();
-                    });
-                };
-                
-                cell.appendChild(labelDiv);
-
             } else if (col.field === '医師名') {
                 // ★修正: 斜線背景クラスをTDにのみ適用
                 cell.classList.add('doctor-cell-void');
@@ -1200,7 +1159,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                     
                     const searchBtn = document.createElement('button');
                     searchBtn.className = 'btn-detail';
-                    searchBtn.textContent = '詳細';
+                    searchBtn.textContent = '編集';
                     searchBtn.title = 'この医師で絞り込んで編集';
                     searchBtn.onclick = (e) => {
                        e.stopPropagation();
@@ -1371,57 +1330,6 @@ window.ShinryoApp = window.ShinryoApp || {};
       document.body.appendChild(overlay);
   }
 
-  // ★追加: 案内ラベル確認ビューワー (モーダル)
-  function showLabelViewer(deptName, currentHtml, onUpdate) {
-      const { overlay, box, content } = createModalBase();
-      box.style.width = '800px';
-      box.style.maxWidth = '90%';
-      box.style.textAlign = 'left';
-
-      const title = document.createElement('h3');
-      title.textContent = `案内ラベル確認: ${deptName}`;
-      title.style.marginTop = '0';
-      title.style.borderBottom = '1px solid #eee';
-      title.style.paddingBottom = '10px';
-      content.appendChild(title);
-
-      const viewArea = document.createElement('div');
-      viewArea.className = 'rich-text-content'; // ★追加: スタイル適用用クラス
-      viewArea.style.padding = '15px';
-      viewArea.style.backgroundColor = '#f9f9f9';
-      viewArea.style.border = '1px solid #ddd';
-      viewArea.style.borderRadius = '4px';
-      viewArea.style.minHeight = '100px';
-      viewArea.style.maxHeight = '400px';
-      viewArea.style.overflowY = 'auto';
-      const isEmpty = !currentHtml || (stripHtml(currentHtml).trim() === '' && !currentHtml.includes('<img'));
-      viewArea.innerHTML = isEmpty ? '<span style="color:#999;">(設定なし)</span>' : currentHtml;
-      content.appendChild(viewArea);
-
-      const btnGroup = document.createElement('div');
-      btnGroup.className = 'custom-modal-btn-group';
-      btnGroup.style.marginTop = '20px';
-
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-      closeBtn.textContent = '閉じる';
-      closeBtn.onclick = () => document.body.removeChild(overlay);
-
-      const editBtn = document.createElement('button');
-      editBtn.className = 'custom-modal-btn custom-modal-btn-ok';
-      editBtn.textContent = '編集する';
-      editBtn.onclick = () => {
-          document.body.removeChild(overlay);
-          showLabelEditor(deptName, currentHtml, onUpdate);
-      };
-
-      btnGroup.appendChild(closeBtn);
-      btnGroup.appendChild(editBtn);
-      content.appendChild(btnGroup);
-
-      document.body.appendChild(overlay);
-  }
-
   // ★追加: Quill.js ライブラリの動的ロード
   let quillLoaded = false;
   function loadQuill() {
@@ -1441,56 +1349,73 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
 
   // ★追加: 案内ラベル編集ダイアログ (Quill使用)
-  async function showLabelEditor(deptName, currentHtml, onSuccess) {
+  async function showLabelEditor(deptName, currentHtml, currentSetting, onSuccess, displayTitle = null) {
       await loadQuill();
       
       // createModalBase を使用して ×ボタン付きのモーダルを作成
-      const { overlay, box, content } = createModalBase();
+      // ★変更: ダイアログ外クリックで閉じないように設定
+      const { overlay, box, content } = createModalBase({ closeOnOverlayClick: false });
       box.style.width = '800px';
       box.style.maxWidth = '90%';
       box.style.textAlign = 'left';
 
       const title = document.createElement('h3');
-      title.textContent = `案内ラベル編集: ${deptName}`;
+      title.textContent = displayTitle ? `案内ラベル編集: ${displayTitle}` : `案内ラベル編集: ${deptName}`;
       title.style.marginTop = '0';
       title.style.borderBottom = '1px solid #eee';
       title.style.paddingBottom = '10px';
       content.appendChild(title);
 
-      // ★追加: 定型文挿入ボタンエリア
-      const templateArea = document.createElement('div');
-      templateArea.style.marginBottom = '10px';
-      templateArea.style.display = 'flex';
-      templateArea.style.gap = '10px';
-      
-      const templates = [
-          { label: '休診のお知らせ', text: '<p><span style="color: rgb(230, 0, 0);"><strong>【休診のお知らせ】</strong></span></p><p>都合により、<strong>〇月〇日（曜）</strong>の診察は休診となります。</p><p>ご迷惑をおかけしますが、よろしくお願いいたします。</p>' },
-          { label: '時間変更', text: '<p><span style="color: rgb(0, 102, 204);"><strong>【診療時間変更のお知らせ】</strong></span></p><p><strong>〇月〇日（曜）</strong>の診療時間は以下の通り変更となります。</p><p>変更前：9:00 ～ 12:00<br><strong>変更後：9:30 ～ 11:30</strong></p>' },
-          { label: '代診のお知らせ', text: '<p><strong>【代診のお知らせ】</strong></p><p><strong>〇月〇日（曜）</strong>は、〇〇医師に代わり、<strong>〇〇医師</strong>が診察を行います。</p>' }
-      ];
+      // ★変更: 用件別制御ラジオボタン (診療科の場合のみ表示)
+      let radioGroup = null;
+      if (!deptName.startsWith('__Global_')) {
+          const controlContainer = document.createElement('div');
+          controlContainer.style.marginBottom = '15px';
+          controlContainer.style.padding = '10px';
+          controlContainer.style.backgroundColor = '#f8f9fa';
+          controlContainer.style.borderRadius = '4px';
+          
+          const controlLabel = document.createElement('div');
+          controlLabel.textContent = '用件別制御';
+          controlLabel.style.fontWeight = 'bold';
+          controlLabel.style.fontSize = '12px';
+          controlLabel.style.marginBottom = '5px';
+          controlContainer.appendChild(controlLabel);
 
-      templates.forEach(tmpl => {
-          const btn = document.createElement('button');
-          btn.textContent = tmpl.label;
-          btn.className = 'custom-modal-btn';
-          btn.style.padding = '4px 10px';
-          btn.style.fontSize = '12px';
-          btn.style.backgroundColor = '#f0f0f0';
-          btn.style.border = '1px solid #ccc';
-          btn.style.color = '#333';
-          btn.onclick = () => {
-              // カーソル位置または末尾に挿入
-              const range = quill.getSelection(true);
-              if (range) {
-                  quill.clipboard.dangerouslyPasteHTML(range.index, tmpl.text);
-              } else {
-                  const length = quill.getLength();
-                  quill.clipboard.dangerouslyPasteHTML(length, tmpl.text);
-              }
-          };
-          templateArea.appendChild(btn);
-      });
-      content.appendChild(templateArea);
+          radioGroup = document.createElement('div');
+          radioGroup.style.display = 'flex';
+          radioGroup.style.gap = '15px';
+
+          const options = [
+              { label: '初診と変更の両方', value: 'both' },
+              { label: '初診のみ', value: 'first_visit' },
+              { label: '変更のみ', value: 'change' }
+          ];
+
+          // 現在の設定値 (デフォルトは 'both')
+          const currentVal = currentSetting || 'both';
+
+          options.forEach(opt => {
+              const label = document.createElement('label');
+              label.style.display = 'flex';
+              label.style.alignItems = 'center';
+              label.style.cursor = 'pointer';
+              label.style.fontSize = '13px';
+
+              const radio = document.createElement('input');
+              radio.type = 'radio';
+              radio.name = 'label_requirement_control';
+              radio.value = opt.value;
+              if (opt.value === currentVal) radio.checked = true;
+              radio.style.marginRight = '5px';
+
+              label.appendChild(radio);
+              label.appendChild(document.createTextNode(opt.label));
+              radioGroup.appendChild(label);
+          });
+          controlContainer.appendChild(radioGroup);
+          content.appendChild(controlContainer);
+      }
 
       const editorContainer = document.createElement('div');
       editorContainer.id = 'quill-editor-container';
@@ -1512,9 +1437,15 @@ window.ShinryoApp = window.ShinryoApp || {};
       saveBtn.textContent = '保存';
       saveBtn.onclick = async () => {
           const html = quill.root.innerHTML;
+          let setting = 'both';
+          if (radioGroup) {
+              const selectedRadio = radioGroup.querySelector('input:checked');
+              setting = selectedRadio ? selectedRadio.value : 'both';
+          }
+
           document.body.removeChild(overlay);
           try {
-              await window.ShinryoApp.ConfigManager.updateDepartmentDescription(deptName, html);
+              await window.ShinryoApp.ConfigManager.updateDepartmentDescription(deptName, html, setting);
               if (onSuccess) onSuccess();
           } catch(e) {
               await window.ShinryoApp.Viewer.showCustomDialog('保存に失敗しました', 'alert');
@@ -1542,7 +1473,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                   ['bold', 'italic', 'underline', 'strike'],
                   [{ 'color': colors }, { 'background': colors }],
                   [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                  ['image'],
+                  ['link'],
                   ['clean']
               ]
           }
@@ -1551,7 +1482,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
 
   // モーダルベース作成ヘルパー (既存のcreateModalBaseがない場合に備えて簡易版、あればViewModeSwitcherのものを使うが、ここはViewer内なので独自定義)
-  function createModalBase() {
+  function createModalBase(options = {}) {
       const overlay = document.createElement('div');
       overlay.className = 'custom-modal-overlay';
       const box = document.createElement('div');
@@ -1571,9 +1502,11 @@ window.ShinryoApp = window.ShinryoApp || {};
       overlay.appendChild(box);
       
       // オーバーレイクリックで閉じる
-      overlay.onclick = (e) => {
-          if (e.target === overlay) {
-              if(document.body.contains(overlay)) document.body.removeChild(overlay);
+      if (options.closeOnOverlayClick !== false) {
+          overlay.onclick = (e) => {
+              if (e.target === overlay) {
+                  if(document.body.contains(overlay)) document.body.removeChild(overlay);
+              }
           }
       };
 

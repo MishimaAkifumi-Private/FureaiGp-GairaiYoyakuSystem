@@ -19,6 +19,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   let publishedDescriptions = {};
   let publishedDepartmentSettings = {}; // ★追加: 診療科単位の設定キャッシュ
   let publishedCommonSettings = {}; // ★追加: 病院共通の設定キャッシュ
+  let publishedLabelSettings = {}; // ★追加: ラベル表示制御設定キャッシュ
   let lastPublishedAt = null;
   let lastJsonLength = 0;
   let isDataOldFormat = false;
@@ -48,6 +49,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       isOldFormat: isDataOldFormat
     }),
     getPublishedDescriptions: () => publishedDescriptions,
+    getLabelSettings: () => publishedLabelSettings, // ★追加
     getDepartmentSettings: () => publishedDepartmentSettings, // ★追加
     getCommonSettings: () => publishedCommonSettings, // ★追加
     isOldFormat: () => isDataOldFormat,
@@ -170,6 +172,7 @@ window.ShinryoApp = window.ShinryoApp || {};
             publishedDescriptions = data.descriptions || {};
             publishedDepartmentSettings = data.departmentSettings || {}; // ★追加: 読み込み
             publishedCommonSettings = data.commonSettings || {}; // ★追加: 読み込み
+            publishedLabelSettings = data.labelSettings || {}; // ★追加: 読み込み
             isDataOldFormat = false;
         }
 
@@ -190,7 +193,8 @@ window.ShinryoApp = window.ShinryoApp || {};
             records: records, 
             descriptions: publishedDescriptions, 
             departmentSettings: publishedDepartmentSettings,
-            commonSettings: publishedCommonSettings
+            commonSettings: publishedCommonSettings,
+            labelSettings: publishedLabelSettings
         };
       }
     } catch (e) {
@@ -203,20 +207,22 @@ window.ShinryoApp = window.ShinryoApp || {};
     publishedDescriptions = {};
     publishedDepartmentSettings = {};
     publishedCommonSettings = {};
+    publishedLabelSettings = {};
     lastPublishedAt = null;
     isDataOldFormat = false;
-    return { records: [], descriptions: {}, departmentSettings: {}, commonSettings: {} };
+    return { records: [], descriptions: {}, departmentSettings: {}, commonSettings: {}, labelSettings: {} };
   }
 
   /**
    * 現在のアプリの状態をJSONとして共通設定保管アプリに保存（公開）する
    */
-  async function saveConfig(currentRecords, currentDescriptions, currentDeptSettings, currentCommonSettings) {
+  async function saveConfig(currentRecords, currentDescriptions, currentDeptSettings, currentCommonSettings, currentLabelSettings) {
     const myAppId = kintone.app.getId();
 
     // 設定の解決
     const deptSettings = currentDeptSettings || publishedDepartmentSettings;
     const commonSettings = currentCommonSettings || publishedCommonSettings;
+    const labelSettings = currentLabelSettings || publishedLabelSettings;
 
     // ★Webフォーム互換対応: レコード内の「予約開始」「予約可能期間」フィールドを設定値で上書き同期する
     if (currentRecords && Array.isArray(currentRecords)) {
@@ -331,7 +337,8 @@ window.ShinryoApp = window.ShinryoApp || {};
       records: currentRecords.map(compressRecord), // ★変更: 圧縮して保存
       descriptions: currentDescriptions,
       departmentSettings: deptSettings,
-      commonSettings: commonSettings
+      commonSettings: commonSettings,
+      labelSettings: labelSettings
     };
     const jsonStr = JSON.stringify(data);
     lastJsonLength = jsonStr.length;
@@ -495,7 +502,7 @@ window.ShinryoApp = window.ShinryoApp || {};
         // 診療科ステータス用の特殊キーを使用
         descriptions['__status__' + deptName] = newStatus;
         
-        await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings);
+        await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings);
         console.log(`ConfigManager: Department ${deptName} status updated to ${newStatus}`);
       }
     } catch (e) {
@@ -519,7 +526,7 @@ window.ShinryoApp = window.ShinryoApp || {};
             settings[deptName] = { start: start, duration: duration };
         }
         
-        await saveConfig(currentPublished.records, currentPublished.descriptions, settings, currentPublished.commonSettings);
+        await saveConfig(currentPublished.records, currentPublished.descriptions, settings, currentPublished.commonSettings, currentPublished.labelSettings);
         console.log(`ConfigManager: Department ${deptName} term updated.`);
       }
     } catch (e) {
@@ -529,16 +536,21 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
 
   /**
-   * ★追加: 診療科ごとの案内ラベル(HTML)を更新し、公開データに保存する
+   * ★追加: 診療科ごとの案内ラベル(HTML)と表示制御設定を更新し、公開データに保存する
    */
-  async function updateDepartmentDescription(deptName, html) {
+  async function updateDepartmentDescription(deptName, html, targetRequirement) {
     try {
       const currentPublished = await fetchPublishedData();
       if (currentPublished) {
         const descriptions = currentPublished.descriptions || {};
         descriptions[deptName] = html;
+
+        const labelSettings = currentPublished.labelSettings || {};
+        if (targetRequirement !== undefined) {
+            labelSettings[deptName] = targetRequirement;
+        }
         
-        await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings);
+        await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, labelSettings);
         console.log(`ConfigManager: Department ${deptName} description updated.`);
       }
     } catch (e) {
@@ -555,7 +567,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       const currentPublished = await fetchPublishedData();
       if (currentPublished) {
         const common = { start: start, duration: duration };
-        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common);
+        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
         console.log(`ConfigManager: Common term updated to start:${start}, duration:${duration}`);
       }
     } catch (e) {
@@ -573,7 +585,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       if (currentPublished) {
         const common = currentPublished.commonSettings || {};
         common.holidays = holidays;
-        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common);
+        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
         console.log(`ConfigManager: Common holidays updated. Count: ${holidays ? holidays.length : 0}`);
       }
     } catch (e) {
@@ -591,7 +603,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       if (currentPublished) {
         const common = currentPublished.commonSettings || {};
         common.facilities = facilities;
-        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common);
+        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
         console.log(`ConfigManager: Common facilities updated. Count: ${facilities ? facilities.length : 0}`);
       }
     } catch (e) {
@@ -609,7 +621,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       if (currentPublished) {
         const common = currentPublished.commonSettings || {};
         common.staffs = staffs;
-        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common);
+        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
         console.log(`ConfigManager: Common staffs updated. Count: ${staffs ? staffs.length : 0}`);
       }
     } catch (e) {

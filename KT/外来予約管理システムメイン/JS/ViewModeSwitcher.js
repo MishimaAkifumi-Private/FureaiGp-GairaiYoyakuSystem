@@ -121,6 +121,9 @@
         .health-desc { font-size: 11px; color: #6c757d; margin-top: 4px; line-height: 1.4; }
         .usage-bar-container { width: 100%; height: 12px; background: #e9ecef; border-radius: 6px; overflow: hidden; margin-top: 8px; }
         .usage-bar-fill { height: 100%; transition: width 0.5s ease; }
+
+        /* プレビュー画面の行間調整 */
+        .preview-content p { margin: 0 !important; padding: 0 !important; line-height: 1.5 !important; }
       `;
       const style = document.createElement('style');
       style.id = INITIAL_HIDE_STYLE_ID;
@@ -218,7 +221,7 @@
             // ★変更: 歯車ボタンを廃止し、メインメニューボタンを右側に配置
             const btnMainMenu = document.createElement('button');
             btnMainMenu.className = 'mode-switch-btn';
-            btnMainMenu.textContent = 'メインメニュー';
+            btnMainMenu.textContent = 'Dashboard';
             btnMainMenu.style.backgroundColor = '#28a745'; // ★変更: 緑色
             btnMainMenu.style.position = 'absolute';
             btnMainMenu.style.right = '20px';
@@ -270,14 +273,7 @@
 
         if (viewMode === 'input') {
              const btnOverview = document.createElement('button');
-             btnOverview.className = 'mode-switch-btn btn-to-overview';
-             btnOverview.textContent = '予約待ち受け管理';
-             // ボタンを離して配置し、色を変えて誤操作防止
-             btnOverview.style.marginRight = '0px';
-             btnOverview.style.backgroundColor = '#28a745'; 
-             btnOverview.onclick = () => location.href = '?view_mode=overview';
-             div.appendChild(btnOverview);
-             
+
              const hideStyle = document.getElementById(INITIAL_HIDE_STYLE_ID);
              if (hideStyle) hideStyle.remove();
 
@@ -298,10 +294,55 @@
              // ★ 編集モード用フィルターの作成
              createEditModeFilters(div);
 
+             // ★ 追加: ページャー部分へのボタン配置 (Dashboard, 予約待ち受け状況)
+             const pager = document.querySelector('.gaia-argoui-app-index-pager');
+             if (pager) {
+                 const btnContainer = document.createElement('div');
+                 btnContainer.style.float = 'left';
+                 btnContainer.style.display = 'flex';
+                 btnContainer.style.gap = '10px';
+                 btnContainer.style.marginLeft = '10px';
+                 btnContainer.style.alignItems = 'center';
+                 
+                 // Dashboard Button
+                 const btnDashboard = document.createElement('button');
+                 btnDashboard.className = 'mode-switch-btn';
+                 btnDashboard.textContent = 'Dashboard';
+                 btnDashboard.style.backgroundColor = '#6c757d';
+                 btnDashboard.style.margin = '0';
+                 btnDashboard.style.height = '30px';
+                 btnDashboard.style.lineHeight = '30px';
+                 btnDashboard.style.padding = '0 15px';
+                 btnDashboard.style.fontSize = '13px';
+                 btnDashboard.onclick = () => location.href = '?view_mode=dashboard';
+                 
+                 // Overview Button
+                 const btnOverview = document.createElement('button');
+                 btnOverview.className = 'mode-switch-btn';
+                 btnOverview.textContent = '予約待ち受け状況';
+                 btnOverview.style.backgroundColor = '#28a745';
+                 btnOverview.style.margin = '0';
+                 btnOverview.style.height = '30px';
+                 btnOverview.style.lineHeight = '30px';
+                 btnOverview.style.padding = '0 15px';
+                 btnOverview.style.fontSize = '13px';
+                 btnOverview.onclick = () => location.href = '?view_mode=overview';
+
+                 btnContainer.appendChild(btnDashboard);
+                 btnContainer.appendChild(btnOverview);
+
+                 const resetBtn = document.getElementById('reset_order_button');
+                 if (resetBtn && resetBtn.parentNode === pager) {
+                     pager.insertBefore(btnContainer, resetBtn.nextSibling);
+                 } else {
+                     pager.insertBefore(btnContainer, pager.firstChild);
+                 }
+             }
+
         } else if (viewMode === 'overview') {
              const btnDetail = document.createElement('button');
              btnDetail.className = 'mode-switch-btn btn-to-detail';
-             btnDetail.textContent = '診療シフト表 編集';
+             btnDetail.textContent = '全体編集';
              btnDetail.onclick = () => location.href = '?view_mode=input';
              div.appendChild(btnDetail);
         }
@@ -404,7 +445,7 @@
       const cards = [
           { title: '予約チケット管理', icon: '🎫', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約の申込状況を確認・管理します' },
           { title: '予約待ち受け管理', icon: '📅', url: '?view_mode=overview', target: '_self', desc: '個別医師の予定状況等から予約が受け付けられる選択肢を組み立てます' },
-          { title: 'フォーム挿入ラベル', icon: '📑', action: () => alert('現在開発中です'), desc: '予約フォームに挿入するラベルの文言を編集します' },
+          { title: 'フォーム挿入ラベル', icon: '📑', action: () => showFormLabelMenu(), desc: '予約フォームに挿入するラベルの文言を編集します' },   
           { title: '設定', icon: '⚙️', action: () => showSettingsMenu(), desc: '各種システム環境の設定' }
       ];
 
@@ -1662,7 +1703,6 @@
             <strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br>例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）
         </div>
         <div><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）</div>
-        <div style="color:#d9534f; font-weight:bold; margin-top:5px;">※負荷軽減のため、予約可能期間は最大60日までとしてください。</div>
       `;
       box.appendChild(expl);
 
@@ -1679,11 +1719,11 @@
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
       saveBtn.onclick = async () => {
-          const newStart = startInput.value;
-          const newDuration = durationInput.value;
+          const newStart = startInput.value.trim();
+          const newDuration = durationInput.value.trim();
 
           if (parseInt(newDuration, 10) > 60) {
-              await showCustomDialog('予約可能期間は最大60日までです。\nシステム負荷軽減のため、60日以内で設定してください。', 'alert');
+              await showCustomDialog('予約可能期間は最大60日までです。', 'alert');
               return;
           }
 
@@ -1691,7 +1731,7 @@
           try {
               await window.ShinryoApp.ConfigManager.updateCommonTerm(newStart, newDuration);
               await showCustomDialog('共通設定を保存し、予約フォームに反映しました。', 'alert');
-              // ★追加: 画面とLast Form Updateを更新
+              // ★追加: 画面とLast Form Updateを更　新
               if (window.ShinryoApp.Viewer && window.ShinryoApp.Viewer.renderOverview) {
                   window.ShinryoApp.Viewer.renderOverview();
               }
@@ -2016,6 +2056,15 @@
   async function executePublish() {
     try {
         const records = await fetchAllRecords(kintone.app.getId());
+        
+        // ★追加: 表示順でソートしてから保存する
+        records.sort((a, b) => {
+            const oa = parseInt(a['表示順']?.value || 9999, 10);
+            const ob = parseInt(b['表示順']?.value || 9999, 10);
+            if (oa !== ob) return oa - ob;
+            return parseInt(a.$id.value, 10) - parseInt(b.$id.value, 10);
+        });
+
         const publishedData = await window.ShinryoApp.ConfigManager.fetchPublishedData();
         const descriptions = publishedData.descriptions || {};
         
@@ -2275,6 +2324,7 @@
             // 有効なレコードから選択肢を抽出
             const counts = {};
             const conflictCounts = {}; // 競合があるかどうかのフラグ
+            const orderMap = {}; // 表示順保持用
 
             validRecords.forEach(r => {
                 const v = r[target.field]?.value;
@@ -2283,10 +2333,16 @@
                     if (target.field === '医師名' && isRecordConflicting(r)) {
                         conflictCounts[v] = true;
                     }
+                    // 表示順の取得 (最小値を採用)
+                    const order = parseInt(r['表示順']?.value || 9999, 10);
+                    if (orderMap[v] === undefined || order < orderMap[v]) {
+                        orderMap[v] = order;
+                    }
+
                 }
             });
             
-            const values = new Set(Object.keys(counts));
+            const values = Object.keys(counts);
 
             // 選択肢の再構築
             target.element.innerHTML = '';
@@ -2295,8 +2351,15 @@
             defaultOpt.textContent = '(すべて)';
             target.element.appendChild(defaultOpt);
 
-            Array.from(values).sort().forEach(v => {
-                const opt = document.createElement('option');
+            // 表示順でソート (昇順)
+            values.sort((a, b) => {
+                const oa = orderMap[a] ?? 9999;
+                const ob = orderMap[b] ?? 9999;
+                if (oa !== ob) return oa - ob;
+                return a.localeCompare(b, 'ja');
+            });
+
+            values.forEach(v => {                const opt = document.createElement('option');
                 opt.value = v;
                 opt.textContent = `${v} (${counts[v]})`;
                 if (conflictCounts[v]) {
@@ -2307,7 +2370,7 @@
             });
 
             // 値の復元（選択肢になければリセット）
-            if (values.has(currentVal)) {
+            if (values.includes(currentVal)) {
                 target.element.value = currentVal;
                 // 初期値の適用に成功したら、次回以降はDOMの値を優先するため初期値をクリア
                 if (target.initialValue === currentVal) {
@@ -2362,6 +2425,782 @@
 
     container.appendChild(filterWrapper);
     container.appendChild(btnReset);
+  }
+
+  // 全レコード取得用ヘルパー
+  async function fetchAllRecords(appId) {
+    let allRecords = [];
+    let offset = 0;
+    const limit = 500;
+    while (true) {
+      const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', { app: appId, query: `limit ${limit} offset ${offset}` });
+      allRecords = allRecords.concat(resp.records);
+      offset += resp.records.length;
+      if (resp.records.length < limit) break;
+    }
+    return allRecords;
+  }
+
+  // --- 編集モード用フィルター機能 ---
+  async function createEditModeFilters(parentElement) {
+    if (document.getElementById('custom-edit-filters')) return;
+
+    // フィルターコンテナの作成
+    const container = document.createElement('div');
+    container.id = 'custom-edit-filters';
+    container.style.display = 'flex';
+    container.style.alignItems = 'flex-end';
+    container.style.marginLeft = '20px';
+    container.style.gap = '10px';
+
+    if (parentElement) {
+        parentElement.appendChild(container);
+    } else {
+        kintone.app.getHeaderMenuSpaceElement().appendChild(container);
+    }
+
+    // 全レコード取得（選択肢生成用）
+    const records = await fetchAllRecords(kintone.app.getId());
+    
+    // --- 競合チェック用ロジック ---
+    const days = ['月', '火', '水', '木', '金', '土'];
+    const weeks = ['1', '2', '3', '4', '5'];
+    const scheduleFields = days.flatMap(d => weeks.map(w => d + w));
+
+    const getScheduleSet = (rec) => {
+        const set = new Set();
+        scheduleFields.forEach(field => {
+            const val = rec[field]?.value || [];
+            if (val.includes('午前')) set.add(`${field}_AM`);
+            if (val.includes('午後')) set.add(`${field}_PM`);
+        });
+        return set;
+    };
+
+    const isRecordConflicting = (currentRec) => {
+        const currentTag = currentRec['集合'] ? currentRec['集合'].value : '';
+        if (!currentTag) return false;
+
+        const currentId = currentRec['$id'].value;
+        const currentStart = currentRec['着任日']?.value ? new Date(currentRec['着任日'].value).getTime() : -8640000000000000;
+        const currentEnd = currentRec['離任日']?.value ? new Date(currentRec['離任日'].value).getTime() : 8640000000000000;
+        const currentSchedule = getScheduleSet(currentRec);
+
+        return records.some(other => {
+            if (other['$id'].value === currentId) return false;
+            if ((other['集合']?.value || '') !== currentTag) return false;
+
+            const otherStart = other['着任日']?.value ? new Date(other['着任日'].value).getTime() : -8640000000000000;
+            const otherEnd = other['離任日']?.value ? new Date(other['離任日'].value).getTime() : 8640000000000000;
+
+            // 1. 期間重複判定
+            if (!(currentStart <= otherEnd && currentEnd >= otherStart)) return false;
+
+            // 2. 時間割重複判定
+            const otherSchedule = getScheduleSet(other);
+            for (let slot of currentSchedule) { if (otherSchedule.has(slot)) return true; }
+            return false;
+        });
+    };
+
+    const filters = [
+        { label: '診療科', field: '診療科' },
+        { label: '診察施設', field: '施設名' },
+        { label: '医師', field: '医師名' }
+    ];
+
+    // 現在のクエリから選択状態を復元するためのヘルパー
+    // URLパラメータを優先しつつ、kintone.app.getQueryCondition() もフォールバックとして使用
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlQuery = urlParams.get('query') || '';
+    const appQuery = kintone.app.getQueryCondition() || '';
+    const currentQuery = urlQuery || appQuery;
+
+    const getQueryValue = (field) => {
+        // 正規表現を調整: スペースの柔軟性向上
+        const re = new RegExp(`${field}\\s*(?:=|in)\\s*(?:\\"([^"]+)\\"|\\(\\s*\\"([^"]+)\\"\\s*\\))`);
+        const match = currentQuery.match(re);
+        return match ? (match[1] || match[2]) : '';
+    };
+
+    const selectElements = [];
+
+    // --- 絞り込み実行関数 ---
+    const applyFilter = () => {
+        const conditions = Array.from(container.querySelectorAll('select'))
+            .map((sel, idx) => sel.value ? `${filters[idx].field} in ("${sel.value}")` : null)
+            .filter(Boolean);
+        const query = conditions.join(' and ');
+        const url = new URL(window.location.href);
+        if (query) url.searchParams.set('query', query);
+        else url.searchParams.delete('query');
+        window.location.href = url.toString();
+    };
+
+    // --- 絞り込みボタン ---
+    const btnFilter = document.createElement('button');
+    btnFilter.textContent = '絞込';
+    btnFilter.style.backgroundColor = '#3498db';
+    btnFilter.style.color = '#fff';
+    btnFilter.style.border = 'none';
+    btnFilter.style.padding = '0 15px';
+    btnFilter.style.height = '32px';
+    btnFilter.style.borderRadius = '4px';
+    btnFilter.style.fontWeight = 'bold';
+    btnFilter.style.cursor = 'pointer';
+    btnFilter.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+    btnFilter.onclick = applyFilter;
+
+    // --- 自動絞り込みチェックボックス ---
+    const autoFilterCheckbox = document.createElement('input');
+    autoFilterCheckbox.type = 'checkbox';
+    autoFilterCheckbox.id = 'auto-filter-checkbox';
+    autoFilterCheckbox.style.margin = '0';
+    autoFilterCheckbox.style.cursor = 'pointer';
+    
+    const updateBtnState = () => {
+        if (autoFilterCheckbox.checked) {
+            btnFilter.disabled = true;
+            btnFilter.style.backgroundColor = '#ccc';
+            btnFilter.style.cursor = 'not-allowed';
+        } else {
+            btnFilter.disabled = false;
+            btnFilter.style.backgroundColor = '#3498db';
+            btnFilter.style.cursor = 'pointer';
+        }
+    };
+
+    // 状態の復元と保存
+    if (localStorage.getItem('shinryo_auto_filter') === 'true') {
+        autoFilterCheckbox.checked = true;
+    }
+    updateBtnState();
+    autoFilterCheckbox.onchange = () => {
+        localStorage.setItem('shinryo_auto_filter', autoFilterCheckbox.checked);
+        updateBtnState();
+    };
+
+    const autoLabel = document.createElement('label');
+    autoLabel.htmlFor = 'auto-filter-checkbox';
+    autoLabel.textContent = '自動';
+    autoLabel.style.fontSize = '10px';
+    autoLabel.style.marginLeft = '2px';
+    autoLabel.style.cursor = 'pointer';
+    autoLabel.style.userSelect = 'none';
+    autoLabel.style.color = '#555';
+    autoLabel.style.lineHeight = '1';
+
+    const autoContainer = document.createElement('div');
+    autoContainer.style.display = 'flex';
+    autoContainer.style.alignItems = 'center';
+    autoContainer.style.marginLeft = '3px';
+    autoContainer.style.marginBottom = '1px'; // 極限まで接近
+    autoContainer.appendChild(autoFilterCheckbox);
+    autoContainer.appendChild(autoLabel);
+
+    filters.forEach(f => {
+        if (f.label === '診療分野') return;
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+
+        const title = document.createElement('div');
+        title.textContent = f.label;
+        title.style.fontSize = '11px';
+        title.style.fontWeight = 'bold';
+        title.style.color = '#555';
+        title.style.marginBottom = '0px';
+        title.style.lineHeight = '1.2';
+        title.style.paddingLeft = '2px';
+
+        const select = document.createElement('select');
+        select.className = 'gaia-argoui-select'; // Kintoneライクなスタイルクラスがあれば適用（なければ以下のスタイル）
+        select.style.padding = '0 8px';
+        select.style.height = '32px';
+        select.style.borderRadius = '4px';
+        select.style.border = '2px solid #3498db';
+        select.style.fontSize = '13px';
+        select.style.color = '#333';
+        select.style.cursor = 'pointer';
+        select.style.backgroundColor = '#fff';
+        select.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+        select.style.minWidth = '130px';
+        
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = '(すべて)';
+        select.appendChild(defaultOpt);
+
+        // 変更時に他のプルダウンの選択肢を更新（検索はしない）
+        select.onchange = () => {
+            updateDropdownOptions();
+            if (autoFilterCheckbox.checked) {
+                applyFilter();
+            }
+        };
+
+        wrapper.appendChild(title);
+        wrapper.appendChild(select);
+        container.appendChild(wrapper);
+
+        // 初期値を保持しておく（選択肢生成後にセットするため）
+        const initialVal = getQueryValue(f.field);
+        selectElements.push({ element: select, field: f.field, initialValue: initialVal });
+    });
+
+    // プルダウンの選択肢を動的に更新する関数
+    function updateDropdownOptions() {
+        selectElements.forEach(target => {
+            // 現在の値を取得。未設定で初期値があればそれを使用
+            let currentVal = target.element.value;
+            if (!currentVal && target.initialValue) {
+                currentVal = target.initialValue;
+            }
+            
+            // 自分以外の選択条件でレコードを絞り込む
+            const validRecords = records.filter(r => {
+                return selectElements.every(other => {
+                    if (other === target) return true; // 自分自身は条件に含めない（選択変更できるようにするため）
+                    
+                    // 他のフィールドの値も、DOM値または初期値から取得
+                    let otherVal = other.element.value;
+                    if (!otherVal && other.initialValue) otherVal = other.initialValue;
+
+                    if (!otherVal) return true;
+                    return r[other.field]?.value === otherVal;
+                });
+            });
+
+            // 有効なレコードから選択肢を抽出
+            const counts = {};
+            const conflictCounts = {}; // 競合があるかどうかのフラグ
+            const orderMap = {}; // 表示順保持用
+
+            validRecords.forEach(r => {
+                const v = r[target.field]?.value;
+                if (v) {
+                    counts[v] = (counts[v] || 0) + 1;
+                    if (target.field === '医師名' && isRecordConflicting(r)) {
+                        conflictCounts[v] = true;
+                    }
+                    // 表示順の取得 (最小値を採用)
+                    const order = parseInt(r['表示順']?.value || 9999, 10);
+                    if (orderMap[v] === undefined || order < orderMap[v]) {
+                        orderMap[v] = order;
+                    }
+
+                }
+            });
+            
+            const values = Object.keys(counts);
+
+            // 選択肢の再構築
+            target.element.innerHTML = '';
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = '';
+            defaultOpt.textContent = '(すべて)';
+            target.element.appendChild(defaultOpt);
+
+            // 表示順でソート (昇順)
+            values.sort((a, b) => {
+                const oa = orderMap[a] ?? 9999;
+                const ob = orderMap[b] ?? 9999;
+                if (oa !== ob) return oa - ob;
+                return a.localeCompare(b, 'ja');
+            });
+
+            values.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = `${v} (${counts[v]})`;
+                if (conflictCounts[v]) {
+                    opt.style.color = 'red';
+                    opt.style.fontWeight = 'bold';
+                }
+                target.element.appendChild(opt);
+            });
+
+            // 値の復元（選択肢になければリセット）
+            if (values.includes(currentVal)) {
+                target.element.value = currentVal;
+                // 初期値の適用に成功したら、次回以降はDOMの値を優先するため初期値をクリア
+                if (target.initialValue === currentVal) {
+                    target.initialValue = null;
+                }
+            } else {
+                target.element.value = '';
+            }
+
+            // ② 選択肢がない場合はグレーアウトして操作不可にする
+            if (target.element.options.length <= 1) {
+                target.element.disabled = true;
+                target.element.style.backgroundColor = '#eee';
+                target.element.style.cursor = 'not-allowed';
+            } else {
+                target.element.disabled = false;
+                target.element.style.backgroundColor = '#fff';
+                target.element.style.cursor = 'pointer';
+            }
+        });
+    }
+
+    // 初期表示時に選択肢を更新
+    updateDropdownOptions();
+
+    // --- リセットボタン ---
+    const btnReset = document.createElement('button');
+    btnReset.textContent = 'リセット';
+    btnReset.style.backgroundColor = '#95a5a6';
+    btnReset.style.color = '#fff';
+    btnReset.style.border = 'none';
+    btnReset.style.padding = '0 15px';
+    btnReset.style.height = '32px';
+    btnReset.style.borderRadius = '4px';
+    btnReset.style.fontWeight = 'bold';
+    btnReset.style.cursor = 'pointer';
+    btnReset.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+
+    btnReset.onclick = () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('query');
+        window.location.href = url.toString();
+    };
+
+    // ボタンとチェックボックスをまとめるラッパー
+    const filterWrapper = document.createElement('div');
+    filterWrapper.style.display = 'flex';
+    filterWrapper.style.flexDirection = 'column';
+    filterWrapper.style.alignItems = 'flex-start';
+    filterWrapper.appendChild(autoContainer);
+    filterWrapper.appendChild(btnFilter);
+
+    container.appendChild(filterWrapper);
+    container.appendChild(btnReset);
+  }
+
+
+
+ 
+
+  // ★追加: フォーム挿入ラベル管理メニュー
+  async function showFormLabelMenu() {
+      const { overlay, box, content } = createModalBase();
+      
+      // モーダルボックスのスタイル調整 (サイドバーレイアウト用)
+      box.style.maxWidth = '1100px';
+      box.style.width = '95%';
+      box.style.height = '85vh';
+      box.style.padding = '0'; // パディングなしで全画面利用
+      box.style.display = 'flex';
+      box.style.flexDirection = 'column';
+      box.style.textAlign = 'left';
+      box.style.overflow = 'hidden';
+      
+      // コンテンツエリアのスタイル調整
+      content.style.flex = '1';
+      content.style.display = 'flex';
+      content.style.flexDirection = 'column';
+      content.style.height = '100%';
+      content.style.overflow = 'hidden';
+
+      // 1. ヘッダーエリア
+      const headerDiv = document.createElement('div');
+      headerDiv.style.padding = '20px 25px';
+      headerDiv.style.borderBottom = '1px solid #e1e4e8';
+      headerDiv.style.backgroundColor = '#fff';
+      headerDiv.style.flexShrink = '0';
+
+      const title = document.createElement('h2');
+      title.textContent = 'フォーム挿入ラベル管理';
+      title.style.cssText = 'margin: 0 0 5px 0; font-size: 20px; color: #2c3e50; font-weight: 700;';
+      headerDiv.appendChild(title);
+      
+      const subTitle = document.createElement('p');
+      subTitle.textContent = '予約フォームに表示される各種案内文を一元管理します。左側のメニューから対象を選択してください。';
+      subTitle.style.cssText = 'margin: 0; font-size: 12px; color: #666;';
+      headerDiv.appendChild(subTitle);
+
+      const note = document.createElement('p');
+      note.textContent = '※実際の予約フォーム上での見え方はプレビュー画面にて確認するようにしてください';
+      note.style.cssText = 'margin: 5px 0 0 0; font-size: 12px; color: #e74c3c; font-weight: bold;';
+      headerDiv.appendChild(note);
+
+
+      content.appendChild(headerDiv);
+
+      // 2. メインレイアウト (サイドバー + メインエリア)
+      const layoutContainer = document.createElement('div');
+      layoutContainer.style.display = 'flex';
+      layoutContainer.style.flex = '1';
+      layoutContainer.style.overflow = 'hidden'; // 内部でスクロール
+
+      // サイドバー
+      const sidebar = document.createElement('div');
+      sidebar.style.width = '240px';
+      sidebar.style.backgroundColor = '#f8f9fa';
+      sidebar.style.borderRight = '1px solid #e1e4e8';
+      sidebar.style.overflowY = 'auto';
+      sidebar.style.flexShrink = '0';
+      sidebar.style.padding = '15px 0';
+
+      // メインエリア
+      const mainArea = document.createElement('div');
+      mainArea.style.flex = '1';
+      mainArea.style.overflowY = 'auto';
+      mainArea.style.padding = '25px';
+      mainArea.style.backgroundColor = '#fff';
+      mainArea.style.scrollBehavior = 'smooth';
+
+      layoutContainer.appendChild(sidebar);
+      layoutContainer.appendChild(mainArea);
+      content.appendChild(layoutContainer);
+
+      // 3. フッターエリア
+      const footerDiv = document.createElement('div');
+      footerDiv.style.padding = '15px 25px';
+      footerDiv.style.borderTop = '1px solid #e1e4e8';
+      footerDiv.style.backgroundColor = '#fff';
+      footerDiv.style.display = 'flex';
+      footerDiv.style.justifyContent = 'space-between';
+      footerDiv.style.flexShrink = '0';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+      closeBtn.textContent = '閉じる';
+      closeBtn.onclick = () => document.body.removeChild(overlay);
+
+      const previewBtn = document.createElement('button');
+      previewBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+      previewBtn.textContent = 'フォームプレビューを開く';
+      previewBtn.style.backgroundColor = '#e67e22';
+      previewBtn.onclick = () => {
+          const urlConfig = JSON.parse(localStorage.getItem('shinryo_url_config') || '{}');
+          const previewUrl = urlConfig.previewFormUrl;
+          if (previewUrl) window.open(previewUrl, '_blank');
+          else alert('プレビュー用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
+      };
+      const publishBtn = document.createElement('button');
+      publishBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+      publishBtn.textContent = '公開する';
+      publishBtn.style.backgroundColor = '#28a745';
+      publishBtn.style.marginLeft = '10px';
+      publishBtn.onclick = async () => {
+          const confirmed = await showCustomDialog(
+              '現在の設定を予約フォームに公開しますか？', 
+              'confirm', 
+              { ok: '公開する', cancel: 'キャンセル' }
+          );
+          if (confirmed) {
+              await executePublish();
+          }
+      };
+
+      const rightGroup = document.createElement('div');
+      rightGroup.appendChild(previewBtn);
+      rightGroup.appendChild(publishBtn);
+
+
+      footerDiv.appendChild(closeBtn);
+      footerDiv.appendChild(rightGroup);
+      content.appendChild(footerDiv);
+
+      document.body.appendChild(overlay);
+
+      // --- データ取得と描画 ---
+      let descriptions = {};
+      let labelSettings = {}; // ★追加
+      let fieldGroups = new Map(); // 診療分野 -> 診療科リスト
+      let fieldOrderMap = new Map(); // 診療分野 -> 最小表示順
+      let deptOrderMap = new Map();  // 診療科 -> 最小表示順
+      
+      if (window.ShinryoApp.ConfigManager) {
+        const data = await window.ShinryoApp.ConfigManager.fetchPublishedData();
+        descriptions = data.descriptions || {};
+        labelSettings = data.labelSettings || {}; // ★追加
+        
+        const records = data.records || [];
+        records.forEach(r => {
+            const dept = r['診療科']?.value;
+            const field = r['診療分野']?.value || 'その他';
+            const order = parseInt(r['表示順']?.value || 9999, 10);
+            
+            if (dept) {
+                if (!fieldGroups.has(field)) fieldGroups.set(field, new Set());
+                fieldGroups.get(field).add(dept);
+                
+                // 表示順の記録 (グループ内の最小値を採用)
+                if (!fieldOrderMap.has(field) || order < fieldOrderMap.get(field)) fieldOrderMap.set(field, order);
+                if (!deptOrderMap.has(dept) || order < deptOrderMap.get(dept)) deptOrderMap.set(dept, order);
+
+
+
+            }          
+        });
+      }
+
+      const globalLabels = [
+          { key: '__Global_Header__', label: '冒頭ラベル', desc: 'フォームの最上部に表示される案内文です。' },
+          { key: '__Global_Change__', label: '変更ラベル', desc: '用件で変更が選択された場合に表示される案内文です。' },
+          { key: '__Global_Cancel__', label: '取消ラベル', desc: '用件で取消が選択された場合に表示される案内文です。' },
+          { key: '__Global_FirstVisit__', label: '初診ラベル', desc: '用件で初診が選択された場合に表示される案内文です。' }
+      ];
+
+      // HTMLタグ除去ヘルパー
+      const stripHtml = (html) => {
+          const tmp = document.createElement("DIV");
+          tmp.innerHTML = html || '';
+          return tmp.textContent || tmp.innerText || "";
+      };
+
+      // サイドバー項目作成ヘルパー
+      const createSidebarItem = (id, text, isHeader = false, isIndent = false) => {
+          const item = document.createElement('div');
+          if (isHeader) {
+              item.textContent = text;
+              item.style.padding = '12px 15px';
+              item.style.fontSize = '14px';
+              item.style.fontWeight = 'bold';
+              item.style.color = '#fff';
+              item.style.backgroundColor = '#34495e';
+              item.style.marginTop = '0';
+              item.style.marginBottom = '5px';
+          } else {
+              item.textContent = text;
+              item.style.padding = isIndent ? '8px 15px 8px 35px' : '8px 20px';
+              item.style.fontSize = isIndent ? '12px' : '13px';
+              item.style.cursor = 'pointer';
+              item.style.color = '#333';
+              item.style.borderLeft = '3px solid transparent';
+              item.style.transition = 'background-color 0.2s';
+              
+              item.onmouseover = () => { item.style.backgroundColor = '#e9ecef'; };
+              item.onmouseout = () => { item.style.backgroundColor = 'transparent'; };
+              item.onclick = () => {
+                  const target = document.getElementById(id);
+                  if (target) {
+                      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      // ハイライトエフェクト
+                      const originalBg = target.style.backgroundColor;
+                      target.style.transition = 'background-color 0.5s';
+                      target.style.backgroundColor = '#fff3cd';
+                      setTimeout(() => { target.style.backgroundColor = originalBg; }, 1000);
+                  }
+              };
+          }
+          sidebar.appendChild(item);
+      };
+
+      // カード作成ヘルパー
+      const createCard = (key, label, desc, isDept = false) => {
+          const cardId = isDept ? `dept-${label}` : `global-${key}`;
+          const card = document.createElement('div');
+          card.id = cardId;
+          card.style.border = '1px solid #e1e4e8';
+          card.style.borderRadius = '8px';
+          card.style.padding = '20px';
+          card.style.marginBottom = '25px';
+          card.style.backgroundColor = '#fff';
+          card.style.scrollMarginTop = '20px'; 
+          
+          const header = document.createElement('div');
+          header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;';
+          
+          const titleDiv = document.createElement('div');
+          titleDiv.style.display = 'flex';
+          titleDiv.style.alignItems = 'center';
+          
+          const titleText = document.createElement('div');
+          titleText.textContent = label;
+          titleText.style.fontWeight = 'bold';
+          titleText.style.fontSize = '18px';
+          titleText.style.color = '#333';
+          titleDiv.appendChild(titleText);
+
+          const badge = document.createElement('span');
+          badge.textContent = isDept ? '診療科' : '共通';
+          badge.style.fontSize = '11px';
+          badge.style.color = '#fff';
+          badge.style.backgroundColor = isDept ? '#28a745' : '#007bff';
+          badge.style.padding = '2px 8px';
+          badge.style.borderRadius = '10px';
+          badge.style.marginLeft = '10px';
+          titleDiv.appendChild(badge);
+
+          let settingBadge = null;
+
+          // ★追加: 診療科の場合、用件別制御の設定状況を表示
+          if (isDept) {
+              const setting = labelSettings[key] || 'both';
+              let settingText = '初診・変更';
+              let settingColor = '#6c757d'; // Default gray
+
+              if (setting === 'first_visit') {
+                  settingText = '初診のみ';
+                  settingColor = '#e67e22'; // Orange
+              } else if (setting === 'change') {
+                  settingText = '変更のみ';
+                  settingColor = '#17a2b8'; // Cyan
+              }
+              
+              settingBadge = document.createElement('span');
+              settingBadge.textContent = settingText;
+              settingBadge.style.fontSize = '11px';
+              settingBadge.style.color = '#fff';
+              settingBadge.style.backgroundColor = settingColor;
+              settingBadge.style.padding = '2px 8px';
+              settingBadge.style.borderRadius = '10px';
+              settingBadge.style.marginLeft = '5px';
+              titleDiv.appendChild(settingBadge);
+          }
+
+          header.appendChild(titleDiv);
+          
+          const editBtn = document.createElement('button');
+          editBtn.className = 'custom-modal-btn';
+          editBtn.textContent = '編集';
+          editBtn.style.padding = '6px 16px';
+          editBtn.style.fontSize = '13px';
+          editBtn.style.backgroundColor = '#fff';
+          editBtn.style.border = '1px solid #3498db';
+          editBtn.style.color = '#3498db';
+          editBtn.style.minWidth = 'auto';
+          editBtn.onclick = () => {
+              window.ShinryoApp.Viewer.showLabelEditor(key, descriptions[key] || '', labelSettings[key], () => {
+                  // 保存後のコールバック: データを再取得して表示更新
+                  window.ShinryoApp.ConfigManager.fetchPublishedData().then(newData => {
+                      descriptions = newData.descriptions || {};
+                      labelSettings = newData.labelSettings || {};
+                      const newHtml = descriptions[key] || '';
+                      const previewDiv = card.querySelector('.preview-content');
+                      if (previewDiv) {
+                          if (newHtml && stripHtml(newHtml).trim()) {
+                              previewDiv.innerHTML = newHtml;
+                              previewDiv.style.display = 'block';
+                          } else {
+                              previewDiv.innerHTML = '<span style="color:#ccc;">(未設定)</span>';
+                              previewDiv.style.display = 'flex';
+                              previewDiv.style.alignItems = 'center';
+                              previewDiv.style.justifyContent = 'center';
+                          }
+                      }
+
+                      // ★追加: バッジの表示更新
+                      if (settingBadge) {
+                          const newSetting = labelSettings[key] || 'both';
+                          let newText = '初診・変更';
+                          let newColor = '#6c757d';
+
+                          if (newSetting === 'first_visit') {
+                              newText = '初診のみ';
+                              newColor = '#e67e22';
+                          } else if (newSetting === 'change') {
+                              newText = '変更のみ';
+                              newColor = '#17a2b8';
+                          }
+                          settingBadge.textContent = newText;
+                          settingBadge.style.backgroundColor = newColor;
+                      }
+                  });
+              }, label);
+          };
+          header.appendChild(editBtn);
+          card.appendChild(header);
+
+          if (desc) {
+              const descDiv = document.createElement('div');
+              descDiv.textContent = desc;
+              descDiv.style.fontSize = '12px';
+              descDiv.style.color = '#666';
+              descDiv.style.marginBottom = '15px';
+              card.appendChild(descDiv);
+          }
+
+          const preview = document.createElement('div');
+          preview.className = 'preview-content';
+          preview.style.backgroundColor = '#f9f9f9';
+          preview.style.border = '1px solid #eee';
+          preview.style.borderRadius = '4px';
+          preview.style.padding = '15px';
+          preview.style.fontSize = '14px';
+          preview.style.color = '#333';
+          preview.style.minHeight = '100px';
+          preview.style.maxHeight = '300px';
+          preview.style.overflowY = 'auto';
+          preview.style.fontFamily = '"Meiryo", sans-serif';
+          preview.style.lineHeight = '1.6';
+          
+          const currentHtml = descriptions[key];
+          if (currentHtml && stripHtml(currentHtml).trim()) {
+              preview.innerHTML = currentHtml; // 簡易プレビュー
+          } else {
+              preview.innerHTML = '<span style="color:#ccc;">(未設定)</span>';
+              preview.style.display = 'flex';
+              preview.style.alignItems = 'center';
+              preview.style.justifyContent = 'center';
+          }
+          card.appendChild(preview);
+
+          mainArea.appendChild(card);
+      };
+
+      // --- 描画実行 ---
+      
+      // 1. 共通ラベル
+      createSidebarItem(null, '共通ラベル', true);
+      globalLabels.forEach(item => {
+          createSidebarItem(`global-${item.key}`, item.label);
+          createCard(item.key, item.label, item.desc);
+      });
+
+      // 2. 診療科ラベル
+      if (fieldGroups.size > 0) {
+          createSidebarItem(null, '診療科別ラベル', true);
+          
+          const divider = document.createElement('div');
+          divider.style.borderTop = '2px dashed #eee';
+          divider.style.margin = '30px 0';
+          divider.style.textAlign = 'center';
+          divider.innerHTML = '<span style="background:#fff; padding:0 10px; color:#999; font-size:12px;">以下、診療科別設定</span>';
+          mainArea.appendChild(divider);
+
+         // 診療分野でソート (表示順優先)
+          const sortedFields = Array.from(fieldGroups.keys()).sort((a, b) => {
+              const oa = fieldOrderMap.get(a) ?? 9999;
+              const ob = fieldOrderMap.get(b) ?? 9999;
+              if (oa !== ob) return oa - ob;
+
+              if (a === 'その他') return 1;
+              if (b === 'その他') return -1;
+              return a.localeCompare(b, 'ja');
+          });
+
+          sortedFields.forEach(field => {
+              // サイドバーの分野ヘッダー
+              const sbField = document.createElement('div');
+              sbField.textContent = field;
+              sbField.style.cssText = 'padding: 8px 15px; font-size: 12px; font-weight: bold; color: #555; background-color: #f0f2f5; border-bottom: 1px solid #e1e4e8;';
+              sidebar.appendChild(sbField);
+
+              // メインエリアの分野ヘッダー
+              const mainField = document.createElement('h3');
+              mainField.textContent = field;
+              mainField.style.cssText = 'font-size: 16px; color: #2c3e50; border-left: 4px solid #3498db; padding-left: 10px; margin-top: 30px; margin-bottom: 15px;';
+              mainArea.appendChild(mainField);
+
+              // 診療科でソート (表示順優先)
+              const depts = Array.from(fieldGroups.get(field)).sort((a, b) => {
+                  const oa = deptOrderMap.get(a) ?? 9999;
+                  const ob = deptOrderMap.get(b) ?? 9999;
+                  if (oa !== ob) return oa - ob;
+                  return a.localeCompare(b, 'ja');
+              });
+
+              depts.forEach(dept => {
+                  createSidebarItem(`dept-${dept}`, dept, false, true); // インデントあり
+                  createCard(dept, dept, `「${dept}」を選択した際に表示される案内文です。`, true);
+              });
+          });
+      }
   }
 
 })();

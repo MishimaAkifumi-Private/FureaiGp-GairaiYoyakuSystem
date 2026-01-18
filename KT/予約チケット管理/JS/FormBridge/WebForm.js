@@ -68,13 +68,6 @@
           PUBLICATION_STATUS: '掲載',
       },
 
-      proxyLabels: {
-          common: { kintoneField: '冒頭ラベルProxy' },
-          change: { kintoneField: '変更ラベルProxy' },
-          firstVisit: { kintoneField: '初診ラベルProxy' },
-          cancel: { kintoneField: '取消ラベルProxy' }
-      },
-
       uiIds: {
           WIZARD_CONTAINER: 'gemini-wizard-container',
           PATIENT_FORM_CONTAINER: 'gemini-patient-form-container',
@@ -88,6 +81,7 @@
           REASON_AREA: 'gemini-reason-area',
           REASON_TEXTAREA: 'gemini-reason-textarea',
           GUIDANCE_AREA: 'gemini-guidance-area',
+          DOCTOR_GUIDANCE_AREA: 'gemini-doctor-guidance-area',
           FIXED_DATE_AREA: 'gemini-fixed-date-area',
           NEW_RESERVATION_AREA: 'gemini-new-reservation-area',
           MULTI_STAGE_AREA: 'gemini-multistage-select-area',
@@ -134,6 +128,7 @@
           yoyakuMethod: null,
           selectedWishDateTimes: { 1: null, 2: null, 3: null, 4: null, 5: null },
           descriptions: {},
+          labelSettings: {}, // ★追加
       },
 
       MAX_WISH_DATES: 5,
@@ -475,6 +470,7 @@ function getReservationSummaryHtml() {
           // ★変更: 圧縮データを復元して格納
           config.state.kintoneRecords = parsedData.records.map(inflateRecord);
           config.state.descriptions = parsedData.descriptions || {};
+          config.state.labelSettings = parsedData.labelSettings || {}; // ★追加
       } else {
           console.log('[Gemini] Data format: OLD (Array). Descriptions will be empty.');
           config.state.kintoneRecords = Array.isArray(parsedData) ? parsedData : [];
@@ -545,9 +541,9 @@ function getReservationSummaryHtml() {
       container.id = config.uiIds.MAIN_CONTAINER;
       container.innerHTML = `
           <div id="${config.uiIds.WIZARD_CONTAINER}" style="margin-bottom: 20px;"></div>
-          <div id="${config.uiIds.COMMON_LABEL_AREA}" style="margin-bottom: 20px;"></div>
+          <div id="${config.uiIds.COMMON_LABEL_AREA}" class="gemini-rich-text" style="margin-bottom: 20px;"></div>
           <div id="${config.uiIds.REQUIREMENT_AREA}"></div>
-          <div id="${config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA}" style="margin-top: 15px;"></div>
+          <div id="${config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA}" class="gemini-rich-text" style="margin-top: 15px;"></div>
           <div id="${config.uiIds.REFERRAL_AREA}" style="display: none; margin-top: 20px;"></div>
           <div id="${config.uiIds.FIXED_DATE_AREA}" style="display: none; margin-top: 20px;"></div>
           <div id="${config.uiIds.NEW_RESERVATION_AREA}" style="display: none; padding-top: 20px; margin-bottom: 20px;">
@@ -590,20 +586,12 @@ function getReservationSummaryHtml() {
   
   function getFilteredRecords() {
       let records = config.state.kintoneRecords;
-      // console.log('[Gemini] getFilteredRecords start. Total:', records.length);
 
       // 1. レコードごとの「掲載」ステータスチェック
       records = records.filter(r => {
           const val = r[config.jsonKeys.PUBLICATION_STATUS]?.value;
           // "停止", "Off", "false" のいずれかなら停止とみなす
           const isStopped = val === '停止' || val === 'Off' || val === 'false';
-          
-          // ★デバッグ: 鈴木医師のステータス値をコンソールに出力
-          const docName = r[config.jsonKeys.DOCTOR]?.value;
-          if (docName && docName.includes('鈴木')) {
-              console.log(`[Gemini] Doctor Check: ${docName}, Status Value: "${val}", Is Stopped: ${isStopped}`);
-          }
-
           return !isStopped;
       });
 
@@ -614,7 +602,6 @@ function getReservationSummaryHtml() {
               const statusKey = '__status__' + dept;
               const statusVal = config.state.descriptions[statusKey];
               const isStopped = statusVal === '停止' || statusVal === 'Off' || statusVal === 'false';
-              // if (isStopped) console.log(`[Gemini] Record filtered out (Department Stopped): ${dept} - ${r[config.jsonKeys.DOCTOR]?.value}`);
               return !isStopped;
           });
       }
@@ -654,33 +641,33 @@ function getReservationSummaryHtml() {
   }
 
   function updateProxyLabels(requirement = null) {
-      const kintoneRecord = config.state.kintoneCommonRecord;
-      if (!kintoneRecord) return;
-      const processLabel = (areaId, kintoneField) => {
+      const descriptions = config.state.descriptions;
+      if (!descriptions) return;
+
+      const processLabel = (areaId, content) => {
           const area = document.getElementById(areaId);
-          const kintoneFieldData = kintoneRecord[kintoneField];
-          if (area && kintoneFieldData && kintoneFieldData.value) {
-              area.innerHTML = normalizeKintoneFontSize(kintoneFieldData.value);
+          if (area && content) {
+              area.innerHTML = normalizeKintoneFontSize(content);
               toggleSection(areaId, true);
           } else if (area) {
               area.innerHTML = '';
               toggleSection(areaId, false);
           }
       };
-      if (!requirement) {
-          processLabel(config.uiIds.COMMON_LABEL_AREA, config.proxyLabels.common.kintoneField);
-          toggleSection(config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA, false);
+
+      // 共通ラベル（冒頭ラベル）
+      processLabel(config.uiIds.COMMON_LABEL_AREA, descriptions['__Global_Header__']);
+      
+      // 用件別ラベル
+      let requirementKey;
+      if (requirement === '変更') requirementKey = '__Global_Change__';
+      if (requirement === '初診') requirementKey = '__Global_FirstVisit__';
+      if (requirement === '取消') requirementKey = '__Global_Cancel__';
+      
+      if (requirementKey) {
+          processLabel(config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA, descriptions[requirementKey]);
       } else {
-          let targetLabelConfig;
-          if (requirement === '変更') targetLabelConfig = config.proxyLabels.change;
-          if (requirement === '初診') targetLabelConfig = config.proxyLabels.firstVisit;
-          if (requirement === '取消') targetLabelConfig = config.proxyLabels.cancel;
-          
-          if (targetLabelConfig) {
-              processLabel(config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA, targetLabelConfig.kintoneField);
-          } else {
-              toggleSection(config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA, false);
-          }
+          toggleSection(config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA, false);
       }
   }
 
@@ -932,16 +919,21 @@ function updateReasonSection(requirement) {
       selectContainer.appendChild(deptWrapper);
       selectContainer.appendChild(finalWrapper);
       
+      const guidanceArea = document.createElement('div');
+      guidanceArea.id = config.uiIds.GUIDANCE_AREA;
+      guidanceArea.style.display = 'none';
+      area.appendChild(guidanceArea);
+
       const doctorArea = document.createElement('div');
       doctorArea.id = config.uiIds.DOCTOR_AREA;
       doctorArea.style.display = 'none';
       doctorArea.style.marginTop = '15px';
       area.appendChild(doctorArea);
       
-      const guidanceArea = document.createElement('div');
-      guidanceArea.id = config.uiIds.GUIDANCE_AREA;
-      guidanceArea.style.display = 'none';
-      area.appendChild(guidanceArea);
+      const doctorGuidanceArea = document.createElement('div');
+      doctorGuidanceArea.id = config.uiIds.DOCTOR_GUIDANCE_AREA;
+      doctorGuidanceArea.style.display = 'none';
+      area.appendChild(doctorGuidanceArea);
 
       const uniqueBunya = [...new Set(config.state.kintoneRecords.map(r => r[config.jsonKeys.BUNYA]?.value?.trim()).filter(Boolean))];
       bunyaSelect.appendChild(createPlaceholderOption('選択してください'));
@@ -987,12 +979,15 @@ function updateReasonSection(requirement) {
           if (!selectedDept) {
               config.state.selectedDepartment = null;
               updateCombinedShinryoField();
+              updateDepartmentGuidance();
               return;
           }
           
           config.state.selectedDepartment = selectedDept;
           config.state.selectedTokuteiShinryo = null;
           updateCombinedShinryoField();
+          updateDepartmentGuidance();
+          updateDoctorGuidance();
 
           const deptRecords = getFilteredRecords();
           const tokuteiOptions = [...new Set(deptRecords.map(r => r[config.jsonKeys.TOKUTEI_SHINRYO]?.value?.trim()).filter(Boolean))];
@@ -1033,42 +1028,67 @@ function updateReasonSection(requirement) {
           
           resetSelections('final');
           updateCombinedShinryoField();
+          updateDoctorGuidance();
           updateDoctorOptions();
       });
   }
 
-  function updateGuidanceSection() {
+  function updateDepartmentGuidance() {
       const area = document.getElementById(config.uiIds.GUIDANCE_AREA);
       area.innerHTML = '';
       area.style.display = 'none';
-      const filteredRecords = getFilteredRecords();
+
+      const dept = config.state.selectedDepartment;
+      if (!dept) return;
+
+      // ★追加: 用件別制御ロジック
+      const setting = config.state.labelSettings ? config.state.labelSettings[dept] : 'both';
+      const req = config.state.requirement;
+      if (setting === 'first_visit' && req !== '初診') return;
+      if (setting === 'change' && req !== '変更') return;
+
+      const guidanceText = config.state.descriptions[dept];
+      if (guidanceText) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = guidanceText;
+          if (tempDiv.textContent.trim().length > 0 || tempDiv.querySelector('img')) {
+              area.style.cssText = 'margin-top: 15px; padding: 10px; border: 1px solid #e0e0e0; background-color: #f9f9f9; font-size: 13px; border-radius: 4px;';
+              const div = document.createElement('div');
+              div.className = 'gemini-rich-text';
+              div.innerHTML = guidanceText;
+              area.appendChild(div);
+              area.style.display = 'block';
+          }
+      }
+  }
+
+  function updateDoctorGuidance() {
+      const area = document.getElementById(config.uiIds.DOCTOR_GUIDANCE_AREA);
+      area.innerHTML = '';
+      area.style.display = 'none';
       
+      const filteredRecords = getFilteredRecords();
       if (filteredRecords.length === 1) {
           const record = filteredRecords[0];
           const guidanceText = record[config.jsonKeys.GUIDANCE]?.value;
+          const doctorName = record[config.jsonKeys.DOCTOR]?.value;
 
+          // 医師個別案内の表示（案内文がある場合のみ）
+          if (guidanceText && guidanceText.replace(/<p><br><\/p>/g, '').trim()) {
+              area.style.cssText = 'margin-top: 10px; padding: 8px; border: 1px solid #cce5ff; background-color: #f8fbff; font-size: 12px; border-radius: 4px;';
+              
+              const div = document.createElement('div');
+              div.className = 'gemini-rich-text';
+              div.innerHTML = guidanceText;
+              area.appendChild(div);
+              area.style.display = 'block';
+          }
+          
           const facilityName = record[config.jsonKeys.FACILITY_NAME]?.value;
           if (facilityName) {
               updateFbField(config.fbFields.FACILITY_NAME, facilityName);
           }
-          
-          if (guidanceText) {
-              const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = guidanceText;
-              if (tempDiv.textContent.trim().length > 0) {
-                  area.style.cssText = 'margin-top: 20px; padding: 10px; border: 1px solid #e0e0e0; background-color: #f9f9f9; font-size: 12px; border-radius: 4px;';
-                  const title = document.createElement('div');
-                  title.textContent = '■備考■';
-                  title.style.fontWeight = 'bold';
-                  title.style.marginBottom = '5px';
-                  area.appendChild(title);
-                  const p = document.createElement('p');
-                  p.innerHTML = guidanceText;
-                  p.style.margin = '0 0 5px 0';
-                  area.appendChild(p);
-                  area.style.display = 'block';
-              }
-          }
+
       } else {
           updateFbField(config.fbFields.FACILITY_NAME, '');
       }
@@ -1103,7 +1123,7 @@ function updateReasonSection(requirement) {
           updateFbField(config.fbFields.DOCTOR, '');
           area.innerHTML = '';
           toggleSection(config.uiIds.DOCTOR_AREA, false);
-          updateGuidanceSection();
+          updateDoctorGuidance();
           updateMethodSection();
           return;
       }
@@ -1130,7 +1150,7 @@ function updateReasonSection(requirement) {
           select.disabled = true;
           config.state.selectedDoctor = doctorName;
           updateFbField(config.fbFields.DOCTOR, doctorName);
-          updateGuidanceSection();
+          updateDoctorGuidance();
           updateMethodSection();
           return;
       }
@@ -1151,7 +1171,7 @@ function updateReasonSection(requirement) {
           config.state.selectedDoctor = doctorName;
           updateFbField(config.fbFields.DOCTOR, doctorName);
           resetSelections('doctor');
-          updateGuidanceSection();
+          updateDoctorGuidance();
           updateMethodSection();
       });
       
@@ -1171,7 +1191,7 @@ function updateReasonSection(requirement) {
           updateFbField(config.fbFields.DOCTOR, '');
       }
 
-      updateGuidanceSection();
+      updateDoctorGuidance();
       updateMethodSection();
   }
 
@@ -2250,6 +2270,13 @@ function injectStyles() {
                 width: 100%;
                 max-width: none;
             }
+        }
+
+        /* リッチテキストの行間調整 */
+        .gemini-rich-text p {
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.5 !important;
         }
       `;
       const style = document.createElement('style');
