@@ -124,6 +124,26 @@
 
         /* プレビュー画面の行間調整 */
         .preview-content p { margin: 0 !important; padding: 0 !important; line-height: 1.5 !important; }
+
+        /* カレンダー強調表示用 */
+        @keyframes blink-shadow-green { 50% { box-shadow: 0 0 0 2px transparent; } }
+        @keyframes blink-shadow-black { 50% { box-shadow: 0 0 0 2px transparent; } }
+        .cell-today {
+            box-shadow: 0 0 0 2px #28a745;
+            animation: blink-shadow-green 1.5s infinite;
+            z-index: 1;
+        }
+        .cell-limit {
+            box-shadow: 0 0 0 2px #becf3e;
+            animation: blink-shadow-black 1.5s infinite;
+            z-index: 1;
+        }
+        .cell-label-tag {
+            position: absolute; top: -6px; right: -4px; font-size: 9px; padding: 1px 3px; border-radius: 3px; line-height: 1; z-index: 2; box-shadow: 0 1px 2px rgb(6, 118, 114); font-weight: bold; pointer-events: none;
+        }
+        .label-today { background-color: #28a745; color: white; }
+        .label-limit { background-color: #7f7908bb; color: white; }
+
       `;
       const style = document.createElement('style');
       style.id = INITIAL_HIDE_STYLE_ID;
@@ -308,7 +328,7 @@
                  const btnDashboard = document.createElement('button');
                  btnDashboard.className = 'mode-switch-btn';
                  btnDashboard.textContent = 'Dashboard';
-                 btnDashboard.style.backgroundColor = '#6c757d';
+                 btnDashboard.style.backgroundColor = '#28a745';
                  btnDashboard.style.margin = '0';
                  btnDashboard.style.height = '30px';
                  btnDashboard.style.lineHeight = '30px';
@@ -575,7 +595,7 @@
 
       const menuList = [
           { label: '予約センター登録', icon: '🏥', desc: 'センター名や管轄施設の設定を行います', action: () => { document.body.removeChild(overlay); showCenterRegistrationMenu(); } },
-          { label: '予約待受期間設定', icon: '📅', desc: '休診日や予約受付期間の設定を行います', action: () => { document.body.removeChild(overlay); showReservationTermMenu(); } },
+          { label: '予約待受期間設定', icon: '📅', desc: '休診日や予約受付期間の設定を行います', action: () => { document.body.removeChild(overlay); showHolidaySettingDialog(); } },
           { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
           { label: 'システム管理者', icon: '🔐', desc: 'システム管理者専用の設定（パスワードが必要）', action: () => { document.body.removeChild(overlay); showAdminPasswordDialog(); } },
           // 必要に応じてメニューを追加
@@ -961,102 +981,6 @@
       content.appendChild(closeBtn);
 
       document.body.appendChild(overlay);
-  }
-
-  function showReservationTermMenu() {
-      const { overlay, box, content } = createModalBase();
-      
-      const title = document.createElement('h2');
-      title.textContent = '予約待受期間設定';
-      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
-      content.appendChild(title);
-
-      const menuList = [
-          { label: '休診日設定', icon: '📅', desc: '病院固有の休診日カレンダーを設定します', action: () => { document.body.removeChild(overlay); showHolidaySettingDialog(); } },
-          { label: '待受期間設定', icon: '⏳', desc: 'デフォルトの予約受付開始日と期間を設定します', action: () => { document.body.removeChild(overlay); showCommonTermInputDialog(); } },
-      ];
-
-      menuList.forEach(item => {
-          const btn = document.createElement('button');
-          btn.className = 'custom-modal-menu-btn';
-          btn.innerHTML = `
-            <div class="menu-btn-icon">${item.icon}</div>
-            <div class="menu-btn-content">
-                <div class="menu-btn-title">${item.label}</div>
-                <div class="menu-btn-desc">${item.desc}</div>
-            </div>
-          `;
-          btn.onclick = item.action;
-          content.appendChild(btn);
-      });
-
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-      closeBtn.textContent = '戻る';
-      closeBtn.style.marginTop = '15px';
-      closeBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
-      content.appendChild(closeBtn);
-
-      document.body.appendChild(overlay);
-  }
-
-  function showCenterNameInputDialog() {
-      const initialVal = localStorage.getItem('shinryo_center_name') || '湘南東部外来予約センター';
-      let inputEl;
-
-      const checkDirty = (action) => {
-          const currentVal = inputEl ? inputEl.value : initialVal;
-          const isDirty = currentVal !== initialVal;
-          checkDirtyAndConfirm(isDirty, action);
-      };
-
-      const { overlay, box, content } = createModalBase((doClose) => checkDirty(doClose));
-      
-      const title = document.createElement('h2');
-      title.textContent = '予約センター名の登録';
-      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
-      content.appendChild(title);
-
-      const desc = document.createElement('p');
-      desc.textContent = 'ダッシュボードに表示する予約センター名を入力してください。';
-      desc.style.cssText = 'text-align: left; font-size: 14px; color: #666; margin-bottom: 10px;';
-      content.appendChild(desc);
-
-      const input = document.createElement('input');
-      inputEl = input;
-      input.className = 'custom-modal-input';
-      input.value = initialVal;
-      content.appendChild(input);
-
-      const btnGroup = document.createElement('div');
-      btnGroup.className = 'custom-modal-btn-group';
-
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-      cancelBtn.textContent = 'キャンセル';
-      cancelBtn.onclick = () => checkDirty(() => { document.body.removeChild(overlay); showCenterRegistrationMenu(); });
-
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
-      saveBtn.textContent = '保存';
-      saveBtn.onclick = () => {
-          const val = input.value.trim();
-          if (val) {
-              localStorage.setItem('shinryo_center_name', val);
-              document.body.removeChild(overlay);
-              location.reload(); // 反映のためリロード
-          } else {
-              // 簡易バリデーション（空の場合は保存しない）
-              input.style.borderColor = 'red';
-          }
-      };
-
-      btnGroup.appendChild(cancelBtn);
-      btnGroup.appendChild(saveBtn);
-      content.appendChild(btnGroup);
-
-      document.body.appendChild(overlay);
-      input.focus();
   }
 
   async function showTicketAppSettingDialog() {
@@ -1654,97 +1578,78 @@
       document.body.appendChild(overlay);
   }
 
-  // ★追加: 病院共通予約期間設定ダイアログ
-  async function showCommonTermInputDialog() {
-      const { overlay, box } = createModalBase();
-      
-      const title = document.createElement('h2');
-      title.textContent = '待受期間設定';
-      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
-      box.appendChild(title);
+  function showCenterNameInputDialog() {
+      const initialVal = localStorage.getItem('shinryo_center_name') || '湘南東部外来予約センター';
+      let inputEl;
 
-      // 現在の設定を取得
-      let currentStart = '', currentDuration = '';
-      if (window.ShinryoApp.ConfigManager) {
-          await window.ShinryoApp.ConfigManager.fetchPublishedData();
-          const common = window.ShinryoApp.ConfigManager.getCommonSettings();
-          if (common) {
-              currentStart = common.start || '';
-              currentDuration = common.duration || '';
-          }
-      }
-
-      const createInput = (label, val, maxVal) => {
-          const div = document.createElement('div');
-          div.style.marginBottom = '15px';
-          div.innerHTML = `<div style="font-weight:bold;margin-bottom:5px;text-align:left;">${label}</div>`;
-          const inp = document.createElement('input');
-          inp.className = 'custom-modal-input';
-          inp.style.marginBottom = '0';
-          inp.type = 'number';
-          if (maxVal) {
-              inp.max = maxVal;
-              inp.oninput = function() { if (Number(this.value) > maxVal) this.value = maxVal; };
-          }
-          inp.value = val;
-          div.appendChild(inp);
-          box.appendChild(div);
-          return inp;
+      const checkDirty = (action) => {
+          const currentVal = inputEl ? inputEl.value : initialVal;
+          const isDirty = currentVal !== initialVal;
+          checkDirtyAndConfirm(isDirty, action);
       };
 
-      const startInput = createInput('予約開始 (日後)', currentStart);
-      const durationInput = createInput('予約可能期間 (日間)', currentDuration, 60);
+      const { overlay, box, content } = createModalBase((doClose) => checkDirty(doClose));
+      
+      const title = document.createElement('h2');
+      title.textContent = '予約センター名の登録';
+      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
+      content.appendChild(title);
 
-      // 説明文の追加
-      const expl = document.createElement('div');
-      expl.style.cssText = 'text-align: left; font-size: 11px; color: #666; margin-bottom: 20px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; line-height: 1.5;';
-      expl.innerHTML = `
-        <div style="margin-bottom: 8px;">
-            <strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br>例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）
-        </div>
-        <div><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）</div>
-      `;
-      box.appendChild(expl);
+      const desc = document.createElement('p');
+      desc.textContent = 'ダッシュボードに表示する予約センター名を入力してください。';
+      desc.style.cssText = 'text-align: left; font-size: 14px; color: #666; margin-bottom: 10px;';
+      content.appendChild(desc);
+
+      const input = document.createElement('input');
+      inputEl = input;
+      input.className = 'custom-modal-input';
+      input.value = initialVal;
+      content.appendChild(input);
 
       const btnGroup = document.createElement('div');
       btnGroup.className = 'custom-modal-btn-group';
-      btnGroup.style.marginTop = '20px';
 
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       cancelBtn.textContent = 'キャンセル';
-      cancelBtn.onclick = () => { document.body.removeChild(overlay); showReservationTermMenu(); };
+      cancelBtn.onclick = () => checkDirty(() => { document.body.removeChild(overlay); showCenterRegistrationMenu(); });
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
-      saveBtn.onclick = async () => {
-          const newStart = startInput.value.trim();
-          const newDuration = durationInput.value.trim();
-
-          if (parseInt(newDuration, 10) > 60) {
-              await showCustomDialog('予約可能期間は最大60日までです。', 'alert');
-              return;
-          }
-
-          document.body.removeChild(overlay);
-          try {
-              await window.ShinryoApp.ConfigManager.updateCommonTerm(newStart, newDuration);
-              await showCustomDialog('共通設定を保存し、予約フォームに反映しました。', 'alert');
-              // ★追加: 画面とLast Form Updateを更　新
-              if (window.ShinryoApp.Viewer && window.ShinryoApp.Viewer.renderOverview) {
-                  window.ShinryoApp.Viewer.renderOverview();
-              }
-          } catch(e) {
-              await showCustomDialog('保存に失敗しました。', 'alert');
+      saveBtn.onclick = () => {
+          const val = input.value.trim();
+          if (val) {
+              localStorage.setItem('shinryo_center_name', val);
+              document.body.removeChild(overlay);
+              location.reload(); // 反映のためリロード
+          } else {
+              // 簡易バリデーション（空の場合は保存しない）
+              input.style.borderColor = 'red';
           }
       };
 
       btnGroup.appendChild(cancelBtn);
       btnGroup.appendChild(saveBtn);
-      box.appendChild(btnGroup);
+      content.appendChild(btnGroup);
 
       document.body.appendChild(overlay);
+      input.focus();
+  }
+
+  // 祝日データ取得ヘルパー
+  async function fetchPublicHolidays() {
+      const url = 'https://holidays-jp.github.io/api/v1/date.json';
+      try {
+          if (typeof kintone !== 'undefined' && kintone.proxy) {
+              const [body, status] = await kintone.proxy(url, 'GET', {}, {});
+              if (status === 200) return JSON.parse(body);
+              else throw new Error(`Proxy Status ${status}`);
+          } else {
+              const res = await fetch(url);
+              return await res.json();
+          }
+      } catch(e) { console.warn('祝日取得失敗', e); return {}; }
   }
 
   // ★追加: 休診日設定ダイアログ
@@ -1754,23 +1659,128 @@
       box.style.width = '95%';
       
       const title = document.createElement('h2');
-      title.textContent = '休診日設定';
+      title.textContent = '予約待受期間・休診日設定';
       title.style.cssText = 'margin-top: 0; margin-bottom: 15px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
       box.appendChild(title);
 
+      // 祝日データの取得
+      const publicHolidays = await fetchPublicHolidays();
+
       // 現在の設定を取得
       let currentHolidays = new Set();
+      let currentExceptions = new Set(); // 例外診療日
+      let closeSaturdays = false;
+      let currentStart = '', currentDuration = '';
+
       if (window.ShinryoApp.ConfigManager) {
           await window.ShinryoApp.ConfigManager.fetchPublishedData();
           const common = window.ShinryoApp.ConfigManager.getCommonSettings();
           if (common && Array.isArray(common.holidays)) {
               common.holidays.forEach(d => currentHolidays.add(d));
           }
+          if (common && Array.isArray(common.exceptionalDays)) {
+              common.exceptionalDays.forEach(d => currentExceptions.add(d));
+          }
+          if (common && typeof common.closeSaturdays === 'boolean') {
+              closeSaturdays = common.closeSaturdays;
+          }
+          if (common) {
+              currentStart = common.start || '';
+              currentDuration = common.duration || '';
+          }
       }
+
+      // UIコンテナ
+      const controlsContainer = document.createElement('div');
+      controlsContainer.style.marginBottom = '15px';
+      controlsContainer.style.textAlign = 'left'; 
+      
+      // 土曜休診設定チェックボックス (定義位置を移動)
+      const satLabel = document.createElement('label');
+      satLabel.style.display = 'inline-flex';
+      satLabel.style.alignItems = 'center';
+      satLabel.style.cursor = 'pointer';
+      satLabel.style.fontWeight = 'bold';
+      satLabel.style.marginLeft = '20px'; // 左マージン追加
+      satLabel.style.whiteSpace = 'nowrap'; // 折り返し防止
+      
+      const satInput = document.createElement('input');
+      satInput.type = 'checkbox';
+      satInput.checked = closeSaturdays;
+      satInput.style.marginRight = '8px';
+      
+      satLabel.appendChild(satInput);
+      satLabel.appendChild(document.createTextNode('土曜日をデフォルトで休診日とする'));
+
+      // --- 待受期間設定UIの移植 ---
+      const termContainer = document.createElement('div');
+      termContainer.style.cssText = 'display: flex; gap: 20px; align-items: center; margin-bottom: 15px; padding: 15px; background-color: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;';
+      
+      const createInput = (label, val, maxVal, minVal, width = '80px') => {
+          const div = document.createElement('div');
+          div.innerHTML = `<div style="font-weight:bold;margin-bottom:5px;font-size:12px;">${label}</div>`;
+          const inp = document.createElement('input');
+          inp.className = 'custom-modal-input';
+          inp.style.marginBottom = '0';
+          inp.style.width = width;
+          inp.type = 'number';
+          
+          if (minVal !== undefined && minVal !== null) inp.min = minVal;
+          if (maxVal !== undefined && maxVal !== null) inp.max = maxVal;
+
+          inp.oninput = function() {
+              if (this.value === '') return;
+              if (maxVal !== undefined && maxVal !== null && Number(this.value) > maxVal) this.value = maxVal;
+          };
+          inp.onchange = function() {
+              if (this.value === '') return;
+              if (minVal !== undefined && minVal !== null && Number(this.value) < minVal) this.value = minVal;
+          };
+
+          inp.value = val;
+          div.appendChild(inp);
+          return { div, inp };
+      };
+
+      const startInputObj = createInput('予約開始 (日後)', currentStart, null, 1);
+      const durationInputObj = createInput('予約可能期間 (日間)', currentDuration, 60, 1);
+      
+      termContainer.appendChild(startInputObj.div);
+      termContainer.appendChild(durationInputObj.div);
+      
+      const termDesc = document.createElement('div');
+      termDesc.style.cssText = 'font-size: 11px; color: #666; line-height: 1.4; flex: 1; margin-left: 10px;';
+      termDesc.innerHTML = `
+        <strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br>
+        <strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）
+      `;
+      termContainer.appendChild(termDesc);
+      
+      termContainer.appendChild(satLabel); // コンテナ内に配置
+      
+      controlsContainer.appendChild(termContainer);
+      // ---------------------------
+
+      box.appendChild(controlsContainer);
 
       const thisYear = new Date().getFullYear();
       const years = [thisYear, thisYear + 1];
       
+      // 本日と予約期限の計算
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      let limitDate = null;
+      let startDate = null;
+      
+      // 初期値で計算
+      const initS = parseInt(currentStart, 10) || 0;
+      const initD = parseInt(currentDuration, 10) || 0;
+      limitDate = new Date(today);
+      limitDate.setDate(today.getDate() + initS + initD);
+
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() + initS);
+
       // タブUI
       const tabContainer = document.createElement('div');
       tabContainer.style.display = 'flex';
@@ -1785,6 +1795,37 @@
 
       const renderCalendar = (year, container) => {
           container.innerHTML = '';
+
+          // ★追加: 年度リセットボタン
+          const headerActions = document.createElement('div');
+          headerActions.style.display = 'flex';
+          headerActions.style.justifyContent = 'flex-end';
+          headerActions.style.marginBottom = '10px';
+
+          const resetBtn = document.createElement('button');
+          resetBtn.textContent = `${year}年の設定を初期化`;
+          resetBtn.style.cssText = 'padding: 6px 12px; font-size: 12px; cursor: pointer; background-color: #fff; border: 1px solid #d9534f; color: #d9534f; border-radius: 4px; transition: all 0.2s;';
+          resetBtn.onmouseover = () => { resetBtn.style.backgroundColor = '#d9534f'; resetBtn.style.color = '#fff'; };
+          resetBtn.onmouseout = () => { resetBtn.style.backgroundColor = '#fff'; resetBtn.style.color = '#d9534f'; };
+
+          resetBtn.onclick = async () => {
+              const confirmed = await showCustomDialog(
+                  `${year}年の設定をすべて初期状態（デフォルト）に戻しますか？\n\nこの操作により、${year}年内の手動設定（休診日・例外診療日）がすべて削除されます。`,
+                  'confirm',
+                  { ok: '初期化する', cancel: 'キャンセル' }
+              );
+              if (confirmed) {
+                  const prefix = `${year}-`;
+                  const hToRemove = Array.from(currentHolidays).filter(d => d.startsWith(prefix));
+                  hToRemove.forEach(d => currentHolidays.delete(d));
+                  const eToRemove = Array.from(currentExceptions).filter(d => d.startsWith(prefix));
+                  eToRemove.forEach(d => currentExceptions.delete(d));
+                  renderCalendar(year, container);
+              }
+          };
+          headerActions.appendChild(resetBtn);
+          container.appendChild(headerActions);
+
           const grid = document.createElement('div');
           grid.style.display = 'grid';
           grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(200px, 1fr))';
@@ -1835,25 +1876,107 @@
                   cell.style.cursor = 'pointer';
                   cell.style.padding = '4px 0';
                   cell.style.borderRadius = '2px';
+                  cell.style.position = 'relative';
                   
+                  const dayOfWeek = new Date(year, m, d).getDay();
+                  const isSunday = dayOfWeek === 0;
+                  const isSaturday = dayOfWeek === 6;
+                  const isPublicHoliday = !!publicHolidays[dateStr];
+
+                  // 本日・予約期限判定
+                  const currentDate = new Date(year, m, d);
+                  const isToday = currentDate.getTime() === today.getTime();
+                  const isStart = startDate && currentDate.getTime() === startDate.getTime();
+                  const isLimit = limitDate && currentDate.getTime() === limitDate.getTime();
+
+                  if (isToday) {
+                      cell.classList.add('cell-today');
+                      const lbl = document.createElement('div');
+                      lbl.className = 'cell-label-tag label-today'; lbl.textContent = '本日'; cell.appendChild(lbl);
+                  }
+                  if (isStart) {
+                      cell.classList.add('cell-limit');
+                      const lbl = document.createElement('div');
+                      lbl.className = 'cell-label-tag label-limit'; lbl.textContent = 'start'; cell.appendChild(lbl);
+                  }
+                  if (isLimit) {
+                      cell.classList.add('cell-limit');
+                      const lbl = document.createElement('div');
+                      lbl.className = 'cell-label-tag label-limit'; lbl.textContent = 'end'; cell.appendChild(lbl);
+                  }
+                  
+                  // 状態判定ロジック
                   const updateStyle = () => {
+                      // スタイルのリセット
+                      cell.style.border = 'none';
+                      cell.style.borderRadius = '2px';
+
+                      let isClosed = false;
+                      let isException = false;
+                      let isManualClosed = false;
+                      const isDefaultHoliday = isSunday || isPublicHoliday || (isSaturday && satInput.checked);
+
+                      // 1. デフォルトの休み判定
+                      if (isDefaultHoliday) isClosed = true;
+
+                      // 2. 個別設定による上書き
                       if (currentHolidays.has(dateStr)) {
+                          isClosed = true;
+                          isManualClosed = true;
+                      }
+                      if (currentExceptions.has(dateStr)) {
+                          isClosed = false;
+                          isException = true;
+                      }
+
+                      // スタイル適用
+                      if (isException) {
+                          // 例外診療日（青）
+                          cell.style.backgroundColor = '#e3f2fd';
+                          cell.style.color = '#1976d2';
+                          cell.style.fontWeight = 'bold';
+                          cell.title = '例外診療日 (本来は休日ですが診療します)';
+                          // 元々が固定休日の場合は、点線で囲んで例外であることを示す
+                          if (isDefaultHoliday) {
+                              cell.style.border = '2px dotted #1976d2';
+                          }
+                      } else if (isClosed) {
+                          // 休診日（赤）
                           cell.style.backgroundColor = '#ffcccc';
                           cell.style.color = '#d9534f';
                           cell.style.fontWeight = 'bold';
+                          cell.title = isManualClosed ? '休診日 (手動設定)' : (publicHolidays[dateStr] || '休診日');
+                          // 固定的な休日（日曜・祝日）の場合は、丸枠で囲む
+                          if (isDefaultHoliday) {
+                              cell.style.border = '2px solid #d9534f';
+                              cell.style.borderRadius = '50%';
+                          }
                       } else {
+                          // 稼働日（透明）
                           cell.style.backgroundColor = 'transparent';
                           cell.style.color = '#333';
                           cell.style.fontWeight = 'normal';
+                          cell.title = '診療日';
                       }
                   };
                   updateStyle();
 
                   cell.onclick = () => {
-                      if (currentHolidays.has(dateStr)) {
-                          currentHolidays.delete(dateStr);
+                      // 現在の状態を再計算
+                      let isClosedDefault = (isSunday || isPublicHoliday || (isSaturday && satInput.checked));
+                      
+                      if (isClosedDefault) {
+                          // デフォルト休日の場合 -> 例外診療(Open)のトグル
+                          if (currentExceptions.has(dateStr)) currentExceptions.delete(dateStr);
+                          else currentExceptions.add(dateStr);
+                          // 手動休診設定があれば消す（矛盾防止）
+                          if (currentHolidays.has(dateStr)) currentHolidays.delete(dateStr);
                       } else {
-                          currentHolidays.add(dateStr);
+                          // デフォルト稼働日の場合 -> 手動休診(Closed)のトグル
+                          if (currentHolidays.has(dateStr)) currentHolidays.delete(dateStr);
+                          else currentHolidays.add(dateStr);
+                          // 例外設定があれば消す
+                          if (currentExceptions.has(dateStr)) currentExceptions.delete(dateStr);
                       }
                       updateStyle();
                   };
@@ -1864,6 +1987,26 @@
           }
           container.appendChild(grid);
       };
+
+      // 再描画・再計算関数
+      const refreshView = () => {
+          // 予約期限の再計算
+          const s = parseInt(startInputObj.inp.value, 10) || 0;
+          const d = parseInt(durationInputObj.inp.value, 10) || 0;
+          limitDate = new Date(today);
+          limitDate.setDate(today.getDate() + s + d);
+          startDate = new Date(today);
+          startDate.setDate(today.getDate() + s);
+
+          // 現在表示中のカレンダーを再描画してスタイル更新
+          const activeTab = Array.from(tabContainer.children).find(t => t.style.fontWeight === 'bold');
+          if (activeTab) activeTab.click();
+      };
+
+      // イベントリスナー設定
+      satInput.onchange = refreshView;
+      startInputObj.inp.addEventListener('input', refreshView);
+      durationInputObj.inp.addEventListener('input', refreshView);
 
       years.forEach((y, idx) => {
           const tab = document.createElement('div');
@@ -1895,7 +2038,7 @@
       renderCalendar(thisYear, contentContainer);
 
       const note = document.createElement('div');
-      note.textContent = '※日付をクリックすると休診日(赤色)の設定/解除ができます。国民の祝日とは別に、病院独自の休診日を設定してください。';
+      note.innerHTML = '※日付をクリックすると設定を切り替えられます。<br><span style="color:#d9534f;font-weight:bold;">■ 赤色：休診日</span>　<span style="color:#1976d2;font-weight:bold;">■ 青色：例外診療日（祝日等だが診療する日）</span>';
       note.style.fontSize = '12px';
       note.style.color = '#666';
       note.style.marginTop = '10px';
@@ -1909,17 +2052,34 @@
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       cancelBtn.textContent = 'キャンセル';
-      cancelBtn.onclick = () => { document.body.removeChild(overlay); showReservationTermMenu(); };
+      cancelBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
       saveBtn.onclick = async () => {
+          const newStart = startInputObj.inp.value.trim();
+          const newDuration = durationInputObj.inp.value.trim();
+
+          if (parseInt(newDuration, 10) > 60) {
+              await showCustomDialog('予約可能期間は最大60日までです。', 'alert');
+              return;
+          }
+          if (parseInt(newStart, 10) < 1) {
+              await showCustomDialog('予約開始は1日以上で設定してください。', 'alert');
+              return;
+          }
+          if (parseInt(newDuration, 10) < 1) {
+              await showCustomDialog('予約可能期間は1日以上で設定してください。', 'alert');
+              return;
+          }
+
           const sortedHolidays = Array.from(currentHolidays).sort();
+          const sortedExceptions = Array.from(currentExceptions).sort();
           document.body.removeChild(overlay);
           try {
-              await window.ShinryoApp.ConfigManager.updateCommonHolidays(sortedHolidays);
-              await showCustomDialog('休診日設定を保存しました。', 'alert');
+              await window.ShinryoApp.ConfigManager.updateCommonCalendarSettings(sortedHolidays, sortedExceptions, satInput.checked, newStart, newDuration);
+              await showCustomDialog('設定を保存しました。', 'alert');
               // 画面更新
               if (window.ShinryoApp.Viewer && window.ShinryoApp.Viewer.renderOverview) {
                   window.ShinryoApp.Viewer.renderOverview();

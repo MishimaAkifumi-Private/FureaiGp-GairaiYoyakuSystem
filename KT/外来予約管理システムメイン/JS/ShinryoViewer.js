@@ -210,6 +210,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       .am-slot, .pm-slot { font-size: 10px; width: 100%; padding: 2px 1px; box-sizing: border-box; line-height: 1.2; margin-bottom: 1px; }
       .am-slot { background-color: #e0f7fa; margin-top: 2px; }
       .pm-slot { background-color: #fff9c4; }
+      .pm-slot { background-color: #fff3e0; }
       
       .calendar-legend-area { margin-top: 8px; border-top: 1px solid #eee; padding-top: 5px; text-align: left; font-size: 11px; color: #444; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
       .legend-item { white-space: nowrap; }
@@ -375,7 +376,7 @@ window.ShinryoApp = window.ShinryoApp || {};
 
 
   function getFacilityChar(fullName, facilities) {
-    if (!fullName || !facilities) return '';
+    if (!fullName || !facilities || facilities.length <= 1) return '';
     // デフォルト色パレット
     const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
     
@@ -391,20 +392,52 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
   function stripHtml(html) { const t = document.createElement('div'); t.innerHTML = html || ''; return t.textContent || t.innerText || ''; }
   
-  function getHolidayName(dateObj, customHolidays) {
-    const y = dateObj.getFullYear(), m = dateObj.getMonth() + 1, d = dateObj.getDate();
-    // ゼロ埋めなしのキー（既存ロジック互換）
-    const key = `${y}-${m}-${d}`; 
-    // ゼロ埋めありのキー（設定保存用）
-    const keyPad = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  // 祝日キャッシュ
+  let cachedPublicHolidays = null;
+  async function ensurePublicHolidays() {
+      if (cachedPublicHolidays) return cachedPublicHolidays;
+      const url = 'https://holidays-jp.github.io/api/v1/date.json';
+      try {
+          if (typeof kintone !== 'undefined' && kintone.proxy) {
+              const [body, status] = await kintone.proxy(url, 'GET', {}, {});
+              if (status === 200) cachedPublicHolidays = JSON.parse(body);
+              else throw new Error(`Proxy Status ${status}`);
+          } else {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error(`Fetch Status ${res.status}`);
+              cachedPublicHolidays = await res.json();
+          }
+      } catch(e) { console.warn('Viewer: Public holiday fetch failed, using empty.', e); cachedPublicHolidays = {}; }
+      return cachedPublicHolidays;
+  }
 
-    // 1. カスタム休診日チェック
+  function getDayStatus(dateObj, commonSettings, publicHolidays) {
+    const y = dateObj.getFullYear(), m = dateObj.getMonth() + 1, d = dateObj.getDate();
+    const keyPad = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    
+    const customHolidays = commonSettings ? (commonSettings.holidays || []) : [];
+    const exceptionalDays = commonSettings ? (commonSettings.exceptionalDays || []) : [];
+    const closeSaturdays = commonSettings ? (commonSettings.closeSaturdays === true) : false;
+
+    // 1. 例外診療日チェック (最優先)
+    if (exceptionalDays.includes(keyPad)) return { isClosed: false, name: '' };
+
+    // 2. カスタム休診日チェック
     if (customHolidays && customHolidays.includes(keyPad)) {
-        return '休診日';
+        return { isClosed: true, name: '休診日' };
     }
-    // 2. 固定祝日チェック
-    const holidays = { '2025-1-1': '元日', '2025-1-13': '成人の日', '2026-1-1': '元日' }; 
-    return holidays[key] || null;
+    
+    // 3. 祝日チェック
+    if (publicHolidays && publicHolidays[keyPad]) {
+        return { isClosed: true, name: publicHolidays[keyPad] };
+    }
+
+    // 4. 土日チェック
+    const day = dateObj.getDay();
+    if (day === 0) return { isClosed: true, name: '' }; // 日曜
+    if (day === 6 && closeSaturdays) return { isClosed: true, name: '' }; // 土曜
+
+    return { isClosed: false, name: '' };
   }
 
   function createCalendarHtml(targetDate, scheduleRecords, commonSettings) {
@@ -426,7 +459,6 @@ window.ShinryoApp = window.ShinryoApp || {};
         }
     });
 
-    const customHolidays = commonSettings ? (commonSettings.holidays || []) : [];
     const facilities = commonSettings ? (commonSettings.facilities || []) : [];
 
     const scheduleByDate = {};
@@ -488,6 +520,10 @@ window.ShinryoApp = window.ShinryoApp || {};
 
     let html = `<div class="calendar-container" data-y="${year}" data-m="${month}"><div class="calendar-header"><div class="calendar-nav prev-month">◀</div><h3>${year}年 ${month + 1}月 ${departmentName ? '('+departmentName+')' : ''}</h3><div class="calendar-nav next-month">▶</div></div><table class="calendar-table"><thead><tr><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat-col">土</th></tr></thead><tbody>`;
     let current = new Date(startDate);
+    
+    // 祝日データ（キャッシュ済みと仮定、なければ空）
+    const pubHolidays = cachedPublicHolidays || {};
+
     for(let r=0; r<6; r++){
         let rowHtml = "";
         let hasDayInMonth = false;
@@ -496,13 +532,20 @@ window.ShinryoApp = window.ShinryoApp || {};
              const isTarget = current.getMonth() === month;
              if(isTarget) hasDayInMonth = true;
              const dateKey = `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`;
-             const holidayName = getHolidayName(current, customHolidays);
+             
+             const status = getDayStatus(current, commonSettings, pubHolidays);
+             const isClosed = status.isClosed;
+             const holidayName = status.name;
+
              const sch = scheduleByDate[dateKey] || {am:[], pm:[]};
              let cls = isTarget ? "" : "past-date";
-             if (holidayName) cls += " holiday-cell";
+             if (isClosed) cls += " holiday-cell";
+             
              rowHtml += `<td class="${cls}"><div class="date-num">${current.getDate()}</div>`;
              if (isTarget) {
-                 if (holidayName) rowHtml += `<div class="holiday-name-display">${holidayName}</div>`;
+                 if (isClosed) {
+                     if (holidayName) rowHtml += `<div class="holiday-name-display">${holidayName}</div>`;
+                 }
                  else {
                      if (sch.am.length > 0) rowHtml += `<div class="am-slot">${sch.am.join('<br>')}</div>`;
                      if (sch.pm.length > 0) rowHtml += `<div class="pm-slot">${sch.pm.join('<br>')}</div>`;
@@ -516,14 +559,16 @@ window.ShinryoApp = window.ShinryoApp || {};
     let legendHtml = '';
     let legendParts = [];
     const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
-    facilities.forEach((fac, i) => {
-        const color = fac.color || defaultColors[i % defaultColors.length];
-        const sym = fac.shortName || '●';
-        legendParts.push(`<span style="color:${color};font-weight:bold;">${sym}</span> ${fac.name}`);
-    });
+    if (facilities.length > 1) {
+        facilities.forEach((fac, i) => {
+            const color = fac.color || defaultColors[i % defaultColors.length];
+            const sym = fac.shortName || '●';
+            legendParts.push(`<span style="color:${color};font-weight:bold;">${sym}</span> ${fac.name}`);
+        });
+    }
     legendParts.push(`<span style="background-color:#e0f7fa; border:1px solid #ccc; padding:0 4px;">午前</span>`);
-    legendParts.push(`<span style="background-color:#fff9c4; border:1px solid #ccc; padding:0 4px;">午後</span>`);
-    legendHtml += `<span class="legend-item">凡例: ${legendParts.join(' / ')}</span>`;
+    legendParts.push(`<span style="background-color:#fff3e0; border:1px solid #ccc; padding:0 4px;">午後</span>`);
+    legendHtml += `<span class="legend-item">${legendParts.join(' / ')}</span>`;
 
     if (specMap.size > 0) {
         const sortedSpecs = Array.from(specMap.entries()).sort((a,b) => a[1] - b[1]);
@@ -535,51 +580,113 @@ window.ShinryoApp = window.ShinryoApp || {};
 
   function createScheduleTableHtml(rec, isMerged = false, commonSettings = null) {
       const days = ['月','火','水','木','金','土'];
-      const facility = rec['施設名']?.value || '';
-      const department = rec['診療科']?.value || '';
-      const selection = rec['診療選択']?.value || ''; 
-      const doctor = rec['医師名']?.value || '';
-      const facilities = commonSettings ? (commonSettings.facilities || []) : [];
       
-      // タイトル部
-      // ヘッダー表示形式を変更: [施設名]　[診療科]　[診療選択]　[医師名]
-      let headerText = `${facility}　${department}`;
-      if (selection) headerText += `　${selection}`;
-      headerText += `　${doctor}`;
+      // 案内文の収集
+      const uniqueGuidances = new Set();
+      if (isMerged && rec._scheduleInfo) {
+          ['1','2','3','4','5'].forEach(w => {
+              days.forEach((d) => {
+                  const field = `${d}${w}`;
+                  if (rec._scheduleInfo[field]) {
+                      const infoList = rec._scheduleInfo[field];
+                      infoList.forEach(item => {
+                          if (item.guidance && stripHtml(item.guidance).trim() !== '') {
+                              uniqueGuidances.add(item.guidance);
+                          }
+                      });
+                  }
+              });
+          });
+      }
 
-      let html = `<div style="text-align:center;font-weight:bold;margin-bottom:10px;font-size:16px;color:#333;">${headerText}</div>`;
+      // ヘッダー表示形式: [診療科] [医師名] (recはマージ済みレコード)
+      const department = rec['診療科']?.value || '';
+      const doctor = rec['医師名']?.value || '';
+      let headerText = `${department}　${doctor}`;
+
+      // 案内アイコンをタイトルに追加
+      if (uniqueGuidances.size > 0) {
+          const noteHtml = Array.from(uniqueGuidances).join('<hr style="margin:5px 0; border:0; border-top:1px dashed #ccc;">');
+          // HTMLをエンコードしてonclickに埋め込む
+          const encodedHtml = encodeURIComponent(noteHtml);
+          headerText += ` <span class="icon-note" style="cursor:pointer; font-size:1.2em;" onclick="event.stopPropagation(); window.ShinryoApp.Viewer.showContentDialog('医師案内', decodeURIComponent('${encodedHtml}'))">ℹ️</span>`;
+      }
+
+      let html = `<div style="text-align:left;font-size:14px;font-weight:bold;color:#666;margin-bottom:2px;">月間担当パターン</div>`;
+      html += `<div style="text-align:center;font-weight:bold;margin-bottom:5px;font-size:16px;color:#333;">${headerText}</div>`;
       html += `<table class="schedule-table" style="table-layout: fixed; width: 100%;"><colgroup><col style="width: 50px;"><col><col><col><col><col><col></colgroup><thead><tr><th></th>`;
       days.forEach(d => html += `<th>${d}</th>`);
       html += `</tr></thead><tbody>`;
+
+      const facilities = commonSettings ? (commonSettings.facilities || []) : [];
+
       ['1','2','3','4','5'].forEach(w => {
-          html += `<tr><th>第${w}</th>`;
-          days.forEach(d => {
+          html += `<tr><th>第${w}週</th>`;
+          days.forEach((d) => {
               const field = `${d}${w}`;
-              const v = rec[field]?.value || [];
-              let cls = '', txt = '';
-              if(v.includes('午前') && v.includes('午後')) { cls='schedule-allday'; txt='終日'; }
-              else if(v.includes('午前')) { cls='schedule-am'; txt='午前'; }
-              else if(v.includes('午後')) { cls='schedule-pm'; txt='午後'; }
               
-              // アイコン付与ロジック
-              let icons = '';
+              let cellContent = '';
+              let cellClass = '';
+              
               if (isMerged && rec._scheduleInfo && rec._scheduleInfo[field]) {
-                  const info = rec._scheduleInfo[field];
-                  // 施設アイコンの動的生成
-                  const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
-                  facilities.forEach((fac, idx) => {
-                      if (info.facilities.has(fac.name)) {
-                          const color = fac.color || defaultColors[idx % defaultColors.length];
-                          icons += `<span style="color:${color};font-weight:bold;margin-right:2px;">${fac.shortName}</span>`;
-                      }
-                  });
-                  if (info.notes.size > 0) {
-                      const noteText = Array.from(info.notes).join('\n').replace(/"/g, '&quot;');
-                      icons += `<span class="icon-note" title="${noteText}">!</span>`;
+                  const infoList = rec._scheduleInfo[field];
+                  
+                  // フィルタリングなしで全て表示（パターンとして表示）
+                  const validSchedules = infoList;
+
+                  if (validSchedules.length > 0) {
+                      // 表示要素の生成
+                      const amParts = [];
+                      const pmParts = [];
+                      
+                      validSchedules.forEach(sch => {
+                          const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
+                          // 施設特定
+                          const facObj = facilities.find(f => f.name === sch.facility);
+                          let symbolHtml = '';
+                          let selectionHtml = '';
+                          
+                          if (facObj && facilities.length > 1) {
+                              const facIdx = facilities.findIndex(f => f.name === sch.facility);
+                              const color = facObj.color || (facIdx >= 0 ? defaultColors[facIdx % defaultColors.length] : '#333');
+                              const sym = facObj.shortName || '●';
+                              symbolHtml = `<span style="color:${color};font-weight:bold;margin-left:2px;margin-right:2px;font-size:1.2em;">${sym}</span>`;
+                          }
+                          
+                          if (sch.selection) {
+                              selectionHtml = `<div style="font-size:0.75em;color:#555;line-height:1.1;margin-top:1px;">${sch.selection}</div>`;
+                          }
+
+                          if (sch.times.includes('午前')) amParts.push({ symbol: symbolHtml, selection: selectionHtml });
+                          if (sch.times.includes('午後')) pmParts.push({ symbol: symbolHtml, selection: selectionHtml });
+                      });
+
+                      // セルの構築 (表示順: 午前/午後 -> 施設 -> 選択)
+                      const buildContent = (label, parts) => {
+                          if (parts.length === 0) return '';
+                          const symbols = parts.map(p => p.symbol).join('');
+                          const selections = parts.map(p => p.selection).join('');
+                          return `<div style="display:flex; flex-direction:column; align-items:center; width:100%;">
+                              <div><span style="font-size:0.8em; margin-right:2px; color:#666;">${label}</span>${symbols}</div>
+                              ${selections}
+                          </div>`;
+                      };
+
+                      // セルの構築
+                      const amStyle = amParts.length > 0 ? 'background-color:#e0f7fa;' : '';
+                      const pmStyle = pmParts.length > 0 ? 'background-color:#fff3e0;' : ''; // 薄いオレンジ
+                      
+                      const amContent = buildContent('午前', amParts);
+                      const pmContent = buildContent('午後', pmParts);
+                      
+                      cellContent = `<div style="display:flex; flex-direction:column; height:100%; min-height:50px;">
+                          <div style="flex:1 1 0; border-bottom:1px dashed #ccc; padding:2px; display:flex; align-items:center; justify-content:center; ${amStyle}">${amContent}</div>
+                          <div style="flex:1 1 0; padding:2px; display:flex; align-items:center; justify-content:center; ${pmStyle}">${pmContent}</div>
+                      </div>`;
                   }
               }
 
-              html += `<td class="${cls}">${icons}${txt}</td>`;
+              html += `<td class="${cellClass}" style="padding:0; height:100%;">${cellContent}</td>`;
           });
           html += `</tr>`;
       });
@@ -588,11 +695,16 @@ window.ShinryoApp = window.ShinryoApp || {};
       // 凡例追加
       const legendParts = [];
       const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
-      facilities.forEach((fac, i) => {
-          const color = fac.color || defaultColors[i % defaultColors.length];
-          legendParts.push(`<span style="color:${color};font-weight:bold;">${fac.shortName}</span> ${fac.name}`);
-      });
-      html += `<div style="margin-top:8px; font-size:11px; text-align:left; color:#555;">凡例: ${legendParts.join(' / ')} / <span class="icon-note">!</span> 医師別案内 (マウスオーバーで表示)</div>`;
+      if (facilities.length > 1) {
+          facilities.forEach((fac, i) => {
+              const color = fac.color || defaultColors[i % defaultColors.length];
+              const sym = fac.shortName || '●';
+              legendParts.push(`<span style="color:${color};font-weight:bold;">${sym}</span>:${fac.name}`);
+          });
+      }
+      if (legendParts.length > 0) {
+          html += `<div style="margin-top:8px; font-size:11px; text-align:left; color:#555;">${legendParts.join(' / ')}</div>`;
+      }
       
       return html;
   }
@@ -637,10 +749,16 @@ window.ShinryoApp = window.ShinryoApp || {};
             baseRec._scheduleInfo = {};
             scheduleFields.forEach(f => {
                 if (rec[f]?.value?.length > 0) {
-                    baseRec._scheduleInfo[f] = { facilities: new Set(), notes: new Set() };
-                    const facName = getFacName(rec['施設名']?.value || '');
-                    if (facName) baseRec._scheduleInfo[f].facilities.add(facName);
-                    if (rec['留意案内']?.value) baseRec._scheduleInfo[f].notes.add(rec['留意案内'].value);
+                    // ★変更: 詳細情報をオブジェクト配列として保持
+                    baseRec._scheduleInfo[f] = [{
+                        times: rec[f].value,
+                        facility: getFacName(rec['施設名']?.value || ''),
+                        selection: rec['診療選択']?.value || '',
+                        guidance: rec['留意案内']?.value || '',
+                        start: rec['着任日']?.value,
+                        end: rec['離任日']?.value,
+                        ngDates: rec['直近NG日指定']?.value
+                    }];
                 }
             });
 
@@ -663,12 +781,17 @@ window.ShinryoApp = window.ShinryoApp || {};
 
                 // 詳細情報の収集
                 if (currentVals.length > 0) {
-                    if (!baseRec._scheduleInfo) baseRec._scheduleInfo = {};
-                    if (!baseRec._scheduleInfo[field]) baseRec._scheduleInfo[field] = { facilities: new Set(), notes: new Set() };
-                    
-                    const facName = getFacName(rec['施設名']?.value || '');
-                    if (facName) baseRec._scheduleInfo[field].facilities.add(facName);
-                    if (rec['留意案内']?.value) baseRec._scheduleInfo[field].notes.add(rec['留意案内'].value);
+                    if (!baseRec._scheduleInfo[field]) baseRec._scheduleInfo[field] = [];
+                    // ★変更: 詳細情報を追加
+                    baseRec._scheduleInfo[field].push({
+                        times: currentVals,
+                        facility: getFacName(rec['施設名']?.value || ''),
+                        selection: rec['診療選択']?.value || '',
+                        guidance: rec['留意案内']?.value || '',
+                        start: rec['着任日']?.value,
+                        end: rec['離任日']?.value,
+                        ngDates: rec['直近NG日指定']?.value
+                    });
                 }
             });
 
@@ -706,7 +829,8 @@ window.ShinryoApp = window.ShinryoApp || {};
 
     Promise.all([
         fetchAllRecords(kintone.app.getId()), // 現在のアプリ(App156)のレコード（ドラフト）
-        window.ShinryoApp.ConfigManager.fetchPublishedData() // 共通設定保管アプリ(App200)のデータ（公開版）
+        window.ShinryoApp.ConfigManager.fetchPublishedData(), // 共通設定保管アプリ(App200)のデータ（公開版）
+        ensurePublicHolidays() // ★追加: 祝日データの取得
     ]).then(([records, publishedData]) => {
         const descriptions = publishedData.descriptions || {};
         const deptSettings = publishedData.departmentSettings || {}; // ★追加: 診療科設定取得
@@ -879,19 +1003,42 @@ window.ShinryoApp = window.ShinryoApp || {};
         }
     }
 
+    // ★追加: 正規化ヘルパー (共通化)
+    const normalize = (val) => {
+        if (val === null || val === undefined) return '';
+        return String(val)
+            .replace(/\r\n/g, '\n').replace(/\r/g, '\n') // 改行コード統一
+            .replace(/[\s\u3000]+/g, ' ') // 全角・半角スペース、タブ等を「1つの半角スペース」に置換
+            .trim();
+    };
+
+    // ★追加: レコード全体の変更判定 (医師名セルの点滅用)
+    const hasRecordChange = (rec1, rec2) => {
+        if (!rec2) return true; // 新規レコード
+
+        // スケジュール比較
+        const days = ['月', '火', '水', '木', '金', '土'];
+        const weeks = ['1', '2', '3', '4', '5'];
+        for (const w of weeks) {
+            for (const d of days) {
+                const key = `${d}${w}`;
+                const v1 = (rec1[key]?.value || []).slice().sort();
+                const v2 = (rec2[key]?.value || []).slice().sort();
+                if (JSON.stringify(v1) !== JSON.stringify(v2)) return true;
+            }
+        }
+        // 主要フィールド比較
+        const fields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '留意案内'];
+        for (const f of fields) {
+            if (normalize(rec1[f]?.value) !== normalize(rec2[f]?.value)) return true;
+        }
+        return false;
+    };
+
     // ★追加: ローカル比較ロジック (マージ済みレコード同士を比較するため)
     const isDiffLocal = (rec1, rec2, col) => {
         const field = col.field;
         const type = col.type;
-        
-        // ★変更: 正規化ヘルパー (強化版: 空白文字の完全正規化)
-        const normalize = (val) => {
-            if (val === null || val === undefined) return '';
-            return String(val)
-                .replace(/\r\n/g, '\n').replace(/\r/g, '\n') // 改行コード統一
-                .replace(/[\s\u3000]+/g, ' ') // 全角・半角スペース、タブ等を「1つの半角スペース」に置換
-                .trim();
-        };
 
         if (type === 'schedule') {
             const days = ['月', '火', '水', '木', '金', '土'];
@@ -944,6 +1091,9 @@ window.ShinryoApp = window.ShinryoApp || {};
         const prevDept = (idx > 0) ? records[idx-1]['診療科']?.value : null;
         if (idx === 0 || currentDept !== prevDept) row.classList.add('department-group-start');
 
+        const pubRec = publishedMap ? publishedMap.get(String(rec.$id.value)) : null;
+        const isRecordChanged = hasRecordChange(rec, pubRec); // レコード全体の変更有無
+
         columns.forEach(col => {
             const rowspanKey = col.field || col.type;
             if (col.merge && rec[`_rowspan_${rowspanKey}`] === 0) return;
@@ -966,7 +1116,6 @@ window.ShinryoApp = window.ShinryoApp || {};
 
             // 差分検知ロジックの適用
             // ★変更: ConfigManager.checkDiff ではなく、マージ済みデータ同士で比較する
-            const pubRec = publishedMap ? publishedMap.get(String(rec.$id.value)) : null; // ★変更: IDを文字列に統一
             let isChanged = false;
             if (!pubRec) {
                 // ★変更: 新規レコードの場合でも、結合カラムについては既存グループなら点滅させない
@@ -993,7 +1142,12 @@ window.ShinryoApp = window.ShinryoApp || {};
                  isChanged = false;
             }
 
-            if (col.field !== '掲載' && isChanged) {
+            // ★追加: 医師名セルの場合、レコード自体に変更があれば点滅させる
+            if (col.field === '医師名' && isRecordChanged) {
+                isChanged = true;
+            }
+
+            if (col.field !== '掲載' && col.field !== '医師名' && col.type !== 'detail_btn' && isChanged) {
                 cell.classList.add('cell-changed');
             }
 
@@ -1132,16 +1286,57 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'doctor-name-wrapper';
                     
+                    // ★追加: 個別レコードの変更判定（医師名枠を点滅させる）
+                    const targetPubRec = publishedMap ? publishedMap.get(String(targetRec.$id.value)) : null;
+                    if (hasRecordChange(targetRec, targetPubRec)) {
+                        containerDiv.classList.add('cell-changed');
+                    }
+
                     const textSpan = document.createElement('span');
                     textSpan.textContent = doctorName;
                     containerDiv.appendChild(textSpan);
                     cell.appendChild(containerDiv);
 
-                    // 担当パターンをツールチップ表示 (各医師の枠にイベント設定)
+                    // 担当パターンをツールチップ表示 (クリックで表示、永続化)
                     const tblHtml = createScheduleTableHtml(targetRec, true, commonSettings);
-                    containerDiv.onmouseenter = (e) => showTooltip(e, tblHtml);
-                    containerDiv.onmouseleave = hideTooltip;
-                    containerDiv.style.cursor = 'help';
+                    
+                    containerDiv.onclick = (e) => {
+                        e.stopPropagation(); // 親要素への伝播防止
+                        // 既存のツールチップがあれば閉じる処理は showCalendarTooltip 内で行われるが、
+                        // ここでは汎用的に showTooltip を使うため、永続化ロジックを独自に組むか、
+                        // ShinryoViewer_UI.js の showCalendarTooltip を流用する（HTMLを渡せるように改造が必要だが、
+                        // ここでは showTooltip を使いつつ、document click で閉じる処理を追加する）
+                        
+                        // UI側の showTooltip を呼び出し
+                        window.ShinryoApp.Viewer.showTooltip(e, tblHtml);
+                        
+                        // 永続化のためのハック: showTooltip は hideTimer をクリアするが、mouseleave で hideTooltip が呼ばれると消える。
+                        // ここでは onclick なので mouseleave は関係ないが、他をクリックしたら消したい。
+                        // ShinryoViewer_UI.js の showCalendarTooltip(..., true) のロジックを模倣したいが、
+                        // 簡易的に「クリックしたら表示」のみ実装し、閉じるのは「別の場所をクリック」または「×ボタン（未実装）」
+                        // 既存の showCalendarTooltip(..., true) を利用するのが一番早いが、引数が records なので HTML を直接渡せない。
+                        // そのため、ここでは showTooltip を呼んだ後、document.onclick で閉じる処理を追加する。
+                        
+                        const tooltipEl = document.getElementById('customHtmlTooltip');
+                        if (tooltipEl) {
+                            const closeHandler = (ev) => {
+                                // モーダルダイアログ（案内表示など）の操作時は閉じない
+                                if (ev.target.closest('.custom-modal-overlay') || ev.target.closest('.custom-modal-box')) return;
+
+                                if (!tooltipEl.contains(ev.target) && ev.target !== containerDiv && !containerDiv.contains(ev.target)) {
+                                    tooltipEl.style.display = 'none';
+                                    document.removeEventListener('click', closeHandler);
+                                }
+                            };
+                            // 即座に反応しないように setTimeout
+                            setTimeout(() => document.addEventListener('click', closeHandler), 0);
+                        }
+                    };
+                    
+                    // ホバーイベントは削除
+                    // containerDiv.onmouseenter = (e) => showTooltip(e, tblHtml);
+                    // containerDiv.onmouseleave = hideTooltip;
+                    containerDiv.style.cursor = 'pointer'; // クリック可能であることを示す
                 }
             } else if (col.type === 'detail_btn') {
                 // ★追加: 詳細ボタン列
@@ -1157,6 +1352,12 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'doctor-name-wrapper';
                     
+                    // ★追加: 個別レコードの変更判定（詳細ボタン枠も点滅させる）
+                    const targetPubRec = publishedMap ? publishedMap.get(String(targetRec.$id.value)) : null;
+                    if (hasRecordChange(targetRec, targetPubRec)) {
+                        containerDiv.classList.add('cell-changed');
+                    }
+
                     const searchBtn = document.createElement('button');
                     searchBtn.className = 'btn-detail';
                     searchBtn.textContent = '編集';

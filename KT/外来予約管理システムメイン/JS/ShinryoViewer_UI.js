@@ -83,7 +83,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       .date-num { text-align: left; padding: 2px 0 0 4px; font-size: 13px; font-weight: bold; color: #555; font-family: Arial, sans-serif; line-height: 1; }
       .am-slot, .pm-slot { font-size: 10px; width: 100%; padding: 2px 1px; box-sizing: border-box; line-height: 1.2; margin-bottom: 1px; }
       .am-slot { background-color: #e0f7fa; margin-top: 2px; }
-      .pm-slot { background-color: #fff9c4; }
+      .pm-slot { background-color: #fff3e0; }
       .calendar-legend-area { margin-top: 8px; border-top: 1px solid #eee; padding-top: 5px; text-align: left; font-size: 11px; color: #444; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
       .legend-item { white-space: nowrap; }
       .schedule-table { width: 100%; border-collapse: collapse; font-size: 11px; }
@@ -188,7 +188,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
   }
 
   function getFacilityChar(fullName, facilities) {
-    if (!fullName || !facilities) return '';
+    if (!fullName || !facilities || facilities.length <= 1) return '';
     // デフォルト色パレット
     const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
     
@@ -235,7 +235,6 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
         }
     });
 
-    const customHolidays = commonSettings ? (commonSettings.holidays || []) : [];
     const facilities = commonSettings ? (commonSettings.facilities || []) : [];
 
     const scheduleByDate = {};
@@ -281,6 +280,8 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
 
     let html = `<div class="calendar-container" data-y="${year}" data-m="${month}"><div class="calendar-header"><div class="calendar-nav prev-month">◀</div><h3>${year}年 ${month + 1}月 ${departmentName ? '('+departmentName+')' : ''}</h3><div class="calendar-nav next-month">▶</div></div><table class="calendar-table"><thead><tr><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat-col">土</th></tr></thead><tbody>`;
     let current = new Date(startDate);
+    const pubHolidays = cachedPublicHolidays || {};
+
     for(let r=0; r<6; r++){
         let rowHtml = "";
         let hasDayInMonth = false;
@@ -289,13 +290,20 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
              const isTarget = current.getMonth() === month;
              if(isTarget) hasDayInMonth = true;
              const dateKey = `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`;
-             const holidayName = getHolidayName(current, customHolidays);
+             
+             const status = getDayStatus(current, commonSettings, pubHolidays);
+             const isClosed = status.isClosed;
+             const holidayName = status.name;
+
              const sch = scheduleByDate[dateKey] || {am:[], pm:[]};
              let cls = isTarget ? "" : "past-date";
-             if (holidayName) cls += " holiday-cell";
+             if (isClosed) cls += " holiday-cell";
+             
              rowHtml += `<td class="${cls}"><div class="date-num">${current.getDate()}</div>`;
              if (isTarget) {
-                 if (holidayName) rowHtml += `<div class="holiday-name-display">${holidayName}</div>`;
+                 if (isClosed) {
+                     if (holidayName) rowHtml += `<div class="holiday-name-display">${holidayName}</div>`;
+                 }
                  else {
                      if (sch.am.length > 0) rowHtml += `<div class="am-slot">${sch.am.join('<br>')}</div>`;
                      if (sch.pm.length > 0) rowHtml += `<div class="pm-slot">${sch.pm.join('<br>')}</div>`;
@@ -309,14 +317,16 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
     let legendHtml = '';
     let legendParts = [];
     const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
-    facilities.forEach((fac, i) => {
-        const color = fac.color || defaultColors[i % defaultColors.length];
-        const sym = fac.shortName || '●';
-        legendParts.push(`<span style="color:${color};font-weight:bold;">${sym}</span> ${fac.name}`);
-    });
+    if (facilities.length > 1) {
+        facilities.forEach((fac, i) => {
+            const color = fac.color || defaultColors[i % defaultColors.length];
+            const sym = fac.shortName || '●';
+            legendParts.push(`<span style="color:${color};font-weight:bold;">${sym}</span> ${fac.name}`);
+        });
+    }
     legendParts.push(`<span style="background-color:#e0f7fa; border:1px solid #ccc; padding:0 4px;">午前</span>`);
-    legendParts.push(`<span style="background-color:#fff9c4; border:1px solid #ccc; padding:0 4px;">午後</span>`);
-    legendHtml += `<span class="legend-item">凡例: ${legendParts.join(' / ')}</span>`;
+    legendParts.push(`<span style="background-color:#fff3e0; border:1px solid #ccc; padding:0 4px;">午後</span>`);
+    legendHtml += `<span class="legend-item">${legendParts.join(' / ')}</span>`;
 
     if (specMap.size > 0) {
         const sortedSpecs = Array.from(specMap.entries()).sort((a,b) => a[1] - b[1]);
@@ -339,7 +349,8 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       if (selection) headerText += `　${selection}`;
       headerText += `　${doctor}`;
 
-      let html = `<div style="text-align:center;font-weight:bold;margin-bottom:10px;font-size:16px;color:#333;">${headerText}</div>`;
+      let html = `<div style="text-align:left;font-size:14px;font-weight:bold;color:#666;margin-bottom:2px;">月間担当パターン</div>`;
+      html += `<div style="text-align:center;font-weight:bold;margin-bottom:10px;font-size:16px;color:#333;">${headerText}</div>`;
       html += `<table class="schedule-table" style="table-layout: fixed; width: 100%;"><colgroup><col style="width: 50px;"><col><col><col><col><col><col></colgroup><thead><tr><th></th>`;
       days.forEach(d => html += `<th>${d}</th>`);
       html += `</tr></thead><tbody>`;
@@ -358,7 +369,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
                   const info = rec._scheduleInfo[field];
                   const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
                   facilities.forEach((fac, idx) => {
-                      if (info.facilities.has(fac.name)) {
+                      if (info.facilities.has(fac.name) && facilities.length > 1) {
                           const color = fac.color || defaultColors[idx % defaultColors.length];
                           icons += `<span style="color:${color};font-weight:bold;margin-right:2px;">${fac.shortName}</span>`;
                       }
@@ -376,11 +387,13 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       
       const legendParts = [];
       const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
-      facilities.forEach((fac, i) => {
-          const color = fac.color || defaultColors[i % defaultColors.length];
-          legendParts.push(`<span style="color:${color};font-weight:bold;">${fac.shortName}</span> ${fac.name}`);
-      });
-      html += `<div style="margin-top:8px; font-size:11px; text-align:left; color:#555;">凡例: ${legendParts.join(' / ')} / <span class="icon-note">!</span> 医師別案内 (マウスオーバーで表示)</div>`;
+      if (facilities.length > 1) {
+          facilities.forEach((fac, i) => {
+              const color = fac.color || defaultColors[i % defaultColors.length];
+              legendParts.push(`<span style="color:${color};font-weight:bold;">${fac.shortName}</span> ${fac.name}`);
+          });
+      }
+      html += `<div style="margin-top:8px; font-size:11px; text-align:left; color:#555;">${legendParts.length > 0 ? '凡例: ' + legendParts.join(' / ') + ' / ' : ''}<span class="icon-note">!</span> 医師別案内 (マウスオーバーで表示)</div>`;
 
       if (rec._debug_infos && rec._debug_infos.length > 0) {
           html += `<div style="margin-top:10px; border-top:1px dashed #ccc; padding-top:5px; text-align:left;">
@@ -570,26 +583,29 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       
       // UI版ではcommonSettingsを直接参照できないため、ConfigManagerから取得を試みる
       const commonSettings = window.ShinryoApp.ConfigManager ? window.ShinryoApp.ConfigManager.getCommonSettings() : null;
-
-      updateCalendarTooltip(new Date().getFullYear(), new Date().getMonth(), records, commonSettings);
-      tooltipEl.style.display = 'block';
-      tooltipEl.style.left = (e.pageX + 15) + 'px';
-      tooltipEl.style.top = (e.pageY + 15) + 'px';
-      tooltipEl.style.pointerEvents = 'auto';
-      adjustTooltipPosition(e);
-      if (isPersistent) {
-          currentCloseHandler = (ev) => {
-              if (!tooltipEl.contains(ev.target)) {
-                  tooltipEl.style.display = 'none';
-                  document.removeEventListener('click', currentCloseHandler);
-                  currentCloseHandler = null;
-              }
-          };
-          setTimeout(() => document.addEventListener('click', currentCloseHandler), 0);
-      } else {
-          tooltipEl.onmouseenter = () => clearTimeout(hideTimer);
-          tooltipEl.onmouseleave = hideTooltip;
-      }
+      
+      // 祝日データを取得してから表示
+      ensurePublicHolidays().then(() => {
+          updateCalendarTooltip(new Date().getFullYear(), new Date().getMonth(), records, commonSettings);
+          tooltipEl.style.display = 'block';
+          tooltipEl.style.left = (e.pageX + 15) + 'px';
+          tooltipEl.style.top = (e.pageY + 15) + 'px';
+          tooltipEl.style.pointerEvents = 'auto';
+          adjustTooltipPosition(e);
+          if (isPersistent) {
+              currentCloseHandler = (ev) => {
+                  if (!tooltipEl.contains(ev.target)) {
+                      tooltipEl.style.display = 'none';
+                      document.removeEventListener('click', currentCloseHandler);
+                      currentCloseHandler = null;
+                  }
+              };
+              setTimeout(() => document.addEventListener('click', currentCloseHandler), 0);
+          } else {
+              tooltipEl.onmouseenter = () => clearTimeout(hideTimer);
+              tooltipEl.onmouseleave = hideTooltip;
+          }
+      });
   }
   
   function updateCalendarTooltip(year, month, records, commonSettings) {

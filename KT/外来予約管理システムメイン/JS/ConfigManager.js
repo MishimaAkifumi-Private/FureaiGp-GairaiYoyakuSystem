@@ -36,7 +36,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     updateDepartmentTerm: updateDepartmentTerm, // ★追加
     updateDepartmentDescription: updateDepartmentDescription, // ★追加
     updateCommonTerm: updateCommonTerm, // ★追加
-    updateCommonHolidays: updateCommonHolidays, // ★追加
+    updateCommonCalendarSettings: updateCommonCalendarSettings, // ★変更: 休診日・例外日・土曜設定をまとめて更新
     updateCommonFacilities: updateCommonFacilities, // ★追加
     updateCommonStaffs: updateCommonStaffs, // ★追加
     syncAppDropdown: syncAppDropdown, // ★追加: アプリ設定同期用
@@ -577,19 +577,23 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
 
   /**
-   * ★追加: 病院共通の休診日設定を更新し、公開データに保存する
+   * ★変更: 病院共通のカレンダー設定（休診日、例外診療日、土曜設定、予約期間）を更新し、公開データに保存する
    */
-  async function updateCommonHolidays(holidays) {
+  async function updateCommonCalendarSettings(holidays, exceptionalDays, closeSaturdays, start, duration) {
     try {
       const currentPublished = await fetchPublishedData();
       if (currentPublished) {
         const common = currentPublished.commonSettings || {};
         common.holidays = holidays;
+        common.exceptionalDays = exceptionalDays; // ★追加
+        common.closeSaturdays = closeSaturdays;   // ★追加
+        common.start = start;                     // ★追加: 予約開始
+        common.duration = duration;               // ★追加: 予約期間
         await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
-        console.log(`ConfigManager: Common holidays updated. Count: ${holidays ? holidays.length : 0}`);
+        console.log(`ConfigManager: Common calendar settings updated.`);
       }
     } catch (e) {
-      console.error('ConfigManager: Failed to update common holidays.', e);
+      console.error('ConfigManager: Failed to update common calendar settings.', e);
       throw e;
     }
   }

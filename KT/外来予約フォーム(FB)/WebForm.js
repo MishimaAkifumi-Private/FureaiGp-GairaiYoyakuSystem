@@ -755,6 +755,7 @@ function getReservationSummaryHtml() {
               toggleSection(config.uiIds.REFERRAL_AREA, true);
               createReferralSection();
               toggleSection(config.uiIds.NEW_RESERVATION_AREA, true);
+              toggleSection(config.uiIds.NEW_RESERVATION_AREA, false);
               createMultiStageSelectSection();
           } else if (value === '変更' || value === '取消') {
               toggleSection(config.uiIds.FIXED_DATE_AREA, true);
@@ -780,14 +781,30 @@ function getReservationSummaryHtml() {
       area.innerHTML = '';
       area.style.borderTop = '1px dashed #ccc';
       area.style.paddingTop = '20px';
-/*
-      const title = document.createElement('h3');
-      title.textContent = '紹介元情報（ある場合）';
-      area.appendChild(title);
-*/
-      const createFormGroup = (labelText, inputHtml) => {
+
+      // 1. 紹介元機関についての確認（ラジオボタン）
+      const confirmWrapper = document.createElement('div');
+      confirmWrapper.className = 'g-form-group required';
+      const confirmLabel = document.createElement('label');
+      confirmLabel.textContent = '紹介元機関について';
+      confirmWrapper.appendChild(confirmLabel);
+      
+      const confirmRadioContainer = document.createElement('div');
+      confirmRadioContainer.className = 'g-radio-group';
+      createSelector(confirmRadioContainer, 'radio', 'referral_confirm', ['ある', 'ない'], null, true);
+      confirmWrapper.appendChild(confirmRadioContainer);
+      area.appendChild(confirmWrapper);
+
+      // 2. 詳細入力エリア（初期は非表示）
+      const detailArea = document.createElement('div');
+      detailArea.id = 'gemini-referral-detail-area';
+      detailArea.style.display = 'none';
+      area.appendChild(detailArea);
+
+      const createFormGroup = (labelText, inputHtml, id) => {
           const div = document.createElement('div');
           div.className = 'form-group g-form-group'; 
+          if (id) div.id = id;
           div.style.marginBottom = '15px';
           const label = document.createElement('label');
           label.textContent = labelText;
@@ -799,26 +816,76 @@ function getReservationSummaryHtml() {
           div.appendChild(inputWrapper);
           return div;
       };
-      const hospitalGroup = createFormGroup('紹介元医療機関名', `<input type="text" class="g-form-control" id="referral_hospital_name">`);
-      area.appendChild(hospitalGroup);
-      const telGroup = createFormGroup('紹介元医療機関電話番号', `<input type="text" class="g-form-control" id="referral_hospital_tel" autocomplete="off">`);
-      area.appendChild(telGroup);
+
+      // 医療機関名
+      const hospitalGroup = createFormGroup('紹介元医療機関名', `<input type="text" class="g-form-control" id="referral_hospital_name">`, 'group-referral-hospital');
+      detailArea.appendChild(hospitalGroup);
+
+      // 電話番号
+      const telGroup = createFormGroup('紹介元医療機関電話番号', `<input type="text" class="g-form-control" id="referral_hospital_tel" autocomplete="off">`, 'group-referral-tel');
+      detailArea.appendChild(telGroup);
+
+      // 画像CD
       const cdGroup = document.createElement('div');
-      cdGroup.className = 'form-group';
+      cdGroup.className = 'form-group g-form-group';
+      cdGroup.id = 'group-referral-cd';
       cdGroup.style.marginBottom = '15px';
       const cdLabel = document.createElement('label');
       cdLabel.textContent = '持参画像CD';
       cdLabel.style.display = 'block';
       cdLabel.style.marginBottom = '5px';
       cdGroup.appendChild(cdLabel);
-      const radioContainer = document.createElement('div');
-      radioContainer.className = 'g-radio-group';
-      createSelector(radioContainer, 'radio', 'referral_cd', ['ある', 'なし'], 'なし');
-      cdGroup.appendChild(radioContainer);
-      area.appendChild(cdGroup);
+      
+      const cdRadioContainer = document.createElement('div');
+      cdRadioContainer.className = 'g-radio-group';
+      createSelector(cdRadioContainer, 'radio', 'referral_cd', ['ある', 'なし'], null);
+      cdGroup.appendChild(cdRadioContainer);
+      detailArea.appendChild(cdGroup);
+
+      // イベントリスナー
       document.getElementById('referral_hospital_name').addEventListener('input', (e) => updateFbField(config.fbFields.REFERRAL_HOSPITAL, e.target.value));
       document.getElementById('referral_hospital_tel').addEventListener('input', (e) => updateFbField(config.fbFields.REFERRAL_TEL, e.target.value));
-      radioContainer.addEventListener('change', (e) => updateFbField(config.fbFields.REFERRAL_CD, e.target.value));
+      cdRadioContainer.addEventListener('change', (e) => updateFbField(config.fbFields.REFERRAL_CD, e.target.value));
+
+      // 紹介元有無の切り替え制御
+      confirmRadioContainer.addEventListener('change', (e) => {
+          const val = e.target.value;
+          const isExist = (val === 'ある');
+          
+          detailArea.style.display = isExist ? 'block' : 'none';
+          
+          const hospitalInput = document.getElementById('referral_hospital_name');
+          const telInput = document.getElementById('referral_hospital_tel');
+          const cdRadios = cdRadioContainer.querySelectorAll('input[type="radio"]');
+          
+          if (isExist) {
+              hospitalInput.required = true;
+              telInput.required = true;
+              cdRadios.forEach(r => r.required = true);
+              
+              document.getElementById('group-referral-hospital').classList.add('required');
+              document.getElementById('group-referral-tel').classList.add('required');
+              document.getElementById('group-referral-cd').classList.add('required');
+          } else {
+              hospitalInput.required = false;
+              hospitalInput.value = '';
+              updateFbField(config.fbFields.REFERRAL_HOSPITAL, '');
+              
+              telInput.required = false;
+              telInput.value = '';
+              updateFbField(config.fbFields.REFERRAL_TEL, '');
+              
+              cdRadios.forEach(r => { r.required = false; r.checked = false; });
+              updateFbField(config.fbFields.REFERRAL_CD, '');
+              
+              document.getElementById('group-referral-hospital').classList.remove('required');
+              document.getElementById('group-referral-tel').classList.remove('required');
+              document.getElementById('group-referral-cd').classList.remove('required');
+          }
+          
+          // 次のステップを表示
+          toggleSection(config.uiIds.NEW_RESERVATION_AREA, true);
+      });
   }
 
 function updateReasonSection(requirement) {
