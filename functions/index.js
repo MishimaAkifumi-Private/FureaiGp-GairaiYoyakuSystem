@@ -11,8 +11,10 @@
  * 2026-01-07: sendReservationMail 実装
  * 2026-01-07: confirmReservation 実装 (Kintone API連携を追加)
  * 2026-01-07: HTML表示改良 (和暦表示, 診療科短縮, 不要項目削除)
+ * 2026-01-23: confirmReservation 自動キャンセル機能・ステートマシン実装
  */
 
+// ver 3.0 update
 const functions = require("firebase-functions");
 const nodemailer = require("nodemailer");
 
@@ -87,110 +89,114 @@ exports.sendTestMail = functions.https.onRequest(async (req, res) => {
 //  Function 2: 予約通知メール送信 (sendReservationMail)
 // ======================================================================
 exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
-  console.log("--- [sendReservationMail] Execution Started ---");
-
-  // CORS設定
+  // 1. CORSヘッダーを最優先でセット
   res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type');
 
+  // 2. Preflight (OPTIONS) は即座に返す
   if (req.method === 'OPTIONS') {
     res.status(204).send('');
     return;
   }
 
-  if (req.method !== 'POST') {
-    console.warn(`[sendReservationMail] Method Not Allowed: ${req.method}`);
-    res.status(405).send({ status: "error", message: "POSTメソッドのみ許可されています。" });
-    return;
-  }
-
-  const data = req.body;
-  console.log("[LOG] 受信データ:", JSON.stringify(data, null, 2));
-
-  if (!data.to || !data.type || !data.name) {
-    console.error("[ERROR] 必須パラメータ不足");
-    res.status(400).send({ status: "error", message: "必須パラメータが不足しています。" });
-    return;
-  }
-
-  const recipientName = data.name;
-  const targetUrl = data.url || "(URL生成未定)";
-  let subject = "";
-  let htmlBody = "";
-  
-  const headerHtml = `<p>${recipientName} 様</p><p>当病院をご利用いただきありがとうございます。</p>`;
-  const footerHtml = `<br><hr><p>湘南東部病院 予約センター</p>`;
-
-  switch (data.type) {
-    case "初診":
-      subject = "【予約確定】診療のご予約（初診）について";
-      htmlBody = `
-        ${headerHtml}
-        <p>診療のご予約（初診）につきまして確定しましたので<br>
-        以下のURLをクリックしてご確認ください。</p>
-        <p><a href="${targetUrl}">${targetUrl}</a></p>
-        ${footerHtml}
-      `;
-      break;
-
-    case "変更":
-      subject = "【予約変更】診療予約の変更について";
-      htmlBody = `
-        ${headerHtml}
-        <p>診療のご予約（変更）につきまして確定しましたので<br>
-        以下のURLをクリックしてご確認ください。</p>
-        <p><a href="${targetUrl}">${targetUrl}</a></p>
-        ${footerHtml}
-      `;
-      break;
-
-    case "取消":
-      const resDate = data.reservationDate || "（日付未定）";
-      const resTime = data.reservationTime || "";
-      const resDept = data.department || "（診療科不明）";
-
-      subject = "【予約取消】診療予約の取り消しについて";
-      htmlBody = `
-        ${headerHtml}
-        <p>以下のご予約を取消しさせていただきました。</p>
-        <p><strong>取り消したご予約:</strong></p>
-        <ul>
-          <li>日時: ${resDate} ${resTime}</li>
-          <li>診療科: ${resDept}</li>
-        </ul>
-        <p>通知のみとなりますので、URLのクリックは不要です。</p>
-        ${footerHtml}
-      `;
-      break;
-
-    default:
-      console.warn(`[WARN] 未定義の用件タイプ: ${data.type}`);
-      subject = "【お知らせ】予約センターからのご連絡";
-      htmlBody = `
-        ${headerHtml}
-        <p>下記より内容をご確認ください。</p>
-        <p><a href="${targetUrl}">${targetUrl}</a></p>
-        ${footerHtml}
-      `;
-      break;
-  }
-
-  const mailOptions = {
-    from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
-    to: data.to,
-    bcc: "akifumi.mishima@gmail.com",
-    subject: subject,
-    html: htmlBody,
-  };
-
   try {
+    console.log("--- [sendReservationMail] Execution Started ---");
+
+    if (req.method !== 'POST') {
+      console.warn(`[sendReservationMail] Method Not Allowed: ${req.method}`);
+      res.status(405).send({ status: "error", message: "POSTメソッドのみ許可されています。" });
+      return;
+    }
+
+    const data = req.body;
+    console.log("[LOG] 受信データ:", JSON.stringify(data, null, 2));
+
+    if (!data.to || !data.type || !data.name) {
+      console.error("[ERROR] 必須パラメータ不足");
+      res.status(400).send({ status: "error", message: "必須パラメータが不足しています。" });
+      return;
+    }
+
+    const recipientName = data.name;
+    const targetUrl = data.url || "(URL生成未定)";
+    let subject = "";
+    let htmlBody = "";
+    
+    const headerHtml = `<p>${recipientName} 様</p><p>当病院をご利用いただきありがとうございます。</p>`;
+    const footerHtml = `<br><hr><p>湘南東部病院 予約センター</p>`;
+
+    switch (data.type) {
+      case "初診":
+        subject = "【予約確定】診療のご予約（初診）について";
+        htmlBody = `
+          ${headerHtml}
+          <p>診療のご予約（初診）につきまして確定しましたので<br>
+          以下のURLをクリックしてご確認ください。</p>
+          <p><a href="${targetUrl}">${targetUrl}</a></p>
+          ${footerHtml}
+        `;
+        break;
+
+      case "変更":
+        subject = "【予約変更】診療予約の変更について";
+        htmlBody = `
+          ${headerHtml}
+          <p>診療のご予約（変更）につきまして確定しましたので<br>
+          以下のURLをクリックしてご確認ください。</p>
+          <p><a href="${targetUrl}">${targetUrl}</a></p>
+          ${footerHtml}
+        `;
+        break;
+
+      case "取消":
+        const resDate = data.reservationDate || "（日付未定）";
+        const resTime = data.reservationTime || "";
+        const resDept = data.department || "（診療科不明）";
+
+        subject = "【予約取消】診療予約の取り消しについて";
+        htmlBody = `
+          ${headerHtml}
+          <p>以下のご予約を取消しさせていただきました。</p>
+          <p><strong>取り消したご予約:</strong></p>
+          <ul>
+            <li>日時: ${resDate} ${resTime}</li>
+            <li>診療科: ${resDept}</li>
+          </ul>
+          <p>通知のみとなりますので、URLのクリックは不要です。</p>
+          ${footerHtml}
+        `;
+        break;
+
+      default:
+        console.warn(`[WARN] 未定義の用件タイプ: ${data.type}`);
+        subject = "【お知らせ】予約センターからのご連絡";
+        htmlBody = `
+          ${headerHtml}
+          <p>下記より内容をご確認ください。</p>
+          <p><a href="${targetUrl}">${targetUrl}</a></p>
+          ${footerHtml}
+        `;
+        break;
+    }
+
+    const mailOptions = {
+      from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
+      to: data.to,
+      bcc: "akifumi.mishima@gmail.com",
+      subject: subject,
+      html: htmlBody,
+    };
+
     const result = await sendMailCore(mailOptions);
     res.status(200).send({ status: "success", message: "予約メールを送信しました。", data: result });
+    console.log("--- [sendReservationMail] Execution Finished ---");
+
   } catch (error) {
-    res.status(500).send({ status: "error", message: "予約メールの送信に失敗しました。", error: error.toString() });
+    console.error(`[CRITICAL ERROR] sendReservationMail failed:`, error);
+    // エラー時もCORSヘッダー付きでレスポンスを返す
+    res.status(500).send({ status: "error", message: "内部エラーが発生しました。", error: error.toString() });
   }
-  console.log("--- [sendReservationMail] Execution Finished ---");
 });
 
 
@@ -200,8 +206,18 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
 exports.confirmReservation = functions.https.onRequest(async (req, res) => {
   console.log("--- [confirmReservation] Execution Started ---");
 
+  // CORS設定 (POSTリクエストを受け付けるため)
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
   // クエリパラメータの取得 (?id=xxx)
-  const recordId = req.query.id;
+  const recordId = req.query.id || req.body.id;
 
   if (!recordId) {
     console.error("[ERROR] パラメータ 'id' が不足しています。");
@@ -210,47 +226,15 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
   }
 
   // --- Kintone API 設定 ---
-  // ゲストスペースID: 11, アプリID: 142
-  const GUEST_SPACE_ID = 11;
-  const APP_ID = 142;
-  const API_TOKEN = "lzGrrquqznrH0cpPIzmzvLKdn4PhyebSRyYKMxSE";
-  const BASE_URI = `https://w60013hke2ct.cybozu.com/k/guest/${GUEST_SPACE_ID}/v1`;
+  // 環境変数から設定を取得 (デフォルト値は既存環境に合わせています)
+  const GUEST_SPACE_ID = process.env.KINTONE_GUEST_SPACE_ID || "11";
+  const APP_ID = process.env.KINTONE_APP_ID || "142";
+  const API_TOKEN = process.env.KINTONE_API_TOKEN || "lzGrrquqznrH0cpPIzmzvLKdn4PhyebSRyYKMxSE";
+  const SUBDOMAIN = process.env.KINTONE_SUBDOMAIN || "w60013hke2ct";
+  const BASE_URI = `https://${SUBDOMAIN}.cybozu.com/k/guest/${GUEST_SPACE_ID}/v1`;
 
   try {
-    // 1. 既読日時の更新 (PUT)
-    const now = new Date();
-    const nowISO = now.toISOString(); 
-
-    console.log(`[LOG] 既読日時更新開始: RecordID=${recordId}, Time=${nowISO}`);
-    
-    const updateBody = {
-      app: APP_ID,
-      id: recordId,
-      record: {
-        "メール既読日時": { value: nowISO },
-        "管理ステータス": { value: "メール既読検知" }
-      }
-    };
-
-    // Node.js 18+ の fetch を使用
-    const updateResponse = await fetch(`${BASE_URI}/record.json`, {
-      method: "PUT",
-      headers: {
-        "X-Cybozu-API-Token": API_TOKEN,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(updateBody)
-    });
-
-    if (!updateResponse.ok) {
-        const errText = await updateResponse.text();
-        console.error(`[ERROR] 既読更新失敗: ${updateResponse.status} ${errText}`);
-        // 続行して閲覧はさせる
-    } else {
-        console.log("[SUCCESS] 既読日時を更新しました。");
-    }
-
-    // 2. 予約情報の取得 (GET)
+    // 1. 最新レコードの取得 (GET)
     console.log(`[LOG] レコード取得開始: RecordID=${recordId}`);
     const getResponse = await fetch(`${BASE_URI}/record.json?app=${APP_ID}&id=${recordId}`, {
         method: "GET",
@@ -263,59 +247,207 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
 
     const getData = await getResponse.json();
     const record = getData.record;
-    
-    // 値の取り出し
-    const name = (record["姓漢字"]?.value || "") + " " + (record["名漢字"]?.value || "");
-    const resTime = record["確定予約時刻"]?.value || "";
-    
-    // 【New!】予約日時過ぎのチェック (有効期限切れ判定)
-    const resDateVal = record["確定予約日"]?.value; // YYYY-MM-DD
-    const resTimeVal = record["確定予約時刻"]?.value; // HH:mm
+    const currentStatus = (record["管理ステータス"] && record["管理ステータス"].value) || "";
+    const phoneConfirmDate = (record["電話確認日時"] && record["電話確認日時"].value) || "";
+    const mailReadDate = (record["メール既読日時"] && record["メール既読日時"].value) || "";
 
-    if (resDateVal && resTimeVal) {
-      // 予約日時を日本時間(+09:00)としてDateオブジェクト化
-      const targetDate = new Date(`${resDateVal}T${resTimeVal}:00+09:00`);
-      const now = new Date(); // 現在時刻 (UTC)
+    // ---------------------------------------------------------
+    // POSTリクエスト処理 (キャンセル実行)
+    // ---------------------------------------------------------
+    if (req.method === 'POST') {
+      const action = req.body.action;
+      
+      if (action === 'cancel') {
+        console.log(`[LOG] キャンセル処理開始: RecordID=${recordId}`);
 
-      // 現在時刻が予約日時を過ぎている場合
-      if (now > targetDate) {
-        console.log(`[INFO] 予約日時超過: Now=${now.toISOString()}, Target=${targetDate.toISOString()}`);
-        res.status(200).send(getExpiredHtml());
+        // 既にキャンセル済みの場合は専用画面へ
+        if (currentStatus === "予約キャンセル発生") {
+            res.status(200).send(getAlreadyCancelledHtml());
+            return;
+        }
+
+        const nowISO = new Date().toISOString();
+
+        // Kintone更新: ステータス変更 & キャンセル日時記録
+        const updateBody = {
+            app: APP_ID,
+            id: recordId,
+            record: {
+                "管理ステータス": { value: "予約キャンセル発生" },
+                "キャンセル日時": { value: nowISO }
+            }
+        };
+
+        const updateResponse = await fetch(`${BASE_URI}/record.json`, {
+            method: "PUT",
+            headers: {
+                "X-Cybozu-API-Token": API_TOKEN,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(updateBody)
+        });
+
+        if (!updateResponse.ok) {
+            const errText = await updateResponse.text();
+            throw new Error(`Kintone Update Failed (Cancel): ${errText}`);
+        }
+
+        // キャンセル完了メール送信
+        const email = (record["メールアドレス"] && record["メールアドレス"].value) || "";
+        const lastName = (record["姓漢字"] && record["姓漢字"].value) || "";
+        const firstName = (record["名漢字"] && record["名漢字"].value) || "";
+        const name = lastName + " " + firstName;
+
+        // 予約情報のフォーマット（メール本文用）
+        const resTime = (record["確定予約時刻"] && record["確定予約時刻"].value) || "";
+        let dept = (record["診療科"] && record["診療科"].value) || "-";
+        if (dept.includes('/')) {
+            const parts = dept.split('/');
+            dept = parts[parts.length - 1].trim();
+        }
+        let formattedDate = (record["確定予約日"] && record["確定予約日"].value) || "未定";
+        if (record["確定予約日"] && record["確定予約日"].value) {
+            try {
+                const d = new Date(record["確定予約日"].value);
+                formattedDate = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', {
+                    era: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                }).format(d);
+            } catch (e) { /* ignore */ }
+        }
+        const dateTimeStr = `${formattedDate} ${resTime}`;
+
+        if (email) {
+            const mailOptions = {
+                from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
+                to: email,
+                bcc: "akifumi.mishima@gmail.com",
+                subject: "【予約キャンセル完了】診療予約のキャンセルについて",
+                html: `
+                    <p>${name} 様</p>
+                    <p>いつもご利用ありがとうございます。</p>
+                    <p>ご依頼いただきました以下の診療予約のキャンセル手続きが完了いたしました。</p>
+                    <br>
+                    <p><strong>【キャンセルされた予約】</strong></p>
+                    <ul>
+                        <li>日時: ${dateTimeStr}</li>
+                        <li>診療科: ${dept}</li>
+                    </ul>
+                    <br>
+                    <p>またのご利用をお待ちしております。</p>
+                    <br><hr><p>湘南東部病院 予約センター</p>
+                `
+            };
+            await sendMailCore(mailOptions);
+        }
+
+        res.status(200).send(getCancellationCompletedHtml());
         return;
       }
     }
 
-    // 【修正】診療科の短縮処理 (例: "外科系 / 歯科口腔外科" -> "歯科口腔外科")
-    let dept = record["診療科"]?.value || "-";
+    // ---------------------------------------------------------
+    // GETリクエスト処理 (画面表示)
+    // ---------------------------------------------------------
+    
+    // 1. 既にキャンセル済みの場合
+    if (currentStatus === "予約キャンセル発生") {
+        res.status(200).send(getAlreadyCancelledHtml());
+        return;
+    }
+
+    // 2. 既読日時の更新 (未読の場合、または電話調整済みだがメールリンクを初めて踏んだ場合)
+    // ステータスが既に「メール既読検知」でも、メール既読日時が空なら更新する
+    if (!mailReadDate) {
+        const nowISO = new Date().toISOString();
+        const updateBody = {
+            app: APP_ID,
+            id: recordId,
+            record: {
+                "メール既読日時": { value: nowISO }
+            }
+        };
+        // ステータスがまだ既読検知になっていなければ更新
+        if (currentStatus !== "メール既読検知") {
+            updateBody.record["管理ステータス"] = { value: "メール既読検知" };
+        }
+
+        const updateResponse = await fetch(`${BASE_URI}/record.json`, {
+            method: "PUT",
+            headers: {
+                "X-Cybozu-API-Token": API_TOKEN,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(updateBody)
+        });
+
+        if (!updateResponse.ok) {
+            const errText = await updateResponse.text();
+            console.error(`[ERROR] 既読更新失敗: ${errText}`);
+        }
+    }
+
+    // 3. キャンセルボタンの表示判定
+    // - 既にステータスが「メール既読検知」だった場合 (再アクセス)
+    // - または、電話確認日時が入っている場合 (電話調整済みなら初回アクセスでもキャンセル可)
+    const isAlreadyRead = (currentStatus === "メール既読検知");
+    const isPhoneConfirmed = !!phoneConfirmDate;
+    const showCancel = isAlreadyRead || isPhoneConfirmed;
+
+    const html = getConfirmedHtml(record, recordId, showCancel);
+    res.status(200).send(html);
+
+  } catch (error) {
+    console.error(`[CRITICAL ERROR] confirmReservation failed:`, error);
+    res.status(500).send(getErrorHtml(error.message));
+  }
+});
+
+// --- HTML Helper Functions ---
+
+/**
+ * 予約確定画面のHTMLを生成
+ * @param {object} record Kintoneレコード
+ * @param {string} recordId レコードID
+ * @param {boolean} showCancel キャンセルボタンを表示するかどうか
+ */
+function getConfirmedHtml(record, recordId, showCancel) {
+    const lastName = (record["姓漢字"] && record["姓漢字"].value) || "";
+    const firstName = (record["名漢字"] && record["名漢字"].value) || "";
+    const name = lastName + " " + firstName;
+    const resTime = (record["確定予約時刻"] && record["確定予約時刻"].value) || "";
+    
+    let dept = (record["診療科"] && record["診療科"].value) || "-";
     if (dept.includes('/')) {
         const parts = dept.split('/');
         dept = parts[parts.length - 1].trim();
     }
 
-    // 【修正】日付の和暦変換 (例: 2026-01-14 -> 令和8年1月14日)
-    let formattedDate = record["確定予約日"]?.value || "未定";
-    if (record["確定予約日"]?.value) {
+    let formattedDate = (record["確定予約日"] && record["確定予約日"].value) || "未定";
+    if (record["確定予約日"] && record["確定予約日"].value) {
         try {
             const d = new Date(record["確定予約日"].value);
-            // 日本時間かつ和暦でフォーマット
             formattedDate = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', {
                 era: 'long', year: 'numeric', month: 'long', day: 'numeric'
             }).format(d);
-        } catch (e) {
-            console.warn("和暦変換エラー:", e);
-        }
+        } catch (e) { /* ignore */ }
     }
     const dateTimeStr = `${formattedDate} ${resTime}`;
 
-    // 3. HTMLレスポンスの生成
-    // 変更点: 「状況」欄削除、SystemId削除、和暦表示、診療科短縮
-    const html = `
+    // キャンセルボタンのHTML (POSTフォーム)
+    const cancelBtnHtml = showCancel ? `
+        <form method="POST" action="?id=${recordId}" onsubmit="return confirm('本当に予約をキャンセルしますか？');">
+            <input type="hidden" name="action" value="cancel">
+            <button type="submit" class="btn-cancel">予約をキャンセルする</button>
+        </form>
+    ` : '';
+
+    return `
       <!DOCTYPE html>
       <html lang="ja">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>予約内容の確認</title>
+        <title>予約確定</title>
         <style>
           body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; margin: 0; }
           .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
@@ -326,16 +458,18 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
           .info-row:last-child { border-bottom: none; }
           .label { width: 100px; font-weight: bold; color: #777; font-size: 14px; }
           .value { flex: 1; font-weight: bold; font-size: 15px; color: #333; }
+          .btn-cancel { display: inline-block; margin-top: 20px; padding: 12px 24px; background-color: #e74c3c; color: white; text-decoration: none; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; transition: background-color 0.3s; }
+          .btn-cancel:hover { background-color: #c0392b; }
           .footer { margin-top: 30px; font-size: 12px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
         </style>
       </head>
       <body>
         <div class="container">
-          <h1>予約内容の確認</h1>
+          <h1>予約が確定しました</h1>
           <div class="message">
             <strong>${name} 様</strong><br>
-            いつもご利用ありがとうございます。<br>
-            以下の内容で予約を承っております。
+            以下の内容で予約が確定しております。<br>
+            当日はお気をつけてお越しください。
           </div>
           
           <div class="info-box">
@@ -349,23 +483,102 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             </div>
           </div>
 
+          ${cancelBtnHtml}
+
           <div class="footer">
             湘南東部病院 予約センター<br>
-            ※この画面を閉じても予約は有効です。
+            ※キャンセルは上記ボタン、またはお電話にてご連絡ください。
           </div>
         </div>
       </body>
       </html>
     `;
+}
 
-    res.status(200).send(html);
-    console.log("--- [confirmReservation] Execution Finished (Success) ---");
+/**
+ * 既にキャンセル済みの場合のHTML
+ */
+function getAlreadyCancelledHtml() {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>キャンセル済み</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #7f8c8d; font-size: 20px; }
+          p { color: #555; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>この予約は無効になりました</h1>
+          <p>この予約は無効となったか、既に取り消し手続きが完了しています。<br>ご不明な点がございましたら、予約センターまでお問い合わせください。</p>
+        </div>
+      </body>
+      </html>
+    `;
+}
 
-  } catch (error) {
-    console.error(`[CRITICAL ERROR] 処理中にエラーが発生しました:`, error);
-    res.status(500).send(`<h1>システムエラー</h1><p>申し訳ありません。情報の取得に失敗しました。</p><p>Error: ${error.message}</p>`);
-  }
-});
+/**
+ * キャンセル完了時のHTML
+ */
+function getCancellationCompletedHtml() {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>キャンセル完了</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #e74c3c; font-size: 20px; }
+          p { color: #555; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>キャンセル処理が完了しました</h1>
+          <p>予約の取り消しを受け付けました。<br>確認メールを送信しましたのでご確認ください。</p>
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
+ * エラー画面のHTML
+ */
+function getErrorHtml(message) {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>システムエラー</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; }
+          h1 { color: #e74c3c; }
+          p { color: #555; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+            <h1>システムエラー</h1>
+            <p>処理中にエラーが発生しました。</p>
+            <p style="font-size:12px; color:#999;">${message}</p>
+        </div>
+      </body>
+      </html>
+    `;
+}
 
 /**
  * 有効期限切れ画面のHTMLを生成するヘルパー関数
