@@ -126,7 +126,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       .shinryo-config-table { width: 100%; border-collapse: collapse; border: 2px solid #555; table-layout: fixed; margin-top: 0px; }
       .shinryo-config-table th, .shinryo-config-table td { border: 1px solid #ddd; padding: 6px; font-size: 16px; vertical-align: middle; text-align: center; }
       .shinryo-config-table th { background-color: #e9e9e9; color: #333; font-weight: bold; font-size: 16px; height: 30px; }
-      .shinryo-config-table tr.department-group-start > td { border-top: 2px solid #555; }
+      .shinryo-config-table tr.field-group-start > td { border-top: 2px solid #555; }
       .shinryo-config-table td.bunya-cell, .shinryo-config-table th.bunya-cell { border-right: 2px solid #555; }
       .shinryo-config-table td.large-font-cell { font-size: 1.3em; font-weight: bold; }
       .shinryo-config-table td.align-top { vertical-align: top; }
@@ -244,18 +244,19 @@ window.ShinryoApp = window.ShinryoApp || {};
 
       /* --- 詳細ボタン --- */
       .btn-detail {
-        background-color: #3498db;
+        background-color: #466dd8;
         color: #fff;
         border: none;
         border-radius: 4px;
-        padding: 2px 8px;
+        padding: 4px 16px;
         font-size: 11px;
         cursor: pointer;
-        margin-left: 5px;
-        transition: background-color 0.2s;
+        margin-left: 8px;
+        transition: all 0.2s;
         vertical-align: middle;
+        white-space: nowrap;
       }
-      .btn-detail:hover { background-color: #2980b9; }
+      .btn-detail:hover { background-color: #218838; }
 
       /* --- 入力ダイアログ --- */
       .term-input-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; }
@@ -307,19 +308,16 @@ window.ShinryoApp = window.ShinryoApp || {};
           vertical-align: top !important;
           padding: 0 !important;
           background-color: #fff;
-      }
-      .doctor-cell-void {
-          background: repeating-linear-gradient(45deg, #fafafa, #fafafa 10px, #f0f0f0 10px, #f0f0f0 20px);
-          vertical-align: top !important;
-          padding: 0 !important;
+          height: 1px;
       }
       .doctor-name-wrapper {
           background-color: #fff;
           padding: 6px;
-          min-height: 45px; /* 医師1人分の高さ */
+          padding: 6px 10px;
           display: flex;
           align-items: center;
           justify-content: center;
+          justify-content: space-between; /* ボタンを右寄せにするため変更 */
           border-bottom: 1px solid #eee;
       }
     `;
@@ -956,9 +954,8 @@ window.ShinryoApp = window.ShinryoApp || {};
       { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell' },
       { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
       { header: '予約期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
-      { header: '診療科', field: '診療科', width: '15%', merge: true, cls: 'large-font-cell' },
-      { header: '医師', field: '医師名', width: '5%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top no-right-border', colspan: 2 },
-      { header: '詳細', type: 'detail_btn', width: '2%', merge: true, mergeKey: '診療科', cls: 'align-top no-left-border', skipHeader: true }
+      { header: '診療科', field: '診療科', width: '10%', merge: true, cls: 'large-font-cell' },
+      { header: '医師', field: '医師名', width: '10%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top' }
     ];
 
     // ★追加: colgroupによる列幅制御
@@ -1088,8 +1085,9 @@ window.ShinryoApp = window.ShinryoApp || {};
         const deptStatus = descriptions['__status__' + currentDept];
         const isDeptStopped = deptStatus === '停止';
 
-        const prevDept = (idx > 0) ? records[idx-1]['診療科']?.value : null;
-        if (idx === 0 || currentDept !== prevDept) row.classList.add('department-group-start');
+        const currentField = rec['診療分野']?.value;
+        const prevField = (idx > 0) ? records[idx-1]['診療分野']?.value : null;
+        if (idx === 0 || currentField !== prevField) row.classList.add('field-group-start');
 
         const pubRec = publishedMap ? publishedMap.get(String(rec.$id.value)) : null;
         const isRecordChanged = hasRecordChange(rec, pubRec); // レコード全体の変更有無
@@ -1275,7 +1273,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 });
             } else if (col.field === '医師名') {
                 // ★修正: 斜線背景クラスをTDにのみ適用
-                cell.classList.add('doctor-cell-void');
+                cell.classList.add('doctor-cell-filled');
 
                 // ★変更: 医師名をリスト形式で表示（結合セル内）
                 const rowSpan = rec[`_rowspan_医師名`] || 1;
@@ -1286,6 +1284,12 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'doctor-name-wrapper';
                     
+                    // ★追加: 1人の場合は高さを100%にする
+                    if (rowSpan === 1) {
+                        containerDiv.style.height = '100%';
+                        containerDiv.style.borderBottom = 'none';
+                    }
+
                     // ★追加: 個別レコードの変更判定（医師名枠を点滅させる）
                     const targetPubRec = publishedMap ? publishedMap.get(String(targetRec.$id.value)) : null;
                     if (hasRecordChange(targetRec, targetPubRec)) {
@@ -1294,10 +1298,24 @@ window.ShinryoApp = window.ShinryoApp || {};
 
                     const textSpan = document.createElement('span');
                     textSpan.textContent = doctorName;
+                    textSpan.style.flex = '1'; // 名前を中央に配置するために伸縮させる
+                    textSpan.style.textAlign = 'center';
                     containerDiv.appendChild(textSpan);
+
+                    // ★追加: 編集ボタン
+                    const searchBtn = document.createElement('button');
+                    searchBtn.className = 'btn-detail';
+                    searchBtn.textContent = '詳細・編集';
+                    searchBtn.title = 'この医師で絞り込んで編集';
+                    searchBtn.onclick = (e) => {
+                       e.stopPropagation();
+                       const query = `診療科 in ("${currentDept}") and 医師名 in ("${doctorName}")`;
+                       window.location.href = `?view_mode=input&query=${encodeURIComponent(query)}`;
+                    };
+                    containerDiv.appendChild(searchBtn);
+
                     cell.appendChild(containerDiv);
 
-                    // 担当パターンをツールチップ表示 (クリックで表示、永続化)
                     const tblHtml = createScheduleTableHtml(targetRec, true, commonSettings);
                     
                     containerDiv.onclick = (e) => {
@@ -1338,40 +1356,6 @@ window.ShinryoApp = window.ShinryoApp || {};
                     // containerDiv.onmouseleave = hideTooltip;
                     containerDiv.style.cursor = 'pointer'; // クリック可能であることを示す
                 }
-            } else if (col.type === 'detail_btn') {
-                // ★追加: 詳細ボタン列
-                // ★修正: 斜線背景クラスをTDにのみ適用
-                cell.classList.add('doctor-cell-void');
-
-                // ★変更: 詳細ボタンをリスト形式で表示（結合セル内）
-                const rowSpan = rec[`_rowspan_detail_btn`] || 1;
-                for (let i = 0; i < rowSpan; i++) {
-                    const targetRec = records[idx + i];
-                    const doctorName = targetRec['医師名']?.value || '';
-                    
-                    const containerDiv = document.createElement('div');
-                    containerDiv.className = 'doctor-name-wrapper';
-                    
-                    // ★追加: 個別レコードの変更判定（詳細ボタン枠も点滅させる）
-                    const targetPubRec = publishedMap ? publishedMap.get(String(targetRec.$id.value)) : null;
-                    if (hasRecordChange(targetRec, targetPubRec)) {
-                        containerDiv.classList.add('cell-changed');
-                    }
-
-                    const searchBtn = document.createElement('button');
-                    searchBtn.className = 'btn-detail';
-                    searchBtn.textContent = '編集';
-                    searchBtn.title = 'この医師で絞り込んで編集';
-                    searchBtn.onclick = (e) => {
-                       e.stopPropagation();
-                       const query = `診療科 in ("${currentDept}") and 医師名 in ("${doctorName}")`;
-                       window.location.href = `?view_mode=input&query=${encodeURIComponent(query)}`;
-                    };
-                    containerDiv.appendChild(searchBtn);
-                    cell.appendChild(containerDiv);
-                }
-            } else {
-                cell.textContent = rec[col.field]?.value || '';
             }
         });
     });
@@ -1463,7 +1447,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       noteDiv.style.backgroundColor = '#f0f0f0';
       noteDiv.style.padding = '8px';
       noteDiv.style.borderRadius = '4px';
-      noteDiv.innerHTML = `<strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br><span style="color:#888; margin-left:1em;">例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）</span><br><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）<br><span style="color:#d9534f; font-weight:bold;">※負荷軽減のため、予約可能期間は最大60日までとしてください。</span>`;
+      noteDiv.innerHTML = `<strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br><span style="color:#888; margin-left:1em;">例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）</span><br><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）`;
       box.appendChild(noteDiv);
 
       // スイッチ切り替え時の制御

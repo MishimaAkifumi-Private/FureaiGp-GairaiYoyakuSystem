@@ -193,6 +193,16 @@
         return event;
     }
 
+    // ★追加: スタッフ未設定時の強制ロック処理
+    const currentStaff = localStorage.getItem('shinryo_ticket_staff_name');
+    if (!currentStaff) {
+        // スタッフ未設定の場合、強制的にスタッフ設定ダイアログを表示
+        if (!document.querySelector('.custom-modal-overlay')) {
+             showStaffSettingDialog(true); // true = 強制モード
+        }
+        return event; // 以降の描画処理をスキップ
+    }
+
     let viewMode = getUrlParam('view_mode');
     if (!viewMode) viewMode = 'dashboard';
 
@@ -460,7 +470,7 @@
       // ★追加: システムアイコン
       const systemIcon = document.createElement('div');
       systemIcon.innerHTML = '<i class="fa-solid fa-hospital"></i>'; 
-      systemIcon.style.cssText = 'font-size: 65px; line-height: 1; cursor: default; color: #333; margin-right: 15px; margin-bottom: 20px;';
+      systemIcon.style.cssText = 'font-size: 65px; line-height: 1; cursor: default; color: #808080; margin-right: 15px; margin-bottom: 20px;';
       group2.appendChild(systemIcon);
 
       const titleContainer = document.createElement('div');
@@ -480,32 +490,38 @@
 
       // ③ ユーザー名 (group3)
       const group3 = document.createElement('div');
-      group3.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 10px; margin-left: 20px;';
-      group3.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 10px; margin-left: 20px; cursor: pointer;';
+      group3.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-left: 20px; cursor: pointer; background-color: #fff; border: 2px solid #e0e0e0; border-radius: 40px; padding: 6px 24px 6px 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;';
+      
+      group3.onmouseover = () => {
+          group3.style.backgroundColor = '#f8f9fa';
+          group3.style.borderColor = '#ccc';
+          group3.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+      };
+      group3.onmouseout = () => {
+          group3.style.backgroundColor = '#fff';
+          group3.style.borderColor = '#e0e0e0';
+          group3.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+      };
+
       group3.onclick = () => showStaffSettingDialog();
 
-      // ★追加: スタッフバッジ表示または強制設定
-      const currentStaff = localStorage.getItem('shinryo_ticket_staff_name');
+      // ★追加: スタッフ名取得
+      const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || '未設定';
 
-      if (!currentStaff) {
-          // スタッフ未設定の場合は設定ダイアログを強制表示
-          showStaffSettingDialog(true);
-      } else {
-          // ユーザーアイコン (FontAwesome)
+      // ユーザーアイコン (FontAwesome)
           const iconDiv = document.createElement('div');
           iconDiv.innerHTML = '<i class="fa-solid fa-headset"></i>';
           iconDiv.style.display = 'flex';
           iconDiv.style.alignItems = 'center';
-          iconDiv.style.fontSize = '50px';
-          iconDiv.style.color = '#666';
+          iconDiv.style.fontSize = '32px';
+          iconDiv.style.color = '#555';
           group3.appendChild(iconDiv);
 
           // スタッフ名
           const staffNameDiv = document.createElement('div');
           staffNameDiv.textContent = currentStaff;
-          staffNameDiv.style.cssText = 'font-size: 30px; font-weight: bold; color: #444; margin-left: 10px;';
+          staffNameDiv.style.cssText = 'font-size: 24px; font-weight: bold; color: #666; margin-left: 2px; line-height: 1;';
           group3.appendChild(staffNameDiv);
-      }
       
       // 並び順: ②システム情報 -> ①ロゴ -> ③利用者 (ユーザーとロゴを入れ替え)
       headerRow.appendChild(group2);
@@ -1081,8 +1097,7 @@
 
           const menuList = [
               { label: 'メール設定', icon: '✉️', desc: 'BCC・リマインド設定', action: () => renderMailMenu() },
-              { label: '未読警告設定', icon: '⚠️', desc: 'アラート時間の閾値設定', action: () => renderAlertSettings() },
-              { label: 'スタッフ管理', icon: '👥', desc: 'システム利用者の登録・管理を行います', action: () => showStaffSettingDialog() }
+              { label: '未読警告設定', icon: '⚠️', desc: 'アラート時間の閾値設定', action: () => renderAlertSettings() }
           ];
 
           menuList.forEach(item => {
@@ -1425,7 +1440,7 @@
   }
 
   // ★追加: スタッフ管理ダイアログ
-  async function showStaffSettingDialog() {
+  async function showStaffSettingDialog(isForced = false) {
       // 初期データのロード（DirtyCheck用）
       let initialStaffsJson = '[]';
       let initialUser = localStorage.getItem('shinryo_ticket_staff_name') || '';
@@ -1441,15 +1456,23 @@
       };
 
       const { overlay, box, content } = createModalBase((doClose) => {
-          // ×ボタンが押されたとき
+          if (isForced) return; // 強制モード時は閉じさせない
           checkDirty(doClose);
       });
 
       box.style.maxWidth = '600px';
       
+      // ★追加: 強制モード時のUI制御
+      if (isForced) {
+          const closeBtn = box.querySelector('div[style*="position: absolute"]'); // ×ボタン
+          if (closeBtn) closeBtn.style.display = 'none';
+          overlay.onclick = null; // 背景クリック無効
+      }
+
       const title = document.createElement('h2');
-      title.textContent = 'スタッフ管理';
+      title.textContent = isForced ? '初期設定: スタッフ登録' : 'スタッフ管理';
       title.style.cssText = 'margin-top: 0; margin-bottom: 20px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
+      if (isForced) title.style.color = '#e74c3c';
       content.appendChild(title);
 
       // データ取得
@@ -1461,6 +1484,19 @@
           }
       }
       initialStaffsJson = JSON.stringify(currentStaffs);
+
+      // ★追加: 保存ボタンの要素作成（表示制御用）
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+      closeBtn.textContent = '保存して閉じる';
+      closeBtn.style.display = 'none'; // 初期状態は非表示
+
+      // ★追加: 変更検知関数
+      const updateSaveButtonVisibility = () => {
+          const currentStaffsJson = JSON.stringify(currentStaffs);
+          const isDirty = (currentStaffsJson !== initialStaffsJson) || (tempUser !== initialUser);
+          closeBtn.style.display = isDirty ? 'inline-block' : 'none';
+      };
 
       // --- ブラウザ利用者設定エリア ---
       const userSettingContainer = document.createElement('div');
@@ -1502,6 +1538,7 @@
 
       userSelect.onchange = () => {
           tempUser = userSelect.value; // 即時保存せず一時変数に保持
+          updateSaveButtonVisibility();
       };
 
       const userDesc = document.createElement('div');
@@ -1533,7 +1570,6 @@
                   row.style.alignItems = 'center';
                   row.style.padding = '8px';
                   row.style.borderBottom = '1px solid #eee';
-                  const emailDisplay = staff.email ? `<div style="font-size:11px; color:#666;">${staff.email}</div>` : '';
                   
                   // ★追加: アクセス情報表示
                   let accessInfo = '';
@@ -1565,16 +1601,20 @@
                   row.innerHTML = `
                     <div style="flex:1; text-align:left;">
                         <div style="font-weight:bold;">${staff.name}</div>
-                        ${emailDisplay}
                         ${accessInfo}
                     </div>
                     <button class="custom-modal-btn" style="padding:4px 10px; font-size:12px; background:#e74c3c; color:#fff; margin-left:10px;">削除</button>
                   `;
                   row.querySelector('button').onclick = async () => {
                       if(await showCustomDialog(`「${staff.name}」を削除しますか？`, 'confirm')) {
+                          // ★追加: 削除対象が現在の選択ユーザーならクリア
+                          if (staff.name === tempUser) {
+                              tempUser = '';
+                          }
                           currentStaffs.splice(idx, 1);
                           renderList();
                           updateUserSelect(); // 削除反映
+                          updateSaveButtonVisibility();
                       }
                   };
                   container.appendChild(row);
@@ -1593,33 +1633,50 @@
       addForm.innerHTML = `
         <div style="display:flex; gap:10px;">
             <input type="text" class="custom-modal-input" placeholder="スタッフ名 (必須)" style="margin:0; flex:1;" id="new-staff-name">
-            <input type="email" class="custom-modal-input" placeholder="メールアドレス" style="margin:0; flex:1;" id="new-staff-email">
         </div>
         <button class="custom-modal-btn custom-modal-btn-ok" style="align-self:flex-end; min-width:80px;">追加</button>`;
       addForm.querySelector('button').onclick = () => {
           const name = document.getElementById('new-staff-name').value.trim();
-          const email = document.getElementById('new-staff-email').value.trim();
           if(name) {
-              currentStaffs.push({ name: name, email: email });
+              currentStaffs.push({ name: name });
               document.getElementById('new-staff-name').value = '';
-              document.getElementById('new-staff-email').value = '';
+              
+              // ★追加: 追加したスタッフを自動選択
+              tempUser = name;
+
               renderList();
               updateUserSelect(); // 追加反映
+              updateSaveButtonVisibility();
           }
       };
       box.appendChild(addForm);
 
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'custom-modal-btn custom-modal-btn-ok';
-      closeBtn.textContent = '保存して閉じる';
       closeBtn.onclick = async () => {
           const ticketConfig = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
           const targetAppId = ticketConfig.appId || 142;
 
-          document.body.removeChild(overlay);
+          // ★追加: 保存処理中はオーバーレイクリックを無効化
+          overlay.onclick = null;
+
+          // ★変更: ダイアログを閉じずに、ローディング表示に切り替える（操作ブロック）
+          box.innerHTML = `
+            <div style="padding: 40px; text-align: center;">
+                <div style="font-size: 30px; margin-bottom: 15px; display: inline-block;">⏳</div>
+                <div style="font-weight: bold; font-size: 18px; color: #333; margin-bottom: 10px;">保存と同期を実行中...</div>
+                <div style="font-size: 13px; color: #666;">画面を閉じずにそのままお待ちください。</div>
+            </div>
+          `;
+
           try {
               // ブラウザ利用者の保存
               localStorage.setItem('shinryo_ticket_staff_name', tempUser);
+              
+              // ★追加: 互換性のため旧キーも同期（削除時は削除）
+              if (tempUser) {
+                  localStorage.setItem('customKey', tempUser);
+              } else {
+                  localStorage.removeItem('customKey');
+              }
 
               // 共通設定の保存
               await window.ShinryoApp.ConfigManager.updateCommonStaffs(currentStaffs);
@@ -1631,11 +1688,22 @@
                   await window.ShinryoApp.ConfigManager.syncExternalAppDropdown(targetAppId, '担当者', staffNames);
               }
 
-              await showCustomDialog('保存と同期が完了しました。\n反映まで数分かかる場合があります。', 'alert');
-              showTicketAppSettingDialog();
+              // ★修正: 完了メッセージを表示せず即座にリロード
+              location.reload();
           } catch(e) {
               await showCustomDialog('保存または同期に失敗しました。\n' + e.message, 'alert');
-              showTicketAppSettingDialog();
+              location.reload();
+              box.innerHTML = `
+                <div style="padding: 40px; text-align: center;">
+                    <div style="font-size: 40px; color: #e74c3c; margin-bottom: 15px;">✖</div>
+                    <div style="font-weight: bold; font-size: 18px; color: #333; margin-bottom: 10px;">保存に失敗しました</div>
+                    <div style="font-size: 13px; color: #666; margin-bottom: 15px;">${e.message}</div>
+                    <div style="font-size: 12px; color: #888;">自動的にリロードします...</div>
+                </div>
+              `;
+              setTimeout(() => {
+                  location.reload();
+              }, 3000);
           }
       };
       box.appendChild(closeBtn);

@@ -57,7 +57,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       .shinryo-config-table { width: 100%; border-collapse: collapse; border: 2px solid #555; table-layout: fixed; }
       .shinryo-config-table th, .shinryo-config-table td { border: 1px solid #ddd; padding: 6px; font-size: 12px; vertical-align: middle; text-align: center; }
       .shinryo-config-table th { background-color: #e9e9e9; color: #333; font-weight: bold; font-size: 13px; height: 30px; }
-      .shinryo-config-table tr.department-group-start > td { border-top: 2px solid #555; }
+      .shinryo-config-table tr.field-group-start > td { border-top: 2px solid #555; }
       .shinryo-config-table td.bunya-cell, .shinryo-config-table th.bunya-cell { border-right: 2px solid #555; }
       .shinryo-config-table td.large-font-cell { font-size: 1.3em; font-weight: bold; }
       .gray-out-cell { background-color: #888888 !important; color: #fff !important; }
