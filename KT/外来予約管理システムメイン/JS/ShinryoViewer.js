@@ -951,10 +951,10 @@ window.ShinryoApp = window.ShinryoApp || {};
     
     const columns = [
       { header: '診療分野', field: '診療分野', width: '8%', merge: true, cls: 'large-font-cell align-top' }, // ★復元
-      { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell' },
+      { header: '診療科', field: '診療科', width: '10%', merge: true, cls: 'large-font-cell' },
       { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
       { header: '予約期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
-      { header: '診療科', field: '診療科', width: '10%', merge: true, cls: 'large-font-cell' },
+      { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell' },
       { header: '医師', field: '医師名', width: '10%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top' }
     ];
 
@@ -1105,6 +1105,24 @@ window.ShinryoApp = window.ShinryoApp || {};
             if (isDeptStopped) {
                 // 診療科停止: 診療分野以外はグレーアウト
                 if (col.field !== '診療分野') cell.classList.add('gray-out-cell');
+                
+                // ★追加: 診療分野の場合、その分野内の全診療科が停止しているかチェック
+                if (col.field === '診療分野') {
+                    const span = rec[`_rowspan_${rowspanKey}`] || 1;
+                    let allStopped = true;
+                    for (let i = 0; i < span; i++) {
+                        if (idx + i < records.length) {
+                            const targetRec = records[idx + i];
+                            const dName = targetRec['診療科']?.value;
+                            const dStatus = descriptions['__status__' + dName];
+                            if (dStatus !== '停止') {
+                                allStopped = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (allStopped) cell.classList.add('gray-out-cell');
+                }
             } else if (isSuspended) {
                 // 個別停止: 診療分野、診療科(toggle含む)、予定表は除外
                 if (col.field !== '診療分野' && col.field !== '診療科' && col.type !== 'calendar_icon') {
@@ -1275,6 +1293,11 @@ window.ShinryoApp = window.ShinryoApp || {};
                 // ★修正: 斜線背景クラスをTDにのみ適用
                 cell.classList.add('doctor-cell-filled');
 
+                // ★追加: 診療科停止時はセルの背景色を上書き
+                if (isDeptStopped) {
+                    cell.style.backgroundColor = '#888888';
+                }
+
                 // ★変更: 医師名をリスト形式で表示（結合セル内）
                 const rowSpan = rec[`_rowspan_医師名`] || 1;
                 for (let i = 0; i < rowSpan; i++) {
@@ -1284,10 +1307,18 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'doctor-name-wrapper';
                     
+                    // ★追加: 診療科停止時はラッパーもグレーアウト
+                    if (isDeptStopped) {
+                        containerDiv.classList.add('gray-out-cell');
+                        containerDiv.style.backgroundColor = '#888888';
+                        containerDiv.style.color = '#fff';
+                    }
+
                     // ★追加: 1人の場合は高さを100%にする
                     if (rowSpan === 1) {
                         containerDiv.style.height = '100%';
                         containerDiv.style.borderBottom = 'none';
+                        containerDiv.style.paddingTop = '0px';
                     }
 
                     // ★追加: 個別レコードの変更判定（医師名枠を点滅させる）
@@ -1355,6 +1386,10 @@ window.ShinryoApp = window.ShinryoApp || {};
                     // containerDiv.onmouseenter = (e) => showTooltip(e, tblHtml);
                     // containerDiv.onmouseleave = hideTooltip;
                     containerDiv.style.cursor = 'pointer'; // クリック可能であることを示す
+                }
+            } else {
+                if (col.field) {
+                    cell.textContent = rec[col.field]?.value || '';
                 }
             }
         });
