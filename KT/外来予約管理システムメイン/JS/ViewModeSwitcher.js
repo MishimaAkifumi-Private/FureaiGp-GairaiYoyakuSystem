@@ -226,21 +226,6 @@
             const titleContainer = document.createElement('div');
             titleContainer.className = 'overview-title-container';
 
-            // テキストラッパー
-            const textWrapper = document.createElement('div');
-            textWrapper.className = 'overview-text-wrapper';
-
-            const titleText = document.createElement('div');
-            titleText.className = 'overview-title-text';
-            titleText.textContent = '予約待ち受け状況';
-            textWrapper.appendChild(titleText);
-
-            const dateText = document.createElement('div');
-            dateText.className = 'overview-last-update';
-            textWrapper.appendChild(dateText);
-
-            titleContainer.appendChild(textWrapper);
-
             // 更新通知ボタン (初期非表示)
             const btnUpdate = document.createElement('button');
             btnUpdate.className = 'btn-update-available';
@@ -262,6 +247,19 @@
             btnMainMenu.style.zIndex = '10';
             btnMainMenu.onclick = () => location.href = '?view_mode=dashboard';
             div.appendChild(btnMainMenu);
+            // ★変更: 全体編集ボタンを右側に配置
+            const btnDetail = document.createElement('button');
+            btnDetail.className = 'mode-switch-btn btn-to-detail';
+            btnDetail.textContent = '全医師リスト';
+            btnDetail.style.position = 'absolute';
+            btnDetail.style.right = '20px';
+            btnDetail.style.top = '50%';
+            btnDetail.style.transform = 'translateY(-50%)';
+            btnDetail.style.marginLeft = '0';
+            btnDetail.style.marginTop = '5px';
+            btnDetail.style.zIndex = '10';
+            btnDetail.onclick = () => location.href = '?view_mode=input';
+            div.appendChild(btnDetail);
 
             // 更新チェックロジック
             if (window.ShinryoApp.ConfigManager) {
@@ -271,11 +269,6 @@
                         await window.ShinryoApp.ConfigManager.fetchPublishedData();
                         
                         const lastTime = window.ShinryoApp.ConfigManager.getStorageStatus().lastPublishedAt;
-                        if (lastTime) {
-                            const d = new Date(lastTime);
-                            const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
-                            dateText.textContent = `Last Form Update : ${dateStr}`;
-                        }
 
                         const hasDiff = window.ShinryoApp.ConfigManager.hasUnsavedChanges(records);
                         const isOld = window.ShinryoApp.ConfigManager.isOldFormat ? window.ShinryoApp.ConfigManager.isOldFormat() : false;
@@ -349,7 +342,7 @@
                  // Overview Button
                  const btnOverview = document.createElement('button');
                  btnOverview.className = 'mode-switch-btn';
-                 btnOverview.textContent = '予約待ち受け状況';
+                 btnOverview.textContent = '予約待ち受け管理';
                  btnOverview.style.backgroundColor = '#28a745';
                  btnOverview.style.margin = '0';
                  btnOverview.style.height = '30px';
@@ -370,11 +363,24 @@
              }
 
         } else if (viewMode === 'overview') {
-             const btnDetail = document.createElement('button');
-             btnDetail.className = 'mode-switch-btn btn-to-detail';
-             btnDetail.textContent = '全体編集';
-             btnDetail.onclick = () => location.href = '?view_mode=input';
-             div.appendChild(btnDetail);
+             const btnMainMenu = document.createElement('button');
+             btnMainMenu.className = 'mode-switch-btn';
+             btnMainMenu.textContent = 'Dashboard';
+             btnMainMenu.style.backgroundColor = '#28a745';
+             btnMainMenu.onclick = () => location.href = '?view_mode=dashboard';
+             div.appendChild(btnMainMenu);
+
+             const btnHoliday = document.createElement('button');
+             btnHoliday.className = 'mode-switch-btn';
+             btnHoliday.textContent = '予約待受期間・休診日設定';
+             btnHoliday.onclick = () => showHolidaySettingDialog();
+             div.appendChild(btnHoliday);
+
+             const btnFormLabel = document.createElement('button');
+             btnFormLabel.className = 'mode-switch-btn';
+             btnFormLabel.textContent = 'フォーム挿入ラベル管理';
+             btnFormLabel.onclick = () => showFormLabelMenu();
+             div.appendChild(btnFormLabel);
         }
 
         if(headerMenu.firstChild) {
@@ -532,10 +538,9 @@
       container.appendChild(headerRow);
 
       const cards = [
-          { title: '予約チケット管理', icon: '🎫', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約の申込状況を確認・管理します' },
+          { title: '予約チケット管理', icon: '📬', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約変更/取消/初診の着信を管理、予約枠を確保して患者に返信します' },
           { title: '予約待ち受け管理', icon: '📅', url: '?view_mode=overview', target: '_self', desc: '個別医師の予定状況等から予約が受け付けられる選択肢を組み立てます' },
-          { title: 'フォーム挿入ラベル', icon: '📑', action: () => showFormLabelMenu(), desc: '予約フォームに挿入するラベルの文言を編集します' },   
-          { title: '設定', icon: '⚙️', action: () => showSettingsMenu(), desc: '各種システム環境の設定' }
+          { title: '各種システム設定', icon: '🔐', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
       ];
 
       // 外来予約フォームを開くボタンをカードに追加
@@ -545,7 +550,7 @@
               title: '外来予約フォーム', 
               icon: '🖥️', 
               action: () => window.open(formUrl, '_blank'), 
-              desc: '外来患者がアクセスするフォームを表示します。' 
+              desc: '外来患者がアクセスするフォームを表示します' 
           });
       }
 
@@ -674,6 +679,8 @@
       content.appendChild(title);
 
       const menuList = [
+          { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
+          { label: 'システム管理者', icon: '🔐', desc: '各種システム設定', action: () => { document.body.removeChild(overlay); showAdminPasswordDialog(); } },
           { label: '予約センター登録', icon: '🏥', desc: 'センター名や管轄施設の設定を行います', action: () => { document.body.removeChild(overlay); showCenterRegistrationMenu(); } },
           { label: '予約待受期間設定', icon: '📅', desc: '休診日や予約受付期間の設定を行います', action: () => { document.body.removeChild(overlay); showHolidaySettingDialog(); } },
           { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
@@ -731,6 +738,7 @@
       cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       cancelBtn.textContent = 'キャンセル';
       cancelBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
+      cancelBtn.onclick = () => { document.body.removeChild(overlay); };
 
       const okBtn = document.createElement('button');
       okBtn.className = 'custom-modal-btn custom-modal-btn-ok';
@@ -764,6 +772,7 @@
       content.appendChild(title);
 
       const menuList = [
+          { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
           { label: 'メールサーバー設定', icon: '🖥️', desc: 'SMTPサーバー・認証情報の設定を行います', action: () => { document.body.removeChild(overlay); showMailServerSettingDialog(); } },
           { label: 'アプリ連携設定', icon: '🔗', desc: '連携するKintoneアプリ番号の設定を行います', action: () => { document.body.removeChild(overlay); showAppIdSettingDialog(); } },
           { label: '各種URL設定', icon: '🌐', desc: 'フォームURLやロゴ画像URLなどを管理します', action: () => { document.body.removeChild(overlay); showUrlSettingDialog(); } },
@@ -789,6 +798,7 @@
       backBtn.textContent = '戻る';
       backBtn.style.marginTop = '15px';
       backBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
+      backBtn.onclick = () => { document.body.removeChild(overlay); };
       content.appendChild(backBtn);
 
       document.body.appendChild(overlay);
@@ -1058,6 +1068,7 @@
       closeBtn.textContent = '戻る';
       closeBtn.style.marginTop = '15px';
       closeBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
+      closeBtn.onclick = () => { document.body.removeChild(overlay); showAdminMenu(); };
       content.appendChild(closeBtn);
 
       document.body.appendChild(overlay);
@@ -2185,6 +2196,7 @@
       cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       cancelBtn.textContent = 'キャンセル';
       cancelBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
+      cancelBtn.onclick = () => { document.body.removeChild(overlay); };
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
