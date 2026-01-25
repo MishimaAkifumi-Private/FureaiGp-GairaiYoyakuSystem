@@ -417,50 +417,103 @@
 
       container = document.createElement('div');
       container.id = 'dashboard-container';
-      container.style.cssText = 'display: flex; flex-wrap: wrap; gap: 30px; padding: 50px; justify-content: center; align-items: flex-start; background-color: #f5f5f5; min-height: 80vh;';
+      // align-content: flex-start を追加して、行間の余計な広がりを防止
+      container.style.cssText = 'display: flex; flex-wrap: wrap; gap: 30px 20px; padding: 30px; justify-content: center; align-items: flex-start; align-content: flex-start; background-color: #f5f5f5; min-height: 80vh;';
       
-      // ロゴ画像の表示
-      const logoContainer = document.createElement('div');
-      logoContainer.style.cssText = 'width: 100%; text-align: center; margin-bottom: 10px;';
+      // FontAwesomeのロード
+      if (!document.getElementById('font-awesome-css')) {
+          const link = document.createElement('link');
+          link.id = 'font-awesome-css'; link.rel = 'stylesheet'; link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+          document.head.appendChild(link);
+      }
+      
+      // --- ヘッダー行 (3つのエレメントを横並び) ---
+      const headerRow = document.createElement('div');
+      headerRow.style.cssText = 'width: 100%; display: flex; align-items: center; justify-content: center; gap: 30px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap;';
+
+      // 区切り線生成ヘルパー
+      const createDivider = () => {
+          const div = document.createElement('div');
+          div.style.cssText = 'width: 3px; height: 70px; background-color: #e0e0e0;';
+          return div;
+      };
+
+      // ① ロゴ + センター名 (group1)
+      const group1 = document.createElement('div');
+      group1.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; justify-content: center;';
+
       const logo = document.createElement('img');
-      // ★ここにロゴ画像のURLを設定してください
       logo.src = 'https://www.fureai-g.or.jp/fureai-g/images/shared/site-logo.svg'; 
-      logo.style.cssText = 'max-width: 100%; height: auto; max-height: 120px;';
-      logoContainer.appendChild(logo);
-      container.appendChild(logoContainer);
+      logo.style.cssText = 'height: 30px; width: auto; margin-bottom: 5px;';
+      group1.appendChild(logo);
 
-      const title = document.createElement('h1');
-      title.textContent = '外来予約管理システム';
-      title.style.cssText = 'width: 100%; text-align: center; margin-bottom: 0px; font-size: 50px;  color: #444; text-shadow: 3px 3px 0px #fff, -1px -1px 0 #fff; letter-spacing: 2px; font-family: "HGP創英角ﾎﾟｯﾌﾟ体", "HGSoeiKakupoptai", "HGPSoeiKakupoptai", "Rounded Mplus 1c", "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", Osaka, "メイリオ", Meiryo, sans-serif;';
-      container.appendChild(title);
-
-      // バージョン番号の表示
-      const version = document.createElement('div');
-      version.textContent = `Ver. ${APP_VERSION}`;
-      version.style.cssText = 'width: 100%; text-align: center; margin-top: -60px; margin-bottom: 15px; color: #888; font-size: 30px;';
-      container.appendChild(version);
-
-      // 予約センター名表示
       const centerName = localStorage.getItem('shinryo_center_name') || '湘南東部外来予約センター';
       const subTitle = document.createElement('div');
       subTitle.textContent = centerName;
-      subTitle.style.cssText = 'width: 100%; text-align: center; margin-bottom: 20px; color: #555; font-size: 20px; font-weight: bold;';
-      container.appendChild(subTitle);
+      subTitle.style.cssText = 'font-size: 24px; font-weight: bold; color: #555;';
+      group1.appendChild(subTitle);
 
-      // 外来予約フォームを開くボタン
-      const formUrl = localStorage.getItem('shinryo_form_url');
-      if (formUrl) {
-          const btnContainer = document.createElement('div');
-          btnContainer.style.cssText = 'width: 100%; text-align: center; margin-bottom: 40px;';
-          const openFormBtn = document.createElement('button');
-          openFormBtn.textContent = '外来予約フォームを開く';
-          openFormBtn.style.cssText = 'padding: 15px 30px; font-size: 18px; font-weight: bold; color: #fff; background-color: #e67e22; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 10px rgba(230, 126, 34, 0.4); transition: all 0.3s ease;';
-          openFormBtn.onmouseover = () => { openFormBtn.style.transform = 'translateY(-2px)'; openFormBtn.style.boxShadow = '0 6px 15px rgba(230, 126, 34, 0.6)'; };
-          openFormBtn.onmouseout = () => { openFormBtn.style.transform = 'translateY(0)'; openFormBtn.style.boxShadow = '0 4px 10px rgba(230, 126, 34, 0.4)'; };
-          openFormBtn.onclick = () => window.open(formUrl, '_blank');
-          btnContainer.appendChild(openFormBtn);
-          container.appendChild(btnContainer);
+      // ② タイトル + バージョン (group2)
+      const group2 = document.createElement('div');
+      group2.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 15px;';
+
+      // ★追加: システムアイコン
+      const systemIcon = document.createElement('div');
+      systemIcon.innerHTML = '<i class="fa-solid fa-hospital"></i>'; 
+      systemIcon.style.cssText = 'font-size: 65px; line-height: 1; cursor: default; color: #333; margin-right: 15px; margin-bottom: 20px;';
+      group2.appendChild(systemIcon);
+
+      const titleContainer = document.createElement('div');
+      titleContainer.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; justify-content: center;';
+
+      const title = document.createElement('h1');
+      title.textContent = '外来予約管理システム';
+      title.style.cssText = 'margin: 0; font-size: 35px; color: #444; font-family: "HGP創英角ﾎﾟｯﾌﾟ体", "HGSoeiKakupoptai", "HGPSoeiKakupoptai", "Rounded Mplus 1c", "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", Osaka, "メイリオ", Meiryo, sans-serif; line-height: 1.2;';
+      titleContainer.appendChild(title);
+
+      const version = document.createElement('span');
+      version.textContent = `Ver. ${APP_VERSION}`;
+      version.style.cssText = 'color: #888; font-size: 20px; align-self: flex-end;';
+      titleContainer.appendChild(version);
+
+      group2.appendChild(titleContainer);
+
+      // ③ ユーザー名 (group3)
+      const group3 = document.createElement('div');
+      group3.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 10px; margin-left: 20px;';
+      group3.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 10px; margin-left: 20px; cursor: pointer;';
+      group3.onclick = () => showStaffSettingDialog();
+
+      // ★追加: スタッフバッジ表示または強制設定
+      const currentStaff = localStorage.getItem('shinryo_ticket_staff_name');
+
+      if (!currentStaff) {
+          // スタッフ未設定の場合は設定ダイアログを強制表示
+          showStaffSettingDialog(true);
+      } else {
+          // ユーザーアイコン (FontAwesome)
+          const iconDiv = document.createElement('div');
+          iconDiv.innerHTML = '<i class="fa-solid fa-headset"></i>';
+          iconDiv.style.display = 'flex';
+          iconDiv.style.alignItems = 'center';
+          iconDiv.style.fontSize = '50px';
+          iconDiv.style.color = '#666';
+          group3.appendChild(iconDiv);
+
+          // スタッフ名
+          const staffNameDiv = document.createElement('div');
+          staffNameDiv.textContent = currentStaff;
+          staffNameDiv.style.cssText = 'font-size: 30px; font-weight: bold; color: #444; margin-left: 10px;';
+          group3.appendChild(staffNameDiv);
       }
+      
+      // 並び順: ②システム情報 -> ①ロゴ -> ③利用者 (ユーザーとロゴを入れ替え)
+      headerRow.appendChild(group2);
+      headerRow.appendChild(createDivider());
+      headerRow.appendChild(group1);
+      headerRow.appendChild(group3);
+
+      container.appendChild(headerRow);
 
       const cards = [
           { title: '予約チケット管理', icon: '🎫', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約の申込状況を確認・管理します' },
@@ -468,6 +521,17 @@
           { title: 'フォーム挿入ラベル', icon: '📑', action: () => showFormLabelMenu(), desc: '予約フォームに挿入するラベルの文言を編集します' },   
           { title: '設定', icon: '⚙️', action: () => showSettingsMenu(), desc: '各種システム環境の設定' }
       ];
+
+      // 外来予約フォームを開くボタンをカードに追加
+      const formUrl = localStorage.getItem('shinryo_form_url');
+      if (formUrl) {
+          cards.splice(2, 0, { // 3番目に挿入
+              title: '外来予約フォーム', 
+              icon: '🖥️', 
+              action: () => window.open(formUrl, '_blank'), 
+              desc: '外来患者がアクセスするフォームを表示します。' 
+          });
+      }
 
       cards.forEach(c => {
           const card = document.createElement('div');
@@ -2235,356 +2299,6 @@
         console.error('公開エラー:', e);
         await showCustomDialog('公開に失敗しました。\n' + e.message, 'alert');
     }
-  }
-
-  // 全レコード取得用ヘルパー
-  async function fetchAllRecords(appId) {
-    let allRecords = [];
-    let offset = 0;
-    const limit = 500;
-    while (true) {
-      const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', { app: appId, query: `limit ${limit} offset ${offset}` });
-      allRecords = allRecords.concat(resp.records);
-      offset += resp.records.length;
-      if (resp.records.length < limit) break;
-    }
-    return allRecords;
-  }
-
-  // --- 編集モード用フィルター機能 ---
-  async function createEditModeFilters(parentElement) {
-    if (document.getElementById('custom-edit-filters')) return;
-
-    // フィルターコンテナの作成
-    const container = document.createElement('div');
-    container.id = 'custom-edit-filters';
-    container.style.display = 'flex';
-    container.style.alignItems = 'flex-end';
-    container.style.marginLeft = '20px';
-    container.style.gap = '10px';
-
-    if (parentElement) {
-        parentElement.appendChild(container);
-    } else {
-        kintone.app.getHeaderMenuSpaceElement().appendChild(container);
-    }
-
-    // 全レコード取得（選択肢生成用）
-    const records = await fetchAllRecords(kintone.app.getId());
-    
-    // --- 競合チェック用ロジック ---
-    const days = ['月', '火', '水', '木', '金', '土'];
-    const weeks = ['1', '2', '3', '4', '5'];
-    const scheduleFields = days.flatMap(d => weeks.map(w => d + w));
-
-    const getScheduleSet = (rec) => {
-        const set = new Set();
-        scheduleFields.forEach(field => {
-            const val = rec[field]?.value || [];
-            if (val.includes('午前')) set.add(`${field}_AM`);
-            if (val.includes('午後')) set.add(`${field}_PM`);
-        });
-        return set;
-    };
-
-    const isRecordConflicting = (currentRec) => {
-        const currentTag = currentRec['集合'] ? currentRec['集合'].value : '';
-        if (!currentTag) return false;
-
-        const currentId = currentRec['$id'].value;
-        const currentStart = currentRec['着任日']?.value ? new Date(currentRec['着任日'].value).getTime() : -8640000000000000;
-        const currentEnd = currentRec['離任日']?.value ? new Date(currentRec['離任日'].value).getTime() : 8640000000000000;
-        const currentSchedule = getScheduleSet(currentRec);
-
-        return records.some(other => {
-            if (other['$id'].value === currentId) return false;
-            if ((other['集合']?.value || '') !== currentTag) return false;
-
-            const otherStart = other['着任日']?.value ? new Date(other['着任日'].value).getTime() : -8640000000000000;
-            const otherEnd = other['離任日']?.value ? new Date(other['離任日'].value).getTime() : 8640000000000000;
-
-            // 1. 期間重複判定
-            if (!(currentStart <= otherEnd && currentEnd >= otherStart)) return false;
-
-            // 2. 時間割重複判定
-            const otherSchedule = getScheduleSet(other);
-            for (let slot of currentSchedule) { if (otherSchedule.has(slot)) return true; }
-            return false;
-        });
-    };
-
-    const filters = [
-        { label: '診療科', field: '診療科' },
-        { label: '診察施設', field: '施設名' },
-        { label: '医師', field: '医師名' }
-    ];
-
-    // 現在のクエリから選択状態を復元するためのヘルパー
-    // URLパラメータを優先しつつ、kintone.app.getQueryCondition() もフォールバックとして使用
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlQuery = urlParams.get('query') || '';
-    const appQuery = kintone.app.getQueryCondition() || '';
-    const currentQuery = urlQuery || appQuery;
-
-    const getQueryValue = (field) => {
-        // 正規表現を調整: スペースの柔軟性向上
-        const re = new RegExp(`${field}\\s*(?:=|in)\\s*(?:\\"([^"]+)\\"|\\(\\s*\\"([^"]+)\\"\\s*\\))`);
-        const match = currentQuery.match(re);
-        return match ? (match[1] || match[2]) : '';
-    };
-
-    const selectElements = [];
-
-    // --- 絞り込み実行関数 ---
-    const applyFilter = () => {
-        const conditions = Array.from(container.querySelectorAll('select'))
-            .map((sel, idx) => sel.value ? `${filters[idx].field} in ("${sel.value}")` : null)
-            .filter(Boolean);
-        const query = conditions.join(' and ');
-        const url = new URL(window.location.href);
-        if (query) url.searchParams.set('query', query);
-        else url.searchParams.delete('query');
-        window.location.href = url.toString();
-    };
-
-    // --- 絞り込みボタン ---
-    const btnFilter = document.createElement('button');
-    btnFilter.textContent = '絞込';
-    btnFilter.style.backgroundColor = '#3498db';
-    btnFilter.style.color = '#fff';
-    btnFilter.style.border = 'none';
-    btnFilter.style.padding = '0 15px';
-    btnFilter.style.height = '32px';
-    btnFilter.style.borderRadius = '4px';
-    btnFilter.style.fontWeight = 'bold';
-    btnFilter.style.cursor = 'pointer';
-    btnFilter.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-    btnFilter.onclick = applyFilter;
-
-    // --- 自動絞り込みチェックボックス ---
-    const autoFilterCheckbox = document.createElement('input');
-    autoFilterCheckbox.type = 'checkbox';
-    autoFilterCheckbox.id = 'auto-filter-checkbox';
-    autoFilterCheckbox.style.margin = '0';
-    autoFilterCheckbox.style.cursor = 'pointer';
-    
-    const updateBtnState = () => {
-        if (autoFilterCheckbox.checked) {
-            btnFilter.disabled = true;
-            btnFilter.style.backgroundColor = '#ccc';
-            btnFilter.style.cursor = 'not-allowed';
-        } else {
-            btnFilter.disabled = false;
-            btnFilter.style.backgroundColor = '#3498db';
-            btnFilter.style.cursor = 'pointer';
-        }
-    };
-
-    // 状態の復元と保存
-    if (localStorage.getItem('shinryo_auto_filter') === 'true') {
-        autoFilterCheckbox.checked = true;
-    }
-    updateBtnState();
-    autoFilterCheckbox.onchange = () => {
-        localStorage.setItem('shinryo_auto_filter', autoFilterCheckbox.checked);
-        updateBtnState();
-    };
-
-    const autoLabel = document.createElement('label');
-    autoLabel.htmlFor = 'auto-filter-checkbox';
-    autoLabel.textContent = '自動';
-    autoLabel.style.fontSize = '10px';
-    autoLabel.style.marginLeft = '2px';
-    autoLabel.style.cursor = 'pointer';
-    autoLabel.style.userSelect = 'none';
-    autoLabel.style.color = '#555';
-    autoLabel.style.lineHeight = '1';
-
-    const autoContainer = document.createElement('div');
-    autoContainer.style.display = 'flex';
-    autoContainer.style.alignItems = 'center';
-    autoContainer.style.marginLeft = '3px';
-    autoContainer.style.marginBottom = '1px'; // 極限まで接近
-    autoContainer.appendChild(autoFilterCheckbox);
-    autoContainer.appendChild(autoLabel);
-
-    filters.forEach(f => {
-        if (f.label === '診療分野') return;
-        const wrapper = document.createElement('div');
-        wrapper.style.display = 'flex';
-        wrapper.style.flexDirection = 'column';
-
-        const title = document.createElement('div');
-        title.textContent = f.label;
-        title.style.fontSize = '11px';
-        title.style.fontWeight = 'bold';
-        title.style.color = '#555';
-        title.style.marginBottom = '0px';
-        title.style.lineHeight = '1.2';
-        title.style.paddingLeft = '2px';
-
-        const select = document.createElement('select');
-        select.className = 'gaia-argoui-select'; // Kintoneライクなスタイルクラスがあれば適用（なければ以下のスタイル）
-        select.style.padding = '0 8px';
-        select.style.height = '32px';
-        select.style.borderRadius = '4px';
-        select.style.border = '2px solid #3498db';
-        select.style.fontSize = '13px';
-        select.style.color = '#333';
-        select.style.cursor = 'pointer';
-        select.style.backgroundColor = '#fff';
-        select.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-        select.style.minWidth = '130px';
-        
-        const defaultOpt = document.createElement('option');
-        defaultOpt.value = '';
-        defaultOpt.textContent = '(すべて)';
-        select.appendChild(defaultOpt);
-
-        // 変更時に他のプルダウンの選択肢を更新（検索はしない）
-        select.onchange = () => {
-            updateDropdownOptions();
-            if (autoFilterCheckbox.checked) {
-                applyFilter();
-            }
-        };
-
-        wrapper.appendChild(title);
-        wrapper.appendChild(select);
-        container.appendChild(wrapper);
-
-        // 初期値を保持しておく（選択肢生成後にセットするため）
-        const initialVal = getQueryValue(f.field);
-        selectElements.push({ element: select, field: f.field, initialValue: initialVal });
-    });
-
-    // プルダウンの選択肢を動的に更新する関数
-    function updateDropdownOptions() {
-        selectElements.forEach(target => {
-            // 現在の値を取得。未設定で初期値があればそれを使用
-            let currentVal = target.element.value;
-            if (!currentVal && target.initialValue) {
-                currentVal = target.initialValue;
-            }
-            
-            // 自分以外の選択条件でレコードを絞り込む
-            const validRecords = records.filter(r => {
-                return selectElements.every(other => {
-                    if (other === target) return true; // 自分自身は条件に含めない（選択変更できるようにするため）
-                    
-                    // 他のフィールドの値も、DOM値または初期値から取得
-                    let otherVal = other.element.value;
-                    if (!otherVal && other.initialValue) otherVal = other.initialValue;
-
-                    if (!otherVal) return true;
-                    return r[other.field]?.value === otherVal;
-                });
-            });
-
-            // 有効なレコードから選択肢を抽出
-            const counts = {};
-            const conflictCounts = {}; // 競合があるかどうかのフラグ
-            const orderMap = {}; // 表示順保持用
-
-            validRecords.forEach(r => {
-                const v = r[target.field]?.value;
-                if (v) {
-                    counts[v] = (counts[v] || 0) + 1;
-                    if (target.field === '医師名' && isRecordConflicting(r)) {
-                        conflictCounts[v] = true;
-                    }
-                    // 表示順の取得 (最小値を採用)
-                    const order = parseInt(r['表示順']?.value || 9999, 10);
-                    if (orderMap[v] === undefined || order < orderMap[v]) {
-                        orderMap[v] = order;
-                    }
-
-                }
-            });
-            
-            const values = Object.keys(counts);
-
-            // 選択肢の再構築
-            target.element.innerHTML = '';
-            const defaultOpt = document.createElement('option');
-            defaultOpt.value = '';
-            defaultOpt.textContent = '(すべて)';
-            target.element.appendChild(defaultOpt);
-
-            // 表示順でソート (昇順)
-            values.sort((a, b) => {
-                const oa = orderMap[a] ?? 9999;
-                const ob = orderMap[b] ?? 9999;
-                if (oa !== ob) return oa - ob;
-                return a.localeCompare(b, 'ja');
-            });
-
-            values.forEach(v => {                const opt = document.createElement('option');
-                opt.value = v;
-                opt.textContent = `${v} (${counts[v]})`;
-                if (conflictCounts[v]) {
-                    opt.style.color = 'red';
-                    opt.style.fontWeight = 'bold';
-                }
-                target.element.appendChild(opt);
-            });
-
-            // 値の復元（選択肢になければリセット）
-            if (values.includes(currentVal)) {
-                target.element.value = currentVal;
-                // 初期値の適用に成功したら、次回以降はDOMの値を優先するため初期値をクリア
-                if (target.initialValue === currentVal) {
-                    target.initialValue = null;
-                }
-            } else {
-                target.element.value = '';
-            }
-
-            // ② 選択肢がない場合はグレーアウトして操作不可にする
-            if (target.element.options.length <= 1) {
-                target.element.disabled = true;
-                target.element.style.backgroundColor = '#eee';
-                target.element.style.cursor = 'not-allowed';
-            } else {
-                target.element.disabled = false;
-                target.element.style.backgroundColor = '#fff';
-                target.element.style.cursor = 'pointer';
-            }
-        });
-    }
-
-    // 初期表示時に選択肢を更新
-    updateDropdownOptions();
-
-    // --- リセットボタン ---
-    const btnReset = document.createElement('button');
-    btnReset.textContent = 'リセット';
-    btnReset.style.backgroundColor = '#95a5a6';
-    btnReset.style.color = '#fff';
-    btnReset.style.border = 'none';
-    btnReset.style.padding = '0 15px';
-    btnReset.style.height = '32px';
-    btnReset.style.borderRadius = '4px';
-    btnReset.style.fontWeight = 'bold';
-    btnReset.style.cursor = 'pointer';
-    btnReset.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-
-    btnReset.onclick = () => {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('query');
-        window.location.href = url.toString();
-    };
-
-    // ボタンとチェックボックスをまとめるラッパー
-    const filterWrapper = document.createElement('div');
-    filterWrapper.style.display = 'flex';
-    filterWrapper.style.flexDirection = 'column';
-    filterWrapper.style.alignItems = 'flex-start';
-    filterWrapper.appendChild(autoContainer);
-    filterWrapper.appendChild(btnFilter);
-
-    container.appendChild(filterWrapper);
-    container.appendChild(btnReset);
   }
 
   // 全レコード取得用ヘルパー
