@@ -16,6 +16,11 @@ window.ShinryoApp = window.ShinryoApp || {};
   window.ShinryoApp.Viewer.showTooltip = showTooltip;
   window.ShinryoApp.Viewer.hideTooltip = hideTooltip;
   window.ShinryoApp.Viewer.showLabelEditor = showLabelEditor;
+  // ★追加: 現在の表示設定を取得するゲッター
+  window.ShinryoApp.Viewer.getDescriptions = () => currentDescriptions;
+  window.ShinryoApp.Viewer.getDeptSettings = () => currentDeptSettings;
+  window.ShinryoApp.Viewer.getCommonSettings = () => currentCommonSettings;
+  window.ShinryoApp.Viewer.getLabelSettings = () => currentLabelSettings; // ★追加
 
   // --- CSS適用 ---
   function applyStyles() {
@@ -326,6 +331,12 @@ window.ShinryoApp = window.ShinryoApp || {};
     styleElement.textContent = css;
     document.head.appendChild(styleElement);
   }
+
+  // ★追加: 現在の設定を保持する変数
+  let currentDescriptions = {};
+  let currentDeptSettings = {};
+  let currentCommonSettings = {};
+  let currentLabelSettings = {}; // ★追加
 
   // --- カスタムダイアログ関数 ---
   function showCustomDialog(message, type = 'alert', labels = {}) {
@@ -833,6 +844,13 @@ window.ShinryoApp = window.ShinryoApp || {};
         const descriptions = publishedData.descriptions || {};
         const deptSettings = publishedData.departmentSettings || {}; // ★追加: 診療科設定取得
         const commonSettings = publishedData.commonSettings || {}; // ★追加: 共通設定取得
+        const labelSettings = publishedData.labelSettings || {}; // ★追加: ラベル設定取得
+
+        // ★追加: 取得した設定をグローバル変数にキャッシュ
+        currentDescriptions = descriptions;
+        currentDeptSettings = deptSettings;
+        currentCommonSettings = commonSettings;
+        currentLabelSettings = labelSettings; // ★追加
         
         // --- レコードのフィルタリング処理 ---
         
@@ -952,10 +970,10 @@ window.ShinryoApp = window.ShinryoApp || {};
     const columns = [
       { header: '診療分野', field: '診療分野', width: '8%', merge: true, cls: 'large-font-cell align-top' }, // ★復元
       { header: '診療科', field: '診療科', width: '10%', merge: true, cls: 'large-font-cell' },
-      { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
-      { header: '予約期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
-      { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell' },
-      { header: '医師', field: '医師名', width: '10%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top' }
+      { header: '予定表', type: 'calendar_icon', width: '4%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
+      { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '4%', merge: true, cls: 'large-font-cell' },
+      { header: '予約期間', type: 'term_group', width: '7%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
+      { header: '医師', field: '医師名', width: '13%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top' }
     ];
 
     // ★追加: colgroupによる列幅制御
@@ -1184,7 +1202,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 
                 deptInput.onchange = async function() {
                     const newState = deptInput.checked ? '停止' : '受付';
-                    const msg = `診療科「${currentDept}」の表示設定を【${newState}】に変更しますか？\n※Webフォームへの反映には少し時間がかかる場合があります。`;
+                    const msg = `診療科「${currentDept}」の表示設定を【${newState}】に変更しますか？`;
                     
                     const confirmed = await showCustomDialog(msg, 'confirm', { ok: '変更する', cancel: 'キャンセル' });
                     if (!confirmed) {
@@ -1196,9 +1214,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                         // 診療科ステータスのみ更新 (レコードは変更しない)
                         await window.ShinryoApp.ConfigManager.updateDepartmentStatus(currentDept, newState);
                         
-                        // descriptionsを更新して再描画
-                        descriptions['__status__' + currentDept] = newState;
-                        renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings); // 再描画
+                        location.reload(); // ★変更: リロード
                     } catch(e) {
                         await showCustomDialog('更新に失敗しました', 'alert');
                         deptInput.checked = !deptInput.checked;
@@ -1287,7 +1303,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 cell.title = 'クリックして予約期間を編集';
                 cell.onclick = () => showTermEditDialog(currentDept, deptSetting, commonSettings, () => {
                     // 更新後のコールバック: 再描画
-                    window.ShinryoApp.Viewer.renderOverview();
+                    location.reload(); // ★変更: リロード
                 });
             } else if (col.field === '医師名') {
                 // ★修正: 斜線背景クラスをTDにのみ適用
@@ -1466,6 +1482,13 @@ window.ShinryoApp = window.ShinryoApp || {};
       const initStart = currentSetting ? currentSetting.start : (commonSettings?.start ?? '');
       const initDuration = currentSetting ? currentSetting.duration : (commonSettings?.duration ?? '');
 
+      // ★追加: 変更検知用の初期値
+      const initialIsCommon = !currentSetting;
+      const initialStartValue = String(initStart); // 文字列として比較
+      const initialDurationValue = String(initDuration); // 文字列として比較
+
+      let saveBtn; // ★追加: 保存ボタンの参照用
+
       const startRow = createInputRow('予約開始', initStart, '日後から');
       const durationRow = createInputRow('予約可能期間', initDuration, '日間', 60);
       
@@ -1485,6 +1508,17 @@ window.ShinryoApp = window.ShinryoApp || {};
       noteDiv.innerHTML = `<strong>予約開始：</strong>本日を0日目として、何日後から予約を受け付けるかを設定（休診日はカウント除外）<br><span style="color:#888; margin-left:1em;">例：本日が金曜日である場合に3を指定すると、日曜日が休診日なので予約開始は火曜日からとなる）</span><br><strong>予約可能期間：</strong>予約開始日から何日先までを予約可能にするかを設定(休診日もカウントする）`;
       box.appendChild(noteDiv);
 
+      // ★追加: 変更検知関数
+      const checkChanges = () => {
+          if (!saveBtn) return;
+          const isCommonNow = switchInput.checked;
+          const startNow = startRow.querySelector('input').value;
+          const durationNow = durationRow.querySelector('input').value;
+
+          const isDirty = (isCommonNow !== initialIsCommon) || (!isCommonNow && (startNow !== initialStartValue || durationNow !== initialDurationValue));
+          saveBtn.style.display = isDirty ? 'inline-block' : 'none';
+      };
+
       // スイッチ切り替え時の制御
       const toggleInputs = () => {
           const isCommon = switchInput.checked;
@@ -1501,9 +1535,14 @@ window.ShinryoApp = window.ShinryoApp || {};
               startRow.querySelector('input').value = currentSetting.start ?? '';
               durationRow.querySelector('input').value = currentSetting.duration ?? '';
           }
+          checkChanges(); // ★追加
       };
       switchInput.onchange = toggleInputs;
       toggleInputs(); // 初期状態適用
+
+      // ★追加: 入力フィールドの変更を検知
+      startRow.querySelector('input').addEventListener('input', checkChanges);
+      durationRow.querySelector('input').addEventListener('input', checkChanges);
 
       const btnGroup = document.createElement('div');
       btnGroup.className = 'custom-modal-btn-group';
@@ -1514,9 +1553,11 @@ window.ShinryoApp = window.ShinryoApp || {};
       cancelBtn.textContent = 'キャンセル';
       cancelBtn.onclick = () => document.body.removeChild(overlay);
 
-      const saveBtn = document.createElement('button');
+      saveBtn = document.createElement('button'); // ★変更
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
+      saveBtn.style.display = 'none'; // ★追加: 初期非表示
+
       saveBtn.onclick = async () => {
           if (!switchInput.checked) {
               const newDuration = durationRow.querySelector('input').value;
@@ -1655,12 +1696,13 @@ window.ShinryoApp = window.ShinryoApp || {};
       const saveBtn = document.createElement('button');
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
+      saveBtn.style.display = 'none';
       saveBtn.onclick = async () => {
           const html = quill.root.innerHTML;
           let setting = 'both';
           if (radioGroup) {
               const selectedRadio = radioGroup.querySelector('input:checked');
-              setting = selectedRadio ? selectedRadio.value : 'both';
+              if (selectedRadio) setting = selectedRadio.value;
           }
 
           document.body.removeChild(overlay);
@@ -1698,7 +1740,32 @@ window.ShinryoApp = window.ShinryoApp || {};
               ]
           }
       });
+      
       quill.root.innerHTML = currentHtml || '';
+
+      let initialHtml = quill.root.innerHTML;
+      const initialSetting = currentSetting || 'both';
+
+      const checkChanges = () => {
+          const currentContent = quill.root.innerHTML;
+          let currentSet = 'both';
+          if (radioGroup) {
+              const selected = radioGroup.querySelector('input:checked');
+              if (selected) currentSet = selected.value;
+          }
+          saveBtn.style.display = (currentContent !== initialHtml || currentSet !== initialSetting) ? 'inline-block' : 'none';
+      };
+
+      // ★追加: QuillのHTML正規化完了を待ってから初期値を確定させる (誤検知防止)
+      setTimeout(() => {
+          initialHtml = quill.root.innerHTML;
+          checkChanges();
+      }, 100);
+
+      quill.on('text-change', checkChanges);
+      if (radioGroup) {
+          radioGroup.querySelectorAll('input').forEach(r => r.onchange = checkChanges);
+      }
   }
 
   // モーダルベース作成ヘルパー (既存のcreateModalBaseがない場合に備えて簡易版、あればViewModeSwitcherのものを使うが、ここはViewer内なので独自定義)

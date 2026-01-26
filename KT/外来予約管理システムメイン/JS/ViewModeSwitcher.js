@@ -144,6 +144,20 @@
         .label-today { background-color: #28a745; color: white; }
         .label-limit { background-color: #7f7908bb; color: white; }
 
+        /* 点滅アニメーション */
+        @keyframes btn-blink-anim {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .btn-blink { animation: btn-blink-anim 0.5s infinite ease-in-out; }
+        .btn-disabled {
+            background-color: #cccccc !important;
+            color: #ffffff !important;
+            cursor: not-allowed !important;
+            pointer-events: none !important;
+            box-shadow: none !important;
+        }
       `;
       const style = document.createElement('style');
       style.id = INITIAL_HIDE_STYLE_ID;
@@ -221,76 +235,31 @@
         div.id = 'mode-switch-container';
         div.style.display = 'flex';
         div.style.alignItems = 'center';
+        div.style.flexWrap = 'wrap'; // ★追加: 画面幅が狭い場合に折り返す
         
+        let btnUpdate = null;
+
         if (viewMode === 'overview') {
             const titleContainer = document.createElement('div');
             titleContainer.className = 'overview-title-container';
 
-            // 更新通知ボタン (初期非表示)
-            const btnUpdate = document.createElement('button');
-            btnUpdate.className = 'btn-update-available';
-            btnUpdate.textContent = '更新があります';
-            btnUpdate.style.display = 'none';
-            titleContainer.appendChild(btnUpdate);
-
-            // ★変更: 歯車ボタンを廃止し、メインメニューボタンを右側に配置
-            const btnMainMenu = document.createElement('button');
-            btnMainMenu.className = 'mode-switch-btn';
-            btnMainMenu.textContent = 'Dashboard';
-            btnMainMenu.style.backgroundColor = '#28a745'; // ★変更: 緑色
-            btnMainMenu.style.position = 'absolute';
-            btnMainMenu.style.right = '20px';
-            btnMainMenu.style.top = '50%';
-            btnMainMenu.style.transform = 'translateY(-50%)';
-            btnMainMenu.style.marginLeft = '0';
-            btnMainMenu.style.marginTop = '5px'; // ★追加: 位置調整
-            btnMainMenu.style.zIndex = '10';
-            btnMainMenu.onclick = () => location.href = '?view_mode=dashboard';
-            div.appendChild(btnMainMenu);
             // ★変更: 全体編集ボタンを右側に配置
             const btnDetail = document.createElement('button');
             btnDetail.className = 'mode-switch-btn btn-to-detail';
-            btnDetail.textContent = '全医師リスト';
+            btnDetail.textContent = '全医師';
             btnDetail.style.position = 'absolute';
             btnDetail.style.right = '20px';
             btnDetail.style.top = '50%';
             btnDetail.style.transform = 'translateY(-50%)';
             btnDetail.style.marginLeft = '0';
-            btnDetail.style.marginTop = '5px';
+            btnDetail.style.marginTop = '0';
             btnDetail.style.zIndex = '10';
+            btnDetail.style.height = '40px';
+            btnDetail.style.width = '100px';
+            btnDetail.style.backgroundColor = '#369';
+            btnDetail.style.fontSize = '18px';
             btnDetail.onclick = () => location.href = '?view_mode=input';
             div.appendChild(btnDetail);
-
-            // 更新チェックロジック
-            if (window.ShinryoApp.ConfigManager) {
-                const checkUpdates = async () => {
-                    try {
-                        const records = await fetchAllRecords(kintone.app.getId());
-                        await window.ShinryoApp.ConfigManager.fetchPublishedData();
-                        
-                        const lastTime = window.ShinryoApp.ConfigManager.getStorageStatus().lastPublishedAt;
-
-                        const hasDiff = window.ShinryoApp.ConfigManager.hasUnsavedChanges(records);
-                        const isOld = window.ShinryoApp.ConfigManager.isOldFormat ? window.ShinryoApp.ConfigManager.isOldFormat() : false;
-                        btnUpdate.style.display = (hasDiff || isOld) ? 'block' : 'none';
-                    } catch (e) {
-                        console.error('Update check failed:', e);
-                    }
-                };
-                checkUpdates();
-
-                btnUpdate.onclick = async () => {
-                    const confirmed = await showCustomDialog(
-                        '表の点滅している個所で情報が更新されています。\n今すぐ予約フォームに公開しますか？', 
-                        'confirm', 
-                        { ok: '公開する', cancel: 'しない' }
-                    );
-                    if (confirmed) {
-                        await executePublish();
-                    }
-                };
-            }
-
             div.appendChild(titleContainer);
         }
 
@@ -367,20 +336,191 @@
              btnMainMenu.className = 'mode-switch-btn';
              btnMainMenu.textContent = 'Dashboard';
              btnMainMenu.style.backgroundColor = '#28a745';
+             btnMainMenu.style.marginTop = '0';
+             btnMainMenu.style.whiteSpace = 'nowrap'; // ★追加: 折り返し禁止
+             btnMainMenu.style.flexShrink = '0'; // ★追加: 縮小禁止
              btnMainMenu.onclick = () => location.href = '?view_mode=dashboard';
              div.appendChild(btnMainMenu);
 
              const btnHoliday = document.createElement('button');
              btnHoliday.className = 'mode-switch-btn';
-             btnHoliday.textContent = '予約待受期間・休診日設定';
+             btnHoliday.textContent = '予約待受期間・休診日';
+             btnHoliday.style.marginTop = '0';
+             btnHoliday.style.marginLeft = '10px';
+             btnHoliday.style.whiteSpace = 'nowrap'; // ★追加: 折り返し禁止
+             btnHoliday.style.flexShrink = '0'; // ★追加: 縮小禁止
              btnHoliday.onclick = () => showHolidaySettingDialog();
              div.appendChild(btnHoliday);
 
              const btnFormLabel = document.createElement('button');
              btnFormLabel.className = 'mode-switch-btn';
-             btnFormLabel.textContent = 'フォーム挿入ラベル管理';
+             btnFormLabel.textContent = 'フォーム挿入ラベル';
+             btnFormLabel.style.marginTop = '0';
+             btnFormLabel.style.marginLeft = '10px';
+             btnFormLabel.style.whiteSpace = 'nowrap'; // ★追加: 折り返し禁止
+             btnFormLabel.style.flexShrink = '0'; // ★追加: 縮小禁止
              btnFormLabel.onclick = () => showFormLabelMenu();
              div.appendChild(btnFormLabel);
+
+             // --- 公開フロー用コンテナ (枠線付き) ---
+             const flowContainer = document.createElement('div');
+             flowContainer.style.cssText = 'display: flex; align-items: center; border: 2px solid #ddd; border-radius: 8px; padding: 8px 15px; margin-left: 10px; background-color: #eee; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 25px;';
+
+             const btnPreview = document.createElement('button');
+             btnPreview.className = 'mode-switch-btn';
+             btnPreview.textContent = 'プレビュー';
+             btnPreview.style.backgroundColor = '#e74c3c';
+             btnPreview.style.marginLeft = '0';
+             btnPreview.style.height = '30px';
+             btnPreview.style.marginTop = '0';
+             btnPreview.style.whiteSpace = 'nowrap'; // ★追加: 折り返し禁止
+             btnPreview.style.flexShrink = '0'; // ★追加: 縮小禁止
+             btnPreview.onclick = () => {
+                 const formUrl = localStorage.getItem('shinryo_form_url');
+                 if (formUrl) {
+                     const url = new URL(formUrl);
+                     url.searchParams.set('preview', '1');
+                     window.open(url.toString(), '_blank');
+                 } else {
+                     alert('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
+                 }
+             };
+             flowContainer.appendChild(btnPreview);
+
+             // ★追加: 中止ボタン (左向き矢印)
+             const btnRevert = document.createElement('button');
+             btnRevert.textContent = '中止';
+             btnRevert.style.cssText = `
+                 background-color: #6c757d;
+                 color: white;
+                 border: none;
+                 padding: 0 5px;
+                 height: 30px;
+                 line-height: 30px;
+                 cursor: pointer;
+                 font-weight: bold;
+                 font-size: 12px;
+                 position: relative;
+                 border-radius: 15px;
+                 transition: background-color 0.2s;
+                 width: 40px;
+                 white-space: nowrap;
+                 flex-shrink: 0;
+                 margin-top: 0;
+             `;
+             btnRevert.onmouseover = () => btnRevert.style.backgroundColor = '#5a6268';
+             btnRevert.onmouseout = () => btnRevert.style.backgroundColor = '#6c757d';
+             btnRevert.onclick = async () => {
+                  const confirmed = await showCustomDialog(
+                      '現在の編集内容（プレビュー環境）を破棄し、公開中の設定（本番環境）に戻しますか？\nこの操作は取り消せません。', 
+                      'confirm', 
+                      { ok: '中止して戻す', cancel: 'キャンセル' }
+                  );
+                  if (confirmed) {
+                      try {
+                          await window.ShinryoApp.ConfigManager.revertFromProduction();
+                          await showCustomDialog('設定を公開中の状態に戻しました。', 'alert');
+                          location.reload();
+                      } catch(e) {
+                          await showCustomDialog('処理に失敗しました。\n' + e.message, 'alert');
+                      }
+                  }
+             };
+             flowContainer.appendChild(btnRevert);
+
+             const btnPublish = document.createElement('button');
+             btnPublish.textContent = '公開'; // ★変更: 名称変更
+             btnPublish.style.cssText = `
+                 background-color: #28a745;
+                 color: white;
+                 border: none;
+                 padding: 0 5px;
+                 height: 30px;
+                 line-height: 30px;
+                 cursor: pointer;
+                 font-weight: bold;
+                 font-size: 12px;
+                 position: relative;
+                 border-radius: 15px;
+                 transition: background-color 0.2s;
+                 width: 40px;
+                 white-space: nowrap;
+                 flex-shrink: 0;
+                 margin-top: 0;
+             `;
+             btnPublish.onmouseover = () => btnPublish.style.backgroundColor = '#218838';
+             btnPublish.onmouseout = () => btnPublish.style.backgroundColor = '#28a745';
+             btnPublish.onclick = async () => {
+                  const confirmed = await showCustomDialog(
+                      '現在の設定を予約フォームに公開しますか？', 
+                      'confirm', 
+                      { ok: '公開する', cancel: 'キャンセル' }
+                  );
+                  if (confirmed) {
+                      await executePublish();
+                  }
+             };
+             flowContainer.appendChild(btnPublish);
+
+             const btnPublicView = document.createElement('button');
+             btnPublicView.className = 'mode-switch-btn';
+             btnPublicView.textContent = '公開中フォーム';
+             btnPublicView.style.backgroundColor = '#499';
+             btnPublicView.style.marginLeft = '10px';
+             btnPublicView.style.height = '40px';
+             btnPublicView.style.marginTop = '0';
+             btnPublicView.style.whiteSpace = 'nowrap'; // ★追加: 折り返し禁止
+             btnPublicView.style.flexShrink = '0'; // ★追加: 縮小禁止
+             btnPublicView.onclick = () => {
+                 const currentUrl = localStorage.getItem('shinryo_form_url');
+                 if (currentUrl) window.open(currentUrl, '_blank');
+                 else alert('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
+             };
+
+             div.appendChild(btnPublicView);
+             div.appendChild(flowContainer);
+
+
+             // 更新チェックロジック (ボタン生成後に移動)
+             if (window.ShinryoApp.ConfigManager) {
+                const checkUpdates = async () => {
+                    try {
+                        const records = await fetchAllRecords(kintone.app.getId());
+                        
+                        // ★追加: 保存前にソートして順序を安定させる (executePublishと同様)
+                        records.sort((a, b) => {
+                            const oa = parseInt(a['表示順']?.value || 9999, 10);
+                            const ob = parseInt(b['表示順']?.value || 9999, 10);
+                            if (oa !== ob) return oa - ob;
+                            return parseInt(a.$id.value, 10) - parseInt(b.$id.value, 10);
+                        });
+
+                        await window.ShinryoApp.ConfigManager.fetchPublishedData();
+                        
+                        // 2. 本番環境との差分チェック (Preview/Publishボタン用)
+                        const hasProdDiff = window.ShinryoApp.ConfigManager.hasProductionDiff();
+                        if (hasProdDiff) {
+                            // 差分あり: 点滅させる (公開ボタンは点滅させない)
+                            // btnPreview.classList.add('btn-blink');
+                            // btnPublish.classList.add('btn-blink'); // ★変更: 点滅停止
+                            btnPreview.classList.remove('btn-disabled');
+                            btnPublish.classList.remove('btn-disabled');
+                            btnRevert.classList.remove('btn-disabled'); // ★追加: 中止ボタン有効化
+                        } else {
+                            // 差分なし: グレーアウトして操作不可
+                            btnPreview.classList.remove('btn-blink');
+                            // btnPublish.classList.remove('btn-blink');
+                            btnPreview.classList.add('btn-disabled');
+                            btnPublish.classList.add('btn-disabled');
+                            btnRevert.classList.add('btn-disabled'); // ★追加: 中止ボタン無効化
+                        }
+
+                    } catch (e) {
+                        console.error('Update check failed:', e);
+                    }
+                };
+                checkUpdates();
+            }
         }
 
         if(headerMenu.firstChild) {
@@ -543,17 +683,6 @@
           { title: '各種システム設定', icon: '🔐', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
       ];
 
-      // 外来予約フォームを開くボタンをカードに追加
-      const formUrl = localStorage.getItem('shinryo_form_url');
-      if (formUrl) {
-          cards.splice(2, 0, { // 3番目に挿入
-              title: '外来予約フォーム', 
-              icon: '🖥️', 
-              action: () => window.open(formUrl, '_blank'), 
-              desc: '外来患者がアクセスするフォームを表示します' 
-          });
-      }
-
       cards.forEach(c => {
           const card = document.createElement('div');
           card.className = 'dashboard-card';
@@ -594,6 +723,7 @@
           card.appendChild(icon);
           card.appendChild(label);
           card.appendChild(desc);
+
           container.appendChild(card);
       });
 
@@ -660,57 +790,6 @@
       }
   }
 
-  async function showSettingsMenu(skipWarning = false) {
-      if (!skipWarning) {
-          // ★追加: 警告ダイアログ
-          const confirmed = await showCustomDialog(
-              '【重要】設定変更の注意\n\n他のスタッフがシステムを利用中に設定を変更すると、データの競合や消失が発生する可能性があります。設定変更は、診療時間外など他の利用者がいない時間帯に行ってください。\n\n設定メニューを開きますか？',
-              'confirm',
-              { ok: '開く', cancel: 'キャンセル' }
-          );
-          if (!confirmed) return;
-      }
-
-      const { overlay, box, content } = createModalBase();
-      
-      const title = document.createElement('h2');
-      title.textContent = 'システム設定';
-      title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
-      content.appendChild(title);
-
-      const menuList = [
-          { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
-          { label: 'システム管理者', icon: '🔐', desc: '各種システム設定', action: () => { document.body.removeChild(overlay); showAdminPasswordDialog(); } },
-          { label: '予約センター登録', icon: '🏥', desc: 'センター名や管轄施設の設定を行います', action: () => { document.body.removeChild(overlay); showCenterRegistrationMenu(); } },
-          { label: '予約待受期間設定', icon: '📅', desc: '休診日や予約受付期間の設定を行います', action: () => { document.body.removeChild(overlay); showHolidaySettingDialog(); } },
-          { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
-          { label: 'システム管理者', icon: '🔐', desc: 'システム管理者専用の設定（パスワードが必要）', action: () => { document.body.removeChild(overlay); showAdminPasswordDialog(); } },
-          // 必要に応じてメニューを追加
-      ];
-
-      menuList.forEach(item => {
-          const btn = document.createElement('button');
-          btn.className = 'custom-modal-menu-btn';
-          btn.innerHTML = `
-            <div class="menu-btn-icon">${item.icon}</div>
-            <div class="menu-btn-content">
-                <div class="menu-btn-title">${item.label}</div>
-                <div class="menu-btn-desc">${item.desc}</div>
-            </div>
-          `;
-          btn.onclick = item.action;
-          content.appendChild(btn);
-      });
-
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-      closeBtn.textContent = '終了';
-      closeBtn.onclick = () => document.body.removeChild(overlay);
-      content.appendChild(closeBtn);
-
-      document.body.appendChild(overlay);
-  }
-
   // ★追加: 管理者認証ダイアログ
   async function showAdminPasswordDialog() {
       const { overlay, box, content } = createModalBase();
@@ -737,7 +816,6 @@
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       cancelBtn.textContent = 'キャンセル';
-      cancelBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
       cancelBtn.onclick = () => { document.body.removeChild(overlay); };
 
       const okBtn = document.createElement('button');
@@ -772,7 +850,6 @@
       content.appendChild(title);
 
       const menuList = [
-          { label: '予約チケット管理アプリ設定', icon: '🎫', desc: '連携アプリ番号やメール通知設定を行います', action: () => { document.body.removeChild(overlay); showTicketAppSettingDialog(); } },
           { label: 'メールサーバー設定', icon: '🖥️', desc: 'SMTPサーバー・認証情報の設定を行います', action: () => { document.body.removeChild(overlay); showMailServerSettingDialog(); } },
           { label: 'アプリ連携設定', icon: '🔗', desc: '連携するKintoneアプリ番号の設定を行います', action: () => { document.body.removeChild(overlay); showAppIdSettingDialog(); } },
           { label: '各種URL設定', icon: '🌐', desc: 'フォームURLやロゴ画像URLなどを管理します', action: () => { document.body.removeChild(overlay); showUrlSettingDialog(); } },
@@ -795,9 +872,8 @@
 
       const backBtn = document.createElement('button');
       backBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-      backBtn.textContent = '戻る';
+      backBtn.textContent = '閉じる';
       backBtn.style.marginTop = '15px';
-      backBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
       backBtn.onclick = () => { document.body.removeChild(overlay); };
       content.appendChild(backBtn);
 
@@ -956,6 +1032,8 @@
       const saveBtn = document.createElement('button');
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
+      saveBtn.style.display = 'none'; // ★変更: 初期状態は非表示
+
       saveBtn.onclick = () => {
           Object.keys(inputRefs).forEach(key => {
               config[key] = inputRefs[key].value;
@@ -1065,287 +1143,10 @@
 
       const closeBtn = document.createElement('button');
       closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-      closeBtn.textContent = '戻る';
+      closeBtn.textContent = '閉じる';
       closeBtn.style.marginTop = '15px';
-      closeBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
-      closeBtn.onclick = () => { document.body.removeChild(overlay); showAdminMenu(); };
+      closeBtn.onclick = () => { document.body.removeChild(overlay); };
       content.appendChild(closeBtn);
-
-      document.body.appendChild(overlay);
-  }
-
-  async function showTicketAppSettingDialog() {
-      const { overlay, box, content, setOnCloseRequest } = createModalBase(); // メニュー画面はDirtyCheckなし
-      box.style.maxWidth = '500px';
-      box.style.maxHeight = '90vh';
-      box.style.overflowY = 'auto';
-      
-      // 設定値の読み込み
-      let config = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
-      
-      // スタッフ情報の読み込み（共通設定から）
-      let staffList = [];
-      if (window.ShinryoApp.ConfigManager) {
-          const pubData = await window.ShinryoApp.ConfigManager.fetchPublishedData();
-          if (pubData && pubData.commonSettings && Array.isArray(pubData.commonSettings.staffs)) {
-              staffList = pubData.commonSettings.staffs;
-          }
-      }
-
-      // 共通スタイル
-      const titleStyle = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700; text-align: center;';
-
-      // --- 画面描画関数 ---
-
-      // メインメニュー
-      const renderMenu = () => {
-          setOnCloseRequest(null); // メニューではDirtyCheck不要
-          content.innerHTML = '';
-          const title = document.createElement('h2');
-          title.textContent = '予約チケット管理アプリ設定';
-          title.style.cssText = titleStyle;
-          content.appendChild(title);
-
-          const menuList = [
-              { label: 'メール設定', icon: '✉️', desc: 'BCC・リマインド設定', action: () => renderMailMenu() },
-              { label: '未読警告設定', icon: '⚠️', desc: 'アラート時間の閾値設定', action: () => renderAlertSettings() }
-          ];
-
-          menuList.forEach(item => {
-              const btn = document.createElement('button');
-              btn.className = 'custom-modal-menu-btn';
-              btn.innerHTML = `
-                <div class="menu-btn-icon">${item.icon}</div>
-                <div class="menu-btn-content">
-                    <div class="menu-btn-title">${item.label}</div>
-                    <div class="menu-btn-desc">${item.desc}</div>
-                </div>
-              `;
-              btn.onclick = item.action;
-              content.appendChild(btn);
-          });
-
-          const closeBtn = document.createElement('button');
-          closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-          closeBtn.textContent = '閉じる';
-          closeBtn.style.marginTop = '20px';
-          closeBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
-          content.appendChild(closeBtn);
-      };
-
-      // メール設定サブメニュー
-      const renderMailMenu = () => {
-          setOnCloseRequest(null);
-          content.innerHTML = '';
-          const title = document.createElement('h2');
-          title.textContent = 'メール設定';
-          title.style.cssText = titleStyle;
-          content.appendChild(title);
-
-          const menuList = [
-              { label: 'BCC設定', icon: '📬', desc: 'BCC の設定', action: () => renderMailDestSettings() },
-              { label: '予約日リマインド設定', icon: '⏰', desc: 'リマインドメールの送信設定', action: () => renderReminderSettings() }
-          ];
-
-          menuList.forEach(item => {
-              const btn = document.createElement('button');
-              btn.className = 'custom-modal-menu-btn';
-              btn.innerHTML = `
-                <div class="menu-btn-icon">${item.icon}</div>
-                <div class="menu-btn-content">
-                    <div class="menu-btn-title">${item.label}</div>
-                    <div class="menu-btn-desc">${item.desc}</div>
-                </div>
-              `;
-              btn.onclick = item.action;
-              content.appendChild(btn);
-          });
-
-          const backBtn = document.createElement('button');
-          backBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-          backBtn.textContent = '戻る';
-          backBtn.style.marginTop = '20px';
-          backBtn.onclick = () => renderMenu();
-          content.appendChild(backBtn);
-      };
-
-      // フォーム描画ヘルパー
-      const renderForm = (titleText, inputsDef, onSave, backAction = null) => {
-          content.innerHTML = '';
-          const title = document.createElement('h2');
-          title.textContent = titleText;
-          title.style.cssText = titleStyle;
-          content.appendChild(title);
-
-          const inputEls = {};
-          const initialValues = {};
-
-          inputsDef.forEach(def => {
-              let val = config[def.key] || '';
-              if (def.fallbackKey && !val) val = config[def.fallbackKey] || '';
-              if (def.default && !val) val = def.default;
-              initialValues[def.key] = val;
-          });
-
-          inputsDef.forEach(def => {
-              const div = document.createElement('div');
-              div.style.marginBottom = '15px';
-              div.style.textAlign = 'left';
-              
-              const lbl = document.createElement('label');
-              lbl.textContent = def.label;
-              lbl.style.display = 'block';
-              lbl.style.fontSize = '12px';
-              lbl.style.fontWeight = 'bold';
-              lbl.style.marginBottom = '4px';
-              div.appendChild(lbl);
-
-              let inp;
-              if (def.type === 'select') {
-                  inp = document.createElement('select');
-                  inp.className = 'custom-modal-input';
-                  inp.style.marginBottom = '0';
-                  def.options.forEach(opt => {
-                      const o = document.createElement('option');
-                      o.value = opt;
-                      o.textContent = opt;
-                      if (opt === initialValues[def.key]) o.selected = true;
-                      inp.appendChild(o);
-                  });
-              } else if (def.type === 'textarea') {
-                  inp = document.createElement('textarea');
-                  inp.className = 'custom-modal-input';
-                  inp.style.marginBottom = '0';
-                  inp.style.height = '100px';
-                  inp.style.resize = 'vertical';
-                  inp.style.fontFamily = 'monospace';
-                  inp.value = initialValues[def.key];
-                  if (def.placeholder) inp.placeholder = def.placeholder;
-              } else {
-                  inp = document.createElement('input');
-                  inp.className = 'custom-modal-input';
-                  inp.style.marginBottom = '0';
-                  inp.type = def.type || 'text';
-                  inp.value = initialValues[def.key];
-                  if (def.placeholder) inp.placeholder = def.placeholder;
-              }
-              inputEls[def.key] = inp;
-              div.appendChild(inp);
-              content.appendChild(div);
-          });
-
-          const checkDirty = (action) => {
-              let isDirty = false;
-              Object.keys(inputEls).forEach(key => {
-                  if (inputEls[key].value != initialValues[key]) isDirty = true;
-              });
-              checkDirtyAndConfirm(isDirty, action);
-          };
-          setOnCloseRequest((doClose) => checkDirty(doClose));
-
-          const btnGroup = document.createElement('div');
-          btnGroup.className = 'custom-modal-btn-group';
-          btnGroup.style.marginTop = '20px';
-
-          const cancelBtn = document.createElement('button');
-          cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-          cancelBtn.textContent = 'キャンセル';
-          cancelBtn.onclick = () => checkDirty(() => backAction ? backAction() : renderMenu());
-
-          const saveBtn = document.createElement('button');
-          saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
-          saveBtn.textContent = '保存';
-          saveBtn.onclick = () => {
-              const newValues = {};
-              Object.keys(inputEls).forEach(key => {
-                  newValues[key] = inputEls[key].value;
-              });
-              
-              if (onSave(newValues)) {
-                  config = { ...config, ...newValues };
-                  localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
-                  backAction ? backAction() : renderMenu();
-              }
-          };
-
-          btnGroup.appendChild(cancelBtn);
-          btnGroup.appendChild(saveBtn);
-          content.appendChild(btnGroup);
-      };
-
-      const renderMailDestSettings = () => {
-          renderForm('BCC設定', [
-              { label: 'BCC', key: 'mailBcc', placeholder: '例: bcc@example.com' }
-          ], () => true, renderMailMenu);
-      };
-
-      const renderAlertSettings = () => {
-          renderForm('未読警告設定', [
-              { label: 'Yellow警告 (時間)', key: 'alertYellow', type: 'number' },
-              { label: 'Red警告 (時間)', key: 'alertRed', type: 'number' }
-          ], (vals) => {
-              const y = parseFloat(vals.alertYellow) || 0;
-              const r = parseFloat(vals.alertRed) || 0;
-              if (y >= r && r !== 0) {
-                  alert('Yellow警告の時間はRed警告より短く設定してください。');
-                  return false;
-              }
-              return true;
-          });
-      };
-
-      const renderReminderSettings = () => {
-          // スタッフ選択肢の作成
-          const staffOptions = ['(選択なし)', ...staffList.map(s => s.name)];
-          
-          const inputs = [
-              { label: '送信タイミング (日前)', key: 'reminderDays', type: 'number', placeholder: '例: 1 (前日)' },
-              { label: '送信時間', key: 'reminderTime', type: 'time' },
-              { label: '担当スタッフ (署名用)', key: 'reminderStaffName', type: 'select', options: staffOptions, default: '(選択なし)' },
-              { label: '件名', key: 'reminderSubject', placeholder: '【リマインド】明日のご予約について' },
-              { label: '本文', key: 'reminderBody', type: 'textarea', placeholder: '{{name}} 様\n\n明日のご予約の日時をお知らせします。\n日時: {{date}} {{time}}\n診療科: {{dept}}\n担当医: {{doctor}}\n\n担当: {{staff_name}} ({{staff_email}})\nご来院をお待ちしております。' }
-          ];
-
-          renderForm('予約日リマインド設定', inputs, (vals) => {
-              // スタッフ名が選択されたら、そのEmailも自動保存しておく（送信時に使うため）
-              if (vals.reminderStaffName && vals.reminderStaffName !== '(選択なし)') {
-                  const targetStaff = staffList.find(s => s.name === vals.reminderStaffName);
-                  if (targetStaff) {
-                      config.reminderStaffEmail = targetStaff.email || '';
-                  }
-              } else {
-                  config.reminderStaffEmail = '';
-              }
-              // configオブジェクトはrenderForm内で更新されるが、ここでも念のため更新
-              localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
-              return true;
-          }, renderMailMenu);
-
-          // 注釈の追加
-          const note = document.createElement('div');
-          note.style.fontSize = '11px';
-          note.style.color = '#666';
-          note.style.textAlign = 'left';
-          note.style.marginTop = '-10px';
-          note.style.marginBottom = '15px';
-          note.style.padding = '10px';
-          note.style.backgroundColor = '#f8f9fa';
-          note.style.borderRadius = '4px';
-          note.innerHTML = `
-            <strong>利用可能な差し込みタグ:</strong><br>
-            {{name}}: 患者名, {{date}}: 予約日, {{time}}: 予約時間<br>
-            {{dept}}: 診療科, {{doctor}}: 医師名<br>
-            {{staff_name}}: 担当スタッフ名, {{staff_email}}: スタッフEmail
-          `;
-          
-          // ボタン群の前に挿入したいので、boxの最後の子要素（ボタン群）の前に追加
-          const btnGroup = content.querySelector('.custom-modal-btn-group');
-          if (btnGroup) {
-              content.insertBefore(note, btnGroup);
-          }
-      };
-
-      renderMenu();
 
       document.body.appendChild(overlay);
   }
@@ -1411,7 +1212,6 @@
           createInput('ふれあいGpロゴURL', 'groupLogoUrl'),
           createInput('診察券サンプルURL', 'ticketSampleUrl'),
           createInput('公開用 外来予約フォームURL', 'shinryo_form_url'),
-          createInput('プレビュー用 外来予約フォームURL', 'previewFormUrl'),
           createInput('既読確定URL', 'readConfirmUrl')
       ];
 
@@ -1833,6 +1633,13 @@
           }
       }
 
+      // ★追加: 変更検知用の初期値保存
+      const initialHolidays = new Set(currentHolidays);
+      const initialExceptions = new Set(currentExceptions);
+      const initialCloseSaturdays = closeSaturdays;
+      const initialStart = currentStart;
+      const initialDuration = currentDuration;
+
       // UIコンテナ
       const controlsContainer = document.createElement('div');
       controlsContainer.style.marginBottom = '15px';
@@ -1904,6 +1711,31 @@
       controlsContainer.appendChild(termContainer);
       // ---------------------------
 
+      // ★追加: 保存ボタン参照と変更検知関数
+      let saveBtnElement = null;
+      const checkChanges = () => {
+          if (!saveBtnElement) return;
+          let isChanged = false;
+
+          if (satInput.checked !== initialCloseSaturdays) isChanged = true;
+          if (String(startInputObj.inp.value) !== String(initialStart)) isChanged = true;
+          if (String(durationInputObj.inp.value) !== String(initialDuration)) isChanged = true;
+
+          if (!isChanged) {
+              if (currentHolidays.size !== initialHolidays.size) isChanged = true;
+              else {
+                  for (const d of currentHolidays) if (!initialHolidays.has(d)) { isChanged = true; break; }
+              }
+          }
+          if (!isChanged) {
+              if (currentExceptions.size !== initialExceptions.size) isChanged = true;
+              else {
+                  for (const d of currentExceptions) if (!initialExceptions.has(d)) { isChanged = true; break; }
+              }
+          }
+          saveBtnElement.style.display = isChanged ? 'inline-block' : 'none';
+      };
+
       box.appendChild(controlsContainer);
 
       const thisYear = new Date().getFullYear();
@@ -1964,6 +1796,7 @@
                   const eToRemove = Array.from(currentExceptions).filter(d => d.startsWith(prefix));
                   eToRemove.forEach(d => currentExceptions.delete(d));
                   renderCalendar(year, container);
+                  checkChanges();
               }
           };
           headerActions.appendChild(resetBtn);
@@ -2122,6 +1955,7 @@
                           if (currentExceptions.has(dateStr)) currentExceptions.delete(dateStr);
                       }
                       updateStyle();
+                      checkChanges();
                   };
                   calTable.appendChild(cell);
               }
@@ -2144,6 +1978,7 @@
           // 現在表示中のカレンダーを再描画してスタイル更新
           const activeTab = Array.from(tabContainer.children).find(t => t.style.fontWeight === 'bold');
           if (activeTab) activeTab.click();
+          checkChanges();
       };
 
       // イベントリスナー設定
@@ -2195,12 +2030,13 @@
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       cancelBtn.textContent = 'キャンセル';
-      cancelBtn.onclick = () => { document.body.removeChild(overlay); showSettingsMenu(true); };
       cancelBtn.onclick = () => { document.body.removeChild(overlay); };
 
       const saveBtn = document.createElement('button');
+      saveBtnElement = saveBtn;
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
+      saveBtn.style.display = 'none';
       saveBtn.onclick = async () => {
           const newStart = startInputObj.inp.value.trim();
           const newDuration = durationInputObj.inp.value.trim();
@@ -2225,9 +2061,7 @@
               await window.ShinryoApp.ConfigManager.updateCommonCalendarSettings(sortedHolidays, sortedExceptions, satInput.checked, newStart, newDuration);
               await showCustomDialog('設定を保存しました。', 'alert');
               // 画面更新
-              if (window.ShinryoApp.Viewer && window.ShinryoApp.Viewer.renderOverview) {
-                  window.ShinryoApp.Viewer.renderOverview();
-              }
+              location.reload(); // ★変更: リロード
           } catch(e) {
               await showCustomDialog('保存に失敗しました。', 'alert');
           }
@@ -2373,6 +2207,10 @@
         const descriptions = publishedData.descriptions || {};
         
         await window.ShinryoApp.ConfigManager.saveConfig(records, descriptions);
+        
+        // ★追加: 本番環境へ反映 (設定情報2 -> 設定情報)
+        await window.ShinryoApp.ConfigManager.deployToProduction();
+
         await showCustomDialog('設定を公開しました。', 'alert');
         location.reload();
     } catch (e) {
@@ -2738,7 +2576,9 @@
 
   // ★追加: フォーム挿入ラベル管理メニュー
   async function showFormLabelMenu() {
-      const { overlay, box, content } = createModalBase();
+      const { overlay, box, content, setOnCloseRequest } = createModalBase();
+      
+      let hasChanges = false;
       
       // モーダルボックスのスタイル調整 (サイドバーレイアウト用)
       box.style.maxWidth = '1100px';
@@ -2821,41 +2661,17 @@
       const closeBtn = document.createElement('button');
       closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
       closeBtn.textContent = '閉じる';
-      closeBtn.onclick = () => document.body.removeChild(overlay);
-
-      const previewBtn = document.createElement('button');
-      previewBtn.className = 'custom-modal-btn custom-modal-btn-ok';
-      previewBtn.textContent = 'フォームプレビューを開く';
-      previewBtn.style.backgroundColor = '#e67e22';
-      previewBtn.onclick = () => {
-          const urlConfig = JSON.parse(localStorage.getItem('shinryo_url_config') || '{}');
-          const previewUrl = urlConfig.previewFormUrl;
-          if (previewUrl) window.open(previewUrl, '_blank');
-          else alert('プレビュー用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
-      };
-      const publishBtn = document.createElement('button');
-      publishBtn.className = 'custom-modal-btn custom-modal-btn-ok';
-      publishBtn.textContent = '公開する';
-      publishBtn.style.backgroundColor = '#28a745';
-      publishBtn.style.marginLeft = '10px';
-      publishBtn.onclick = async () => {
-          const confirmed = await showCustomDialog(
-              '現在の設定を予約フォームに公開しますか？', 
-              'confirm', 
-              { ok: '公開する', cancel: 'キャンセル' }
-          );
-          if (confirmed) {
-              await executePublish();
-          }
+      closeBtn.onclick = () => {
+          document.body.removeChild(overlay);
+          if (hasChanges) location.reload();
       };
 
-      const rightGroup = document.createElement('div');
-      rightGroup.appendChild(previewBtn);
-      rightGroup.appendChild(publishBtn);
-
+      setOnCloseRequest((doClose) => {
+          doClose();
+          if (hasChanges) location.reload();
+      });
 
       footerDiv.appendChild(closeBtn);
-      footerDiv.appendChild(rightGroup);
       content.appendChild(footerDiv);
 
       document.body.appendChild(overlay);
@@ -3020,6 +2836,7 @@
           editBtn.style.minWidth = 'auto';
           editBtn.onclick = () => {
               window.ShinryoApp.Viewer.showLabelEditor(key, descriptions[key] || '', labelSettings[key], () => {
+                  hasChanges = true;
                   // 保存後のコールバック: データを再取得して表示更新
                   window.ShinryoApp.ConfigManager.fetchPublishedData().then(newData => {
                       descriptions = newData.descriptions || {};

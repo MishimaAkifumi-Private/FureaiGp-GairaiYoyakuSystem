@@ -12,7 +12,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   const STORAGE_APP_ID = 200; 
   const STORAGE_API_TOKEN = 'qGQAy2d3TcicQ8t73Oknv5BZU7gGO9aBvhAD9aY8'; // CRUD Full Permission
   const STORAGE_KEY_FIELD = 'AppID';       // 検索キー（各病院のAppID）
-  const STORAGE_JSON_FIELD = '設定情報';   // 設定JSON格納フィールド
+  const STORAGE_JSON_FIELD = '設定情報2';   // 設定JSON格納フィールド
 
   // 公開済みデータのキャッシュ
   let publishedRecordsMap = new Map();
@@ -23,6 +23,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   let lastPublishedAt = null;
   let lastJsonLength = 0;
   let isDataOldFormat = false;
+  let isProductionDiff = false; // ★追加: 本番環境との差分有無
 
   window.ShinryoApp.ConfigManager = {
     init: initConfigManager,
@@ -30,6 +31,8 @@ window.ShinryoApp = window.ShinryoApp || {};
     saveConfig: saveConfig,
     checkDiff: checkDiff,
     hasUnsavedChanges: hasUnsavedChanges,
+    deployToProduction: deployToProduction, // ★追加
+    revertFromProduction: revertFromProduction, // ★追加: 本番から戻す
     updateStatusImmediately: updateStatusImmediately,
     updateStatusBatch: updateStatusBatch,
     updateDepartmentStatus: updateDepartmentStatus,
@@ -53,6 +56,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     getDepartmentSettings: () => publishedDepartmentSettings, // ★追加
     getCommonSettings: () => publishedCommonSettings, // ★追加
     isOldFormat: () => isDataOldFormat,
+    hasProductionDiff: () => isProductionDiff, // ★追加
   };
 
   function initConfigManager() {
@@ -67,9 +71,16 @@ window.ShinryoApp = window.ShinryoApp || {};
     }
     Object.keys(kintoneRecord).forEach(key => {
         // 不要なシステムフィールドとデバッグ情報を除外
-        if (['レコード番号', '作成者', '更新者', '作成日時', '更新日時', '$revision', '$id', '_debug_info'].includes(key)) {
+        if (['レコード番号', '作成者', '更新者', '作成日時', '更新日時', '$revision', '$id'].includes(key)) {
             return;
         }
+        
+        // ★追加: _debug_info は特別扱い (raw objectとして保存)
+        if (key === '_debug_info') {
+            compressed[key] = kintoneRecord[key];
+            return;
+        }
+
         const field = kintoneRecord[key];
         if (!field) return;
 
@@ -111,6 +122,16 @@ window.ShinryoApp = window.ShinryoApp || {};
       return inflated;
   }
 
+  // ★追加: オブジェクトの正規化（キーソート）による比較用ヘルパー
+  function canonicalize(obj) {
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(canonicalize);
+      return Object.keys(obj).sort().reduce((acc, key) => {
+          acc[key] = canonicalize(obj[key]);
+          return acc;
+      }, {});
+  }
+
   /**
    * 共通設定保管アプリから、このアプリ(App156)用の設定JSONを取得する
    * APIトークンを使用してkintone.proxy経由で取得
@@ -150,8 +171,18 @@ window.ShinryoApp = window.ShinryoApp || {};
             }
         }
         const jsonStr = jsonField ? jsonField.value : null;
+
         lastJsonLength = jsonStr ? jsonStr.length : 0;
         const data = JSON.parse(jsonStr || '{}');
+
+        // ★変更: 本番環境(設定情報)とプレビュー環境(設定情報2)の差分チェック (オブジェクト正規化比較)
+        const prodJsonStr = resp.records[0]['設定情報']?.value || null;
+        let prodData = {};
+        try { prodData = JSON.parse(prodJsonStr || '{}'); } catch(e) { console.warn('Prod JSON parse error', e); }
+        
+        const norm1 = JSON.stringify(canonicalize(data));
+        const norm2 = JSON.stringify(canonicalize(prodData));
+        isProductionDiff = (norm1 !== norm2);
         
         // ★★★ デバッグ用ログ出力（取得データ） ★★★
         console.group('ConfigManager: fetchPublishedData Debug');
@@ -210,6 +241,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     publishedLabelSettings = {};
     lastPublishedAt = null;
     isDataOldFormat = false;
+    isProductionDiff = false;
     return { records: [], descriptions: {}, departmentSettings: {}, commonSettings: {}, labelSettings: {} };
   }
 
@@ -327,8 +359,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 calculated_start_days: s,
                 calculated_duration: d,
                 arrival_date: r['着任日']?.value,
-                base_start_days: sInt,
-                calc_time: new Date().toISOString()
+                base_start_days: sInt
             };
         });
     }
@@ -409,6 +440,96 @@ window.ShinryoApp = window.ShinryoApp || {};
       console.log('ConfigManager: Config saved successfully.');
     } catch (e) {
       console.error('ConfigManager: Failed to save config.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: 「設定情報2」(プレビュー) の内容を 「設定情報」(本番) に上書きコピーする
+   */
+  async function deployToProduction() {
+    console.log('ConfigManager: Deploying to Production (Copying 設定情報2 to 設定情報)...');
+    const myAppId = kintone.app.getId();
+    const query = `${STORAGE_KEY_FIELD} = "${myAppId}" limit 1`;
+    const apiPath = kintone.api.url('/k/v1/records', true);
+    const baseUrl = /^https?:\/\//.test(apiPath) ? apiPath : window.location.origin + apiPath;
+    const url = baseUrl + `?app=${STORAGE_APP_ID}&query=${encodeURIComponent(query)}&_t=${new Date().getTime()}`;
+    const headers = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN };
+
+    try {
+      // 1. 現在のレコードを取得 (設定情報2の値を取得)
+      const [body, status] = await kintone.proxy(url, 'GET', headers, {});
+      if (status !== 200) throw new Error(`Fetch failed. Status: ${status}`);
+      const resp = JSON.parse(body);
+      if (resp.records.length === 0) throw new Error('Target record not found in App 200.');
+
+      const rec = resp.records[0];
+      const previewJson = rec[STORAGE_JSON_FIELD].value; // 設定情報2
+      const recId = rec.$id.value;
+
+      // 2. 設定情報フィールドを更新
+      const updateUrl = kintone.api.url('/k/v1/record', true);
+      const updateBody = {
+        app: STORAGE_APP_ID,
+        id: recId,
+        record: {
+          '設定情報': { value: previewJson }
+        }
+      };
+      const updateHeaders = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN, 'Content-Type': 'application/json' };
+      
+      const [putBody, putStatus] = await kintone.proxy(updateUrl, 'PUT', updateHeaders, JSON.stringify(updateBody));
+      if (putStatus !== 200) throw new Error(`Update failed. Status: ${putStatus}`);
+      
+      console.log('ConfigManager: Deployed to Production successfully.');
+    } catch (e) {
+      console.error('ConfigManager: Deploy failed.', e);
+      throw e;
+    }
+  }
+
+  /**
+   * ★追加: 「設定情報」(本番) の内容を 「設定情報2」(プレビュー) に上書きコピーする (Revert)
+   */
+  async function revertFromProduction() {
+    console.log('ConfigManager: Reverting from Production (Copying 設定情報 to 設定情報2)...');
+    const myAppId = kintone.app.getId();
+    const query = `${STORAGE_KEY_FIELD} = "${myAppId}" limit 1`;
+    const apiPath = kintone.api.url('/k/v1/records', true);
+    const baseUrl = /^https?:\/\//.test(apiPath) ? apiPath : window.location.origin + apiPath;
+    const url = baseUrl + `?app=${STORAGE_APP_ID}&query=${encodeURIComponent(query)}&_t=${new Date().getTime()}`;
+    const headers = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN };
+
+    try {
+      // 1. 現在のレコードを取得
+      const [body, status] = await kintone.proxy(url, 'GET', headers, {});
+      if (status !== 200) throw new Error(`Fetch failed. Status: ${status}`);
+      const resp = JSON.parse(body);
+      if (resp.records.length === 0) throw new Error('Target record not found in App 200.');
+
+      const rec = resp.records[0];
+      const prodJson = rec['設定情報']?.value; // 設定情報 (本番)
+      const recId = rec.$id.value;
+
+      if (!prodJson) throw new Error('Production data (設定情報) is empty.');
+
+      // 2. 設定情報2フィールドを更新
+      const updateUrl = kintone.api.url('/k/v1/record', true);
+      const updateBody = {
+        app: STORAGE_APP_ID,
+        id: recId,
+        record: {
+          [STORAGE_JSON_FIELD]: { value: prodJson } // 設定情報2
+        }
+      };
+      const updateHeaders = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN, 'Content-Type': 'application/json' };
+      
+      const [putBody, putStatus] = await kintone.proxy(updateUrl, 'PUT', updateHeaders, JSON.stringify(updateBody));
+      if (putStatus !== 200) throw new Error(`Update failed. Status: ${putStatus}`);
+      
+      console.log('ConfigManager: Reverted from Production successfully.');
+    } catch (e) {
+      console.error('ConfigManager: Revert failed.', e);
       throw e;
     }
   }
