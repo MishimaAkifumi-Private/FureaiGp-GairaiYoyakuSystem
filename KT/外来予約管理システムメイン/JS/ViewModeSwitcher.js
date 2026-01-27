@@ -23,6 +23,24 @@
 
   const INITIAL_HIDE_STYLE_ID = 'kintone-initial-hide-style';
 
+  // FontAwesomeのロード
+  if (!document.getElementById('font-awesome-css')) {
+      const link = document.createElement('link');
+      link.id = 'font-awesome-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+      document.head.appendChild(link);
+  }
+
+  // ★追加: Material Symbols (Calendar Icon) のロード
+  if (!document.getElementById('material-symbols-calendar-css')) {
+      const msLink = document.createElement('link');
+      msLink.id = 'material-symbols-calendar-css';
+      msLink.rel = 'stylesheet';
+      msLink.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=calendar_month';
+      document.head.appendChild(msLink);
+  }
+
   // 先行隠蔽処理
   if (currentMode === 'overview' || currentMode === 'dashboard') {
       const hideCss = `
@@ -297,27 +315,26 @@
                  btnContainer.style.alignItems = 'center';
                  
                  // Dashboard Button
-                 const btnDashboard = document.createElement('button');
-                 btnDashboard.className = 'mode-switch-btn';
-                 btnDashboard.textContent = 'Dashboard';
-                 btnDashboard.style.backgroundColor = '#28a745';
-                 btnDashboard.style.margin = '0';
-                 btnDashboard.style.height = '30px';
-                 btnDashboard.style.lineHeight = '30px';
-                 btnDashboard.style.padding = '0 15px';
-                 btnDashboard.style.fontSize = '13px';
+                 const btnDashboard = document.createElement('i');
+                 btnDashboard.className = 'fa-solid fa-hospital';
+                 btnDashboard.title = 'Dashboard';
+                 btnDashboard.style.fontSize = '35px';
+                 btnDashboard.style.color = '#666';
+                 btnDashboard.style.cursor = 'pointer';
+                 btnDashboard.style.marginRight = '10px';
+                 btnDashboard.style.marginLeft = '0px';
+                 btnDashboard.style.marginBottom = '5px';
                  btnDashboard.onclick = () => location.href = '?view_mode=dashboard';
                  
                  // Overview Button
-                 const btnOverview = document.createElement('button');
-                 btnOverview.className = 'mode-switch-btn';
-                 btnOverview.textContent = '予約待ち受け管理';
-                 btnOverview.style.backgroundColor = '#28a745';
-                 btnOverview.style.margin = '0';
-                 btnOverview.style.height = '30px';
-                 btnOverview.style.lineHeight = '30px';
-                 btnOverview.style.padding = '0 15px';
-                 btnOverview.style.fontSize = '13px';
+                 const btnOverview = document.createElement('span');
+                 btnOverview.className = 'material-symbols-outlined';
+                 btnOverview.textContent = '📅';
+                 btnOverview.title = '予約待ち受け管理';
+                 btnOverview.style.fontSize = '35px';
+                 btnOverview.style.color = 'rgb(102, 102, 102)';
+                 btnOverview.style.cursor = 'pointer';
+                 btnOverview.style.marginBottom = '12px';
                  btnOverview.onclick = () => location.href = '?view_mode=overview';
 
                  btnContainer.appendChild(btnDashboard);
@@ -332,13 +349,18 @@
              }
 
         } else if (viewMode === 'overview') {
-             const btnMainMenu = document.createElement('button');
-             btnMainMenu.className = 'mode-switch-btn';
-             btnMainMenu.textContent = 'Dashboard';
-             btnMainMenu.style.backgroundColor = '#28a745';
-             btnMainMenu.style.marginTop = '0';
-             btnMainMenu.style.whiteSpace = 'nowrap'; // ★追加: 折り返し禁止
-             btnMainMenu.style.flexShrink = '0'; // ★追加: 縮小禁止
+             const btnMainMenu = document.createElement('i');
+             btnMainMenu.className = 'fa-solid fa-hospital';
+             btnMainMenu.title = 'Dashboard';
+             btnMainMenu.style.fontSize = '24px';
+             btnMainMenu.style.color = '#28a745';
+             btnMainMenu.style.fontSize = '40px';
+             btnMainMenu.style.color = '#666';
+             btnMainMenu.style.cursor = 'pointer';
+             btnMainMenu.style.marginRight = '15px';
+             btnMainMenu.style.marginRight = '10px';
+             btnMainMenu.style.marginLeft = '25px';
+             btnMainMenu.style.marginBottom = '5px';
              btnMainMenu.onclick = () => location.href = '?view_mode=dashboard';
              div.appendChild(btnMainMenu);
 

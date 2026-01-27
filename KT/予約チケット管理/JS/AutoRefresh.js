@@ -2,11 +2,13 @@
   'use strict';
 
   // --- 設定値 ---
-  const INTERVAL_MS = 180000; // 更新間隔（3分）
+  const INTERVAL_MS = 20000; // 更新間隔（20秒）
   const IDLE_WAIT_MS = 5000; // 操作したあと、更新を再開するまでの待機時間（5秒）
 
   let lastActivityTime = Date.now();
-  let pageLoadTime = new Date().toISOString(); // 画面を開いた時刻（差分チェック用）
+  // 画面を開いた時刻（差分チェック用）
+  // PCの時計ズレや通信ラグによる検知漏れを防ぐため、少し過去(10秒前)を基準にする
+  let pageLoadTime = new Date(Date.now() - 10000).toISOString();
 
   // ユーザーの操作（マウス移動、クリック、キー入力）を検知して記録する
   const updateActivity = function() {

@@ -1,4 +1,4 @@
-﻿﻿/*
+﻿﻿﻿﻿/*
  * InitialPcUserRegist.js
  * 担当者表示スクリプト (APP142用)
  * 指定されたデザインで現在の端末利用者を表示します。
@@ -437,11 +437,17 @@
     targetSpace.appendChild(wrapper);
   };
 
-  kintone.events.on(['app.record.index.show', 'app.record.detail.show'], (event) => {
+  kintone.events.on('app.record.index.show', (event) => {
     loadFontAwesome();
     // DOM構築待ちを含めて実行
     setTimeout(renderStaffBadge, 100);
     return event;
   });
 
+  // 詳細・編集画面では非表示にする
+  kintone.events.on(['app.record.detail.show', 'app.record.edit.show', 'app.record.create.show'], (event) => {
+    const wrapper = document.getElementById('staff-badge-wrapper');
+    if (wrapper) wrapper.remove();
+    return event;
+  });
 })();

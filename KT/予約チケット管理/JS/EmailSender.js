@@ -24,7 +24,8 @@
   const CONFIG = {
     SPACE_ID: 'MailSend', // ボタン設置スペースID
     TELE_SPACE_ID: 'TeleConfirmation', // 電話調整ボタン設置スペースID
-    CANCEL_SPACE_ID: 'CancelByStaff', // スタッフ取下ボタン設置スペースID
+    CANCEL_SPACE_ID: 'CancelByStaff', // スタッフキャンセルボタン設置スペースID
+    ASSIGN_SPACE_ID: 'MyTicket', // 担当者アサインボタン設置スペースID
     
 // API関連（発行された本番URLを設定）
     API_URL: 'https://sendreservationmail-yoslzibmlq-uc.a.run.app',
@@ -39,18 +40,22 @@
       RES_DATE: '確定予約日',   // YYYY-MM-DD
       RES_TIME: '確定予約時刻', // HH:mm
       DEPT: '診療科',
+      STAFF: '担当者',         // 担当者フィールド
       
       // 【修正】更新用フィールド (プロセス管理の'ステータス'ではなく、ドロップダウンの'管理ステータス'を指定)
       STATUS: '管理ステータス',
       SEND_DATE: 'メール送信日時',   // 送信完了日時を記録するフィールド
-      PHONE_CONFIRM: '電話確認日時' // 電話調整完了日時
+      PHONE_CONFIRM: '電話確認日時', // 電話調整完了日時
+      READ_DATE: 'メール既読日時'    // メール既読日時
     },
 
     // 更新する値 (ドロップダウンの選択肢と完全一致させる必要があります: 2026-01-07変更)
     UPDATE_VALUES: {
       STATUS_SENT: 'メール送信済',
-      STATUS_READ: 'メール既読検知',
-      STATUS_CANCEL: '予約キャンセル発生'
+      STATUS_READ: 'メール合意済',
+      STATUS_PHONE: '電話合意済',
+      STATUS_CANCEL: 'キャンセル',
+      STATUS_ASSIGNED: '担当設定'
     },
 
     // UIカラー
@@ -215,7 +220,7 @@
     }
 
     const okBtn = document.createElement('button');
-    okBtn.innerText = type === 'confirm' ? '送信する' : '閉じる';
+    okBtn.innerText = type === 'confirm' ? 'はい' : '閉じる';
     okBtn.style.cssText = `
       padding: 8px 24px; border: none; background: ${themeColor};
       color: white; border-radius: 4px; cursor: pointer; font-weight: bold;
@@ -305,11 +310,11 @@
     // 送信済み、または電話調整済み、または完了/キャンセル済みの場合は送信ボタンを無効化
     const isSent = !!sendDate;
     const isPhoneConfirmed = !!phoneDate;
-    const isCompleted = ['メール送信済', 'メール既読検知', '完了', '予約キャンセル発生'].includes(status);
+    const isCompleted = ['メール送信済', 'メール合意済', '電話合意済', '完了'].includes(status);
     const disableSendBtn = isSent || isPhoneConfirmed || isCompleted || isResDateOrTimeEmpty;
 
     // --- 1. メール送信ボタン作成 ---
-    if (spaceElement && !document.getElementById('send-reservation-mail-btn')) {
+    if (!isResDateOrTimeEmpty && spaceElement && !document.getElementById('send-reservation-mail-btn')) {
       const btn = document.createElement('button');
     btn.id = 'send-reservation-mail-btn';
     btn.innerText = '予約メール送信';
@@ -460,10 +465,10 @@
     }
 
     // --- 2. 電話調整済ボタン作成 ---
-    if (teleSpaceElement && !document.getElementById('phone-confirm-btn')) {
+    if (!isResDateOrTimeEmpty && teleSpaceElement && !document.getElementById('phone-confirm-btn')) {
       const phoneBtn = document.createElement('button');
       phoneBtn.id = 'phone-confirm-btn';
-      phoneBtn.innerText = '電話調整済';
+      phoneBtn.innerText = '電話合意済';
       phoneBtn.style.cssText = `
         padding: 10px 24px;
         background-color: ${CONFIG.COLORS.SUCCESS};
@@ -480,7 +485,7 @@
       // ② 電話調整完了のボタンはメール既読前まで有効 (既読検知済みなら無効化)
       if (isPhoneConfirmed || status === CONFIG.UPDATE_VALUES.STATUS_READ || isResDateOrTimeEmpty) {
         phoneBtn.disabled = true;
-        phoneBtn.innerText = '電話調整完了';
+        phoneBtn.innerText = '電話合意済';
         phoneBtn.style.backgroundColor = '#ccc';
         phoneBtn.style.cursor = 'not-allowed';
         phoneBtn.style.boxShadow = 'none';
@@ -501,9 +506,11 @@
 
           // 必須項目（メールアドレス、用件、予約日時）が揃っているか
           const canSendMail = (email && type && resDate && resTime);
+          // ★追加: 未送信の場合のみ送信する
+          const shouldSendMail = canSendMail && !isSent;
 
-          let confirmMsg = '電話で予約調整が完了したことを記録します。<br>ステータスを「メール既読検知」に変更し、電話確認日時を記録します。';
-          if (canSendMail) {
+          let confirmMsg = '電話で予約調整が完了したことを記録します。<br>ステータスを「電話合意済」に変更し、電話確認日時を記録します。';
+          if (shouldSendMail) {
             confirmMsg += '<br><br><strong>※予約確定メールも同時に送信されます。</strong>';
           }
           confirmMsg += '<br>よろしいですか？';
@@ -515,12 +522,12 @@
               try {
                 const nowISO = new Date().toISOString();
                 const updateRecord = {
-                  [CONFIG.FIELDS.STATUS]: { value: CONFIG.UPDATE_VALUES.STATUS_READ },
+                  [CONFIG.FIELDS.STATUS]: { value: CONFIG.UPDATE_VALUES.STATUS_PHONE },
                   [CONFIG.FIELDS.PHONE_CONFIRM]: { value: nowISO }
                 };
 
                 // メール送信処理
-                if (canSendMail) {
+                if (shouldSendMail) {
                   const generatedUrl = `${CONFIG.CONFIRM_BASE_URL}?id=${recordId}`;
                   const payload = {
                     to: email,
@@ -552,7 +559,7 @@
                 };
                 await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', body);
                 hideSpinner();
-                showModal('success', '完了', '電話調整情報を登録しました。' + (canSendMail ? '<br>(メール送信完了)' : ''), () => location.reload());
+                showModal('success', '完了', '電話調整情報を登録しました。' + (shouldSendMail ? '<br>(メール送信完了)' : ''), () => location.reload());
               } catch (error) {
                 hideSpinner();
                 errorLog('Phone Confirm Update Failed', error);
@@ -565,11 +572,11 @@
       teleSpaceElement.appendChild(phoneBtn);
     }
 
-    // --- 3. スタッフ取下ボタン作成 ---
-    if (cancelSpaceElement && !document.getElementById('staff-cancel-btn')) {
+    // --- 3. スタッフキャンセルボタン作成 ---
+    if ((isSent || isPhoneConfirmed) && cancelSpaceElement && !document.getElementById('staff-cancel-btn')) {
       const cancelBtn = document.createElement('button');
       cancelBtn.id = 'staff-cancel-btn';
-      cancelBtn.innerText = 'スタッフ取下';
+      cancelBtn.innerText = 'キャンセル';
       cancelBtn.style.cssText = `
         padding: 10px 24px;
         background-color: ${CONFIG.COLORS.DANGER};
@@ -583,13 +590,13 @@
         transition: background-color 0.2s;
       `;
 
-      // スタッフ取り下げは予約確定日や予約確定日時のどちらかが設定されている限り、常時有効にする
-      if (!resDate && !resTime) {
+      // スタッフキャンセルボタンは、メール送信済み または 電話合意済み の場合のみ有効にする
+      if (!isSent && !isPhoneConfirmed) {
         cancelBtn.disabled = true;
         cancelBtn.style.backgroundColor = '#ccc';
         cancelBtn.style.cursor = 'not-allowed';
         cancelBtn.style.boxShadow = 'none';
-        cancelBtn.title = '予約日時が設定されていません';
+        cancelBtn.title = 'メール送信または電話合意後に有効になります';
       } else {
         cancelBtn.onmouseover = () => { cancelBtn.style.backgroundColor = '#c0392b'; };
         cancelBtn.onmouseout  = () => { cancelBtn.style.backgroundColor = CONFIG.COLORS.DANGER; };
@@ -599,26 +606,32 @@
             <strong>【警告】この操作は取り消せません。</strong><br><br>
             以下の処理を実行します：<br>
             ・確定予約日、確定予約時刻を<strong>空欄</strong>にします。<br>
-            ・患者に送信済みのURLを<strong>無効化</strong>します。<br>
+            ・メール送信日時、電話確認日時、メール既読日時を<strong>消去</strong>します。<br>
+            ・ステータスを<strong>キャンセル</strong>に変更します。<br>
             <br>
             本当に実行してよろしいですか？
           `;
 
-          showModal('warning', 'スタッフ取下の確認', confirmMsg, async () => {
+          showModal('warning', 'スタッフキャンセルの確認', confirmMsg, async () => {
             showSpinner();
             try {
+              // キャンセルステータスへ変更（フィールドクリア含む）
               const body = {
                 app: kintone.app.getId(),
                 id: recordId,
                 record: {
                   [CONFIG.FIELDS.STATUS]: { value: CONFIG.UPDATE_VALUES.STATUS_CANCEL },
                   [CONFIG.FIELDS.RES_DATE]: { value: null },
-                  [CONFIG.FIELDS.RES_TIME]: { value: null }
+                  [CONFIG.FIELDS.RES_TIME]: { value: null },
+                  [CONFIG.FIELDS.SEND_DATE]: { value: null },
+                  [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
+                  [CONFIG.FIELDS.READ_DATE]: { value: null }
                 }
               };
               await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', body);
+
               hideSpinner();
-              showModal('success', '完了', '予約情報をクリアし、URLを無効化しました。', () => location.reload());
+              showModal('success', '完了', '予約を取り下げました。', () => location.reload());
             } catch (error) {
               hideSpinner();
               errorLog('Staff Cancel Update Failed', error);
@@ -630,6 +643,136 @@
       cancelSpaceElement.appendChild(cancelBtn);
     }
 
+    // --- 4. 担当者アサインボタン作成 ---
+    const assignSpaceElement = kintone.app.record.getSpaceElement(CONFIG.ASSIGN_SPACE_ID);
+    if (assignSpaceElement && !document.getElementById('assign-staff-btn')) {
+      const assignBtn = document.createElement('button');
+      assignBtn.id = 'assign-staff-btn';
+      assignBtn.innerText = '私が担当する';
+      
+      // ★追加: 自身の担当判定
+      const currentStaffName = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey');
+      const recordStaffName = getValue(record, CONFIG.FIELDS.STAFF);
+      const isSelf = currentStaffName && (recordStaffName === currentStaffName);
+
+      if (isSelf) {
+        assignBtn.disabled = true;
+        assignBtn.style.cssText = `
+            padding: 10px 24px;
+            background-color: #ccc;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: not-allowed;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: none;
+            height: 60px;
+        `;
+        assignBtn.title = '既にあなたが担当者です';
+      } else {
+        assignBtn.style.cssText = `
+            padding: 10px 24px;
+            background-color: #2c3e50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: background-color 0.2s;
+            height: 60px;
+        `;
+        
+        assignBtn.onmouseover = () => { assignBtn.style.backgroundColor = '#34495e'; };
+        assignBtn.onmouseout = () => { assignBtn.style.backgroundColor = '#2c3e50'; };
+
+        assignBtn.onclick = async () => {
+        // 端末の担当者名を取得
+        const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey');
+        
+        if (!currentStaff) {
+          showModal('error', 'エラー', 'この端末には担当者が設定されていません。<br>ダッシュボード等で担当者を設定してください。');
+          return;
+        }
+
+        const recordStaff = getValue(record, CONFIG.FIELDS.STAFF);
+        
+        const doAssign = async () => {
+          showSpinner();
+          try {
+            const updateRecord = {
+              [CONFIG.FIELDS.STAFF]: { value: currentStaff }
+            };
+
+            // 初めて担当が設定される場合のみステータスを更新
+            if (!recordStaff) {
+                updateRecord[CONFIG.FIELDS.STATUS] = { value: CONFIG.UPDATE_VALUES.STATUS_ASSIGNED };
+            }
+
+            const body = {
+              app: kintone.app.getId(),
+              id: recordId,
+              record: updateRecord
+            };
+            await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', body);
+            hideSpinner();
+            showModal('success', '完了', `担当者を「${currentStaff}」に設定しました。`, () => location.reload());
+          } catch (error) {
+            hideSpinner();
+            errorLog('Assign Staff Failed', error);
+            showModal('error', 'エラー', '更新に失敗しました。<br>' + error.message);
+          }
+        };
+
+        if (recordStaff) {
+          showModal('confirm', '担当者変更の確認', 
+            `すでに担当がアサインされています。<br>強制的に担当をあなた（${currentStaff}）にしますか？`, 
+            doAssign
+          );
+        } else {
+          doAssign();
+        }
+      };
+      }
+      assignSpaceElement.appendChild(assignBtn);
+    }
+
+    return event;
+  });
+
+  // --- 編集画面でのフィールド制御 ---
+  kintone.events.on(['app.record.edit.show', 'app.record.create.show'], function(event) {
+    const record = event.record;
+
+    // 1. 担当者フィールドの制御 (常に編集不可)
+    const staffField = record[CONFIG.FIELDS.STAFF];
+    if (staffField) {
+      staffField.disabled = true; // 編集不可に設定
+
+      // グレーアウトを解除するスタイルを注入
+      if (!document.getElementById('custom-disabled-style')) {
+          const style = document.createElement('style');
+          style.id = 'custom-disabled-style';
+          style.textContent = `.gaia-ui-dropdown-disabled .gaia-ui-dropdown-selected, input[disabled] { background-color: #fff !important; color: #333 !important; opacity: 1 !important; -webkit-text-fill-color: #333 !important; }`;
+          document.head.appendChild(style);
+      }
+    }
+
+    // 2. 予約日時フィールドの制御 (送信済・合意済の場合)
+    const status = getValue(record, CONFIG.FIELDS.STATUS);
+    const lockedStatuses = [
+        CONFIG.UPDATE_VALUES.STATUS_SENT, 
+        CONFIG.UPDATE_VALUES.STATUS_READ, 
+        CONFIG.UPDATE_VALUES.STATUS_PHONE, 
+        '完了'
+    ];
+
+    if (lockedStatuses.includes(status)) {
+        if (record[CONFIG.FIELDS.RES_DATE]) record[CONFIG.FIELDS.RES_DATE].disabled = true;
+        if (record[CONFIG.FIELDS.RES_TIME]) record[CONFIG.FIELDS.RES_TIME].disabled = true;
+    }
     return event;
   });
 })();

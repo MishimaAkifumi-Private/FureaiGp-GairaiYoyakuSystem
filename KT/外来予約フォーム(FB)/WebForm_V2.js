@@ -1,8 +1,22 @@
 ﻿(function() {
   "use strict";
 
+  // ★追加: グローバルエラーハンドラによる詳細なデバッグ
+  window.addEventListener('error', function (event) {
+    console.error('[Gemini FATAL] Uncaught Error:', {
+      message: event.message,
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      error: event.error
+    });
+  });
+  window.addEventListener('unhandledrejection', function (event) {
+    console.error('[Gemini FATAL] Unhandled Promise Rejection:', event.reason);
+  });
+
   // 【デバッグ】起動確認ログ
-  console.log('%c[Gemini Debug] Script Loaded. Version: Force-Visible-v4', 'background: #000; color: #bada55; padding: 5px; font-weight: bold;');
+  console.log('%c[Gemini Debug] Script Loaded. Version: Force-Visible-v5', 'background: #000; color: #bada55; padding: 5px; font-weight: bold;');
 
   try {
       if (typeof window.fb === 'undefined') { window.fb = { events: { form: {} } }; }
@@ -176,6 +190,10 @@
       function switchStep(step) {
         config.state.currentStep = step;
         
+        // ★追加: Bodyにクラスを付与して、CSSで全体（ボタン含む）を制御できるようにする
+        document.body.classList.remove('gemini-step-1', 'gemini-step-2');
+        document.body.classList.add(`gemini-step-${step}`);
+
         // Host要素（bootstrapperで特定したもの）にクラスを付与
         const host = document.getElementById(config.uiIds.WIZARD_CONTAINER)?.parentNode;
         if (host) {
@@ -487,8 +505,40 @@
         }
       }
       
+      // ★追加: FormBridgeのDOM要素にも値を反映させる (バリデーション通過のため)
+      function syncToDom(fieldCode, value) {
+          // 1. IDで検索 (HTML例: id="用件")
+          let input = document.getElementById(fieldCode);
+          
+          // 2. data-field-code属性で検索 (フォールバック)
+          if (!input) {
+              const container = document.querySelector(`[data-field-code="${fieldCode}"]`);
+              if (container) {
+                  input = container.querySelector('input, textarea, select');
+              }
+          }
+
+          if (input) {
+              // React/Next.js等が管理するinputの値を外部から変更するための処理
+              const proto = Object.getPrototypeOf(input);
+              const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+              if (descriptor && descriptor.set) {
+                  descriptor.set.call(input, value);
+              } else {
+                  input.value = value;
+              }
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+              input.dispatchEvent(new Event('blur', { bubbles: true }));
+          }
+      }
+
       function updateFbField(fieldCode, value) {
-          config.state.submitData[fieldCode] = value;
+          const safeValue = (value === null || value === undefined) ? '' : value;
+          // ★追加: 入力された値をリアルタイムでログ出力
+          console.log(`[Gemini Input] ${fieldCode} = ${safeValue}`);
+          config.state.submitData[fieldCode] = safeValue;
+          syncToDom(fieldCode, safeValue);
       }
       
       function isStep1Complete() {
@@ -1076,7 +1126,10 @@
               const record = filteredRecords[0];
               const guidanceText = record[config.jsonKeys.GUIDANCE]?.value;
               
-              if (guidanceText && guidanceText.replace(/<p><br><\/p>/g, '').trim()) {
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = guidanceText || '';
+              
+              if (guidanceText && (tempDiv.textContent.trim().length > 0 || tempDiv.querySelector('img'))) {
                   area.style.cssText = 'margin-top: 10px; padding: 8px; border: 1px solid #cce5ff; background-color: #f8fbff; font-size: 12px; border-radius: 4px;';
                   const div = document.createElement('div');
                   div.className = 'gemini-rich-text';
@@ -1761,7 +1814,7 @@
             ${createFormSection('gemini-section-privacy', `<div class="g-form-group g-privacy-policy required"><label>個人情報について</label><div class="g-privacy-text">「<a href="https://fg-sthp.jp/hospital/right.html" target="_blank" rel="noopener noreferrer">個人情報保護方針</a>」をご確認の上、同意いただける場合のみご送信ください。</div><label class="g-checkbox-label"><input type="checkbox" id="${config.uiIds.PRIVACY_AGREE}" required> 同意する</label></div>`)}
           </form>
         `;
-        attachPatientFormEventListeners();
+        attachPatientFormEventListeners(container);
       }
       
       function addLiveValidation(element, validationRegex, errorMessage, processFunc = null) {
@@ -1795,7 +1848,7 @@
           element.addEventListener('change', setValidationMessage);
       }
 
-      function attachPatientFormEventListeners() {
+      function attachPatientFormEventListeners(container) {
           addLiveValidation(document.getElementById(config.uiIds.TEL1), /^\d{10,11}$/, '電話番号は10桁または11桁の半角数字で入力してください。', (v) => v.replace(/-/g, ''));
           addLiveValidation(document.getElementById(config.uiIds.TEL2), /^\d{10,11}$/, '電話番号は10桁または11桁の半角数字で入力してください。', (v) => v.replace(/-/g, ''));
           addLiveValidation(document.getElementById(config.uiIds.EMAIL), /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, '有効なメールアドレスを入力してください。');
@@ -1843,7 +1896,8 @@
           document.getElementById(config.uiIds.EMAIL)?.addEventListener('input', e => updateFbField(config.fbFields.EMAIL, e.target.value));
           document.getElementById('gemini-other-notes')?.addEventListener('input', e => updateFbField(config.fbFields.OTHER_NOTES, e.target.value));
           
-          document.querySelectorAll(`input[name="${config.fbFields.GENDER}"]`).forEach(radio => {
+          // ★修正: document.querySelectorAll -> container.querySelectorAll に変更して範囲を限定
+          container.querySelectorAll(`input[name="${config.fbFields.GENDER}"]`).forEach(radio => {
               radio.addEventListener('change', e => updateFbField(config.fbFields.GENDER, e.target.value));
           });
           
@@ -1878,7 +1932,8 @@
               }
           });
 
-          document.querySelectorAll(`input[name="${config.fbFields.APPLICANT}"]`).forEach(radio => radio.addEventListener('change', handleApplicantChange));
+          // ★修正: document.querySelectorAll -> container.querySelectorAll に変更
+          container.querySelectorAll(`input[name="${config.fbFields.APPLICANT}"]`).forEach(radio => radio.addEventListener('change', handleApplicantChange));
           
           const emailConfirmInput = document.getElementById(config.uiIds.EMAIL_CONFIRM);
           emailConfirmInput?.addEventListener('input', handleEmailVerification);
@@ -1891,7 +1946,8 @@
                   updateFbField(config.fbFields.APPLICANT_SUPPLEMENT, e.target.value);
               });
           }
-          const form = document.querySelector('form');
+          // ★修正: フォームの取得もコンテナ内に限定
+          const form = container.querySelector('form');
           if(form) {
             const allInputs = form.querySelectorAll('input, select, textarea');
             allInputs.forEach(input => addCustomValidationMessage(input));
@@ -2146,15 +2202,23 @@
             }
             
             form .fb-submit { display: none !important; }
-            form.gemini-step-2 .fb-submit, form.gemini-step-2 .fb-custom--button--submit button { display: inline-flex !important; }
+            .gemini-step-2 .fb-submit, .gemini-step-2 .fb-custom--button--submit button { display: inline-flex !important; }
 
-            form.gemini-step-2 .fb-custom--content--divider,
-            form.gemini-step-2 .fb-custom--button--submit {
+            .gemini-step-2 .fb-custom--content--divider,
+            .gemini-step-2 .fb-custom--button--submit {
                 display: block !important;
             }
 
             .gemini-nav-btn:hover, form .fb-submit:hover { opacity: 0.85 !important; }
             form .fb-submit, .fb-custom--button--submit button { background-color: #1E8449 !important; border-color: #1A5276 !important; color: white !important; }
+            form .fb-submit, .fb-custom--button--submit button { 
+                background-color: #1E8449 !important; 
+                border-color: #1A5276 !important; 
+                color: white !important;
+                position: relative !important;
+                left: 20px !important;
+                margin-left: 15px !important;
+            }
             .gemini-nav-btn.gemini-btn-primary { background-color: #007bff !important; border-color: #007bff !important; color: white !important; }
             .gemini-nav-btn.gemini-injected-back-btn { background-color: #6c757d !important; border-color: #6c757d !important; color: white !important; }
             
@@ -2180,10 +2244,17 @@
       function handleDataInjection(state) {
           console.log('[Gemini] Submitting Data... Injecting custom fields.');
           const data = config.state.submitData;
+          
+          // ★追加: デバッグ用ログ (開発者ツールで確認してください)
+          console.log('[Gemini Debug] Submit Data (Custom UI):', JSON.parse(JSON.stringify(data)));
+          console.log('[Gemini Debug] FormBridge Record Fields:', Object.keys(state.record));
 
           Object.keys(data).forEach(fieldCode => {
               if (state.record[fieldCode]) {
                   state.record[fieldCode].value = data[fieldCode];
+                  console.log(`[Gemini Debug] Success: ${fieldCode} = ${data[fieldCode]}`);
+              } else {
+                  console.warn(`[Gemini Warning] Failed: Field code "${fieldCode}" not found in FormBridge. Value not saved.`);
               }
           });
           return state;
@@ -2254,24 +2325,38 @@
                   injectStyles();
                   
                   try {
-                      await fetchData();
+                      await fetchData(); // ログはここまで出ている
+                      console.log('[Gemini Debug] After fetchData. Initializing UI...');
+
                       initializeWizardUI(wizardContainer);
+                      console.log('[Gemini Debug] After initializeWizardUI.');
+
                       initializePatientFormUI(patientFormContainer);
+                      console.log('[Gemini Debug] After initializePatientFormUI.');
 
                       patientFormContainer.style.display = 'none';
                       navigationContainer.style.display = 'none';
+                      console.log('[Gemini Debug] UI containers hidden.');
 
                       updateFbField(config.fbFields.APPLICANT, '本人');
                       const applicantRadio = document.querySelector('input[name="申込者"][value="本人"]');
-                      if (applicantRadio) handleApplicantChange({ target: applicantRadio });
+                      if (applicantRadio) {
+                          console.log('[Gemini Debug] Found applicant radio. Triggering change...');
+                          handleApplicantChange({ target: applicantRadio });
+                      } else {
+                          console.warn('[Gemini Debug] Applicant radio not found.');
+                      }
 
                       updateProxyLabels();
+                      console.log('[Gemini Debug] Proxy labels updated.');
                       
                       setTimeout(() => {
+                          console.log('[Gemini Debug] Switching to initial step...');
                           switchStep(config.state.currentStep);
                       }, 100);
                       
-                      clearInterval(bootstrapper); // ★追加: 初期化成功したらポーリング停止
+                      clearInterval(bootstrapper);
+                      console.log('[Gemini Debug] Bootstrapper cleared. Initialization complete.');
 
                   } catch (e) {
                       console.error('[Gemini] Initialization Error:', e);
