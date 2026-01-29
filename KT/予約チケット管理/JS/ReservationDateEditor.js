@@ -11,6 +11,7 @@
     FIELD_DATE: '確定予約日',
     FIELD_TIME: '確定予約時刻',
     FIELD_STATUS: '管理ステータス',
+    FIELD_EXECUTOR: 'キャンセル実行者',
     ALLOWED_TIMES: [
       '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
       '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
@@ -189,12 +190,11 @@
     const currentDate = record[CONFIG.FIELD_DATE].value;
     const currentTime = record[CONFIG.FIELD_TIME].value;
     const status = record[CONFIG.FIELD_STATUS] ? record[CONFIG.FIELD_STATUS].value : '';
+    const cancelExecutor = record[CONFIG.FIELD_EXECUTOR] ? record[CONFIG.FIELD_EXECUTOR].value : '';
 
     // 編集不可とするステータス (メール送信済、電話合意済など)
     const LOCKED_STATUSES = ['メール送信済', 'メール合意済', '電話合意済', '完了'];
-    const isLocked = LOCKED_STATUSES.includes(status);
-
-    // 表示コンテナ
+    const isLocked = LOCKED_STATUSES.includes(status) || (status === 'キャンセル' && cancelExecutor === '本人');
     const container = document.createElement('div');
     if (isLocked) {
       container.style.cssText = `

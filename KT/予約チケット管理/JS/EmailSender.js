@@ -25,6 +25,8 @@
     SPACE_ID: 'MailSend', // ボタン設置スペースID
     TELE_SPACE_ID: 'TeleConfirmation', // 電話調整ボタン設置スペースID
     CANCEL_SPACE_ID: 'CancelByStaff', // スタッフキャンセルボタン設置スペースID
+    WAY_OF_REPLY_SPACE_ID: 'WayOfReply', // 対応方法選択スペースID
+    RES_DATE_SPACE_ID: 'ReservationDate', // 予約日時表示スペースID
     ASSIGN_SPACE_ID: 'MyTicket', // 担当者アサインボタン設置スペースID
     
 // API関連（発行された本番URLを設定）
@@ -46,7 +48,11 @@
       STATUS: '管理ステータス',
       SEND_DATE: 'メール送信日時',   // 送信完了日時を記録するフィールド
       PHONE_CONFIRM: '電話確認日時', // 電話調整完了日時
-      READ_DATE: 'メール既読日時'    // メール既読日時
+      READ_DATE: 'メール既読日時',    // メール既読日時
+      CANCEL_EXECUTOR: 'キャンセル実行者', // キャンセル実行者
+      CANCEL_DATE: 'キャンセル日時',   // キャンセル日時
+      STAFF_CONFIRM_CHECK: 'スタッフ確認', // スタッフ確認チェックボックス
+      WAY_OF_REPLY: '応対方法' // 応対方法保存用
     },
 
     // 更新する値 (ドロップダウンの選択肢と完全一致させる必要があります: 2026-01-07変更)
@@ -55,7 +61,8 @@
       STATUS_READ: 'メール合意済',
       STATUS_PHONE: '電話合意済',
       STATUS_CANCEL: 'キャンセル',
-      STATUS_ASSIGNED: '担当設定'
+      STATUS_ASSIGNED: '担当設定',
+      STATUS_FINISH: '終了'
     },
 
     // UIカラー
@@ -272,7 +279,9 @@
       id: recordId,
       record: {
         [CONFIG.FIELDS.STATUS]: { value: newStatus },
-        [CONFIG.FIELDS.SEND_DATE]: { value: nowISO }
+        [CONFIG.FIELDS.SEND_DATE]: { value: nowISO },
+        [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
+        [CONFIG.FIELDS.CANCEL_DATE]: { value: null }
       }
     };
 
@@ -293,9 +302,13 @@
     const spaceElement = kintone.app.record.getSpaceElement(CONFIG.SPACE_ID);
     const teleSpaceElement = kintone.app.record.getSpaceElement(CONFIG.TELE_SPACE_ID);
     const cancelSpaceElement = kintone.app.record.getSpaceElement(CONFIG.CANCEL_SPACE_ID);
+    const wayOfReplySpace = kintone.app.record.getSpaceElement(CONFIG.WAY_OF_REPLY_SPACE_ID);
+    const resDateSpaceElement = kintone.app.record.getSpaceElement(CONFIG.RES_DATE_SPACE_ID);
+    const staffConfirmFieldElement = kintone.app.record.getFieldElement(CONFIG.FIELDS.STAFF_CONFIRM_CHECK);
 
     const record = event.record;
     const recordId = kintone.app.record.getId();
+    const savedWayOfReply = getValue(record, CONFIG.FIELDS.WAY_OF_REPLY);
     
     // ステータス・日付チェック
     const status = getValue(record, CONFIG.FIELDS.STATUS);
@@ -303,6 +316,8 @@
     const phoneDate = getValue(record, CONFIG.FIELDS.PHONE_CONFIRM);
     const resDate = getValue(record, CONFIG.FIELDS.RES_DATE);
     const resTime = getValue(record, CONFIG.FIELDS.RES_TIME);
+    const cancelExecutor = getValue(record, CONFIG.FIELDS.CANCEL_EXECUTOR);
+    const isCancelledByPatient = (cancelExecutor === '本人');
     
     // 予約日時が未入力かどうか
     const isResDateOrTimeEmpty = !resDate || !resTime;
@@ -312,6 +327,111 @@
     const isPhoneConfirmed = !!phoneDate;
     const isCompleted = ['メール送信済', 'メール合意済', '電話合意済', '完了'].includes(status);
     const disableSendBtn = isSent || isPhoneConfirmed || isCompleted || isResDateOrTimeEmpty;
+
+    // --- 0. 対応方法選択ラジオボタン作成 & 表示制御 ---
+    // 表示制御関数を定義 (作成ブロックの外に出すことで、常に呼び出せるようにする)
+    const updateVisibility = (mode) => {
+      const isEmail = (mode === 'email');
+      const isPhone = (mode === 'phone');
+      const isAny = isEmail || isPhone;
+
+      // 1. メール送信ボタン (MailSendスペース) -> Email only
+      if (spaceElement) spaceElement.style.display = isEmail ? 'block' : 'none';
+      
+      // 2. 電話合意ボタン (TeleConfirmationスペース) -> Phone only
+      if (teleSpaceElement) teleSpaceElement.style.display = isPhone ? 'block' : 'none';
+
+      // 3. 電話確認日時フィールド -> Phone only
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.PHONE_CONFIRM, isPhone);
+
+      // 共通項目 (Email or Phone)
+      const commonDisplay = isAny ? 'block' : 'none';
+
+      // 確定予約日時 (フィールド & スペース)
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.RES_DATE, isAny);
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.RES_TIME, isAny);
+      if (resDateSpaceElement) resDateSpaceElement.style.display = commonDisplay;
+
+      // その他共通フィールド
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.SEND_DATE, isAny);
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.READ_DATE, isAny);
+      
+      if (cancelSpaceElement) cancelSpaceElement.style.display = commonDisplay;
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.CANCEL_DATE, isAny);
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.CANCEL_EXECUTOR, isAny);
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.STAFF_CONFIRM_CHECK, isAny);
+      
+      // 応対方法フィールド自体は常に非表示
+      kintone.app.record.setFieldShown(CONFIG.FIELDS.WAY_OF_REPLY, false);
+    };
+
+    if (wayOfReplySpace) {
+      const containerId = 'way-of-reply-container';
+      let container = document.getElementById(containerId);
+
+      if (!container) {
+        container = document.createElement('div');
+        container.id = containerId;
+        container.style.cssText = 'padding: 15px; background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 20px; display: flex; gap: 20px; align-items: center;';
+
+        const title = document.createElement('div');
+        title.innerText = '対応方法:';
+        title.style.fontWeight = 'bold';
+        container.appendChild(title);
+
+        const createRadio = (label, value) => {
+          const wrapper = document.createElement('label');
+          wrapper.style.cssText = 'cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 14px;';
+          const radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'way-of-reply-radio';
+          radio.value = value;
+          wrapper.appendChild(radio);
+          wrapper.appendChild(document.createTextNode(label));
+          return { wrapper, radio };
+        };
+
+        const emailOpt = createRadio('メールで対応する', 'email');
+        const phoneOpt = createRadio('電話で対応する', 'phone');
+
+        container.appendChild(emailOpt.wrapper);
+        container.appendChild(phoneOpt.wrapper);
+        wayOfReplySpace.appendChild(container);
+
+        // イベントリスナー
+        emailOpt.radio.addEventListener('change', () => updateVisibility('email'));
+        phoneOpt.radio.addEventListener('change', () => updateVisibility('phone'));
+        const onRadioChange = async (mode) => {
+          updateVisibility(mode);
+          // 選択状態をレコードに保存
+          try {
+            await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', {
+              app: kintone.app.getId(),
+              id: recordId,
+              record: { [CONFIG.FIELDS.WAY_OF_REPLY]: { value: mode } }
+            });
+          } catch(e) { console.error('Failed to save way of reply', e); }
+        };
+
+        // 初期状態設定: どちらも選択せず、フィールドを非表示にする
+        updateVisibility(null);
+        emailOpt.radio.addEventListener('change', () => onRadioChange('email'));
+        phoneOpt.radio.addEventListener('change', () => onRadioChange('phone'));
+
+        // 初期状態設定: 保存された値があれば復元、なければ非表示
+        if (savedWayOfReply === 'email' || savedWayOfReply === 'phone') {
+          if (savedWayOfReply === 'email') emailOpt.radio.checked = true;
+          if (savedWayOfReply === 'phone') phoneOpt.radio.checked = true;
+          updateVisibility(savedWayOfReply);
+        } else {
+          updateVisibility(null);
+        }
+      } else {
+        // 既に存在する場合、現在の選択状態に合わせて表示を更新 (画面再描画対策)
+        const checked = container.querySelector('input[name="way-of-reply-radio"]:checked');
+        updateVisibility(checked ? checked.value : null);
+      }
+    }
 
     // --- 1. メール送信ボタン作成 ---
     if (!isResDateOrTimeEmpty && spaceElement && !document.getElementById('send-reservation-mail-btn')) {
@@ -483,7 +603,7 @@
       `;
 
       // ② 電話調整完了のボタンはメール既読前まで有効 (既読検知済みなら無効化)
-      if (isPhoneConfirmed || status === CONFIG.UPDATE_VALUES.STATUS_READ || isResDateOrTimeEmpty) {
+      if (isPhoneConfirmed || status === CONFIG.UPDATE_VALUES.STATUS_READ || isResDateOrTimeEmpty || isCancelledByPatient) {
         phoneBtn.disabled = true;
         phoneBtn.innerText = '電話合意済';
         phoneBtn.style.backgroundColor = '#ccc';
@@ -523,7 +643,9 @@
                 const nowISO = new Date().toISOString();
                 const updateRecord = {
                   [CONFIG.FIELDS.STATUS]: { value: CONFIG.UPDATE_VALUES.STATUS_PHONE },
-                  [CONFIG.FIELDS.PHONE_CONFIRM]: { value: nowISO }
+                  [CONFIG.FIELDS.PHONE_CONFIRM]: { value: nowISO },
+                  [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
+                  [CONFIG.FIELDS.CANCEL_DATE]: { value: null }
                 };
 
                 // メール送信処理
@@ -573,7 +695,7 @@
     }
 
     // --- 3. スタッフキャンセルボタン作成 ---
-    if ((isSent || isPhoneConfirmed) && cancelSpaceElement && !document.getElementById('staff-cancel-btn')) {
+    if ((isSent || isPhoneConfirmed) && cancelSpaceElement && !document.getElementById('staff-cancel-btn') && !isCancelledByPatient) {
       const cancelBtn = document.createElement('button');
       cancelBtn.id = 'staff-cancel-btn';
       cancelBtn.innerText = 'キャンセル';
@@ -605,7 +727,6 @@
           const confirmMsg = `
             <strong>【警告】この操作は取り消せません。</strong><br><br>
             以下の処理を実行します：<br>
-            ・確定予約日、確定予約時刻を<strong>空欄</strong>にします。<br>
             ・メール送信日時、電話確認日時、メール既読日時を<strong>消去</strong>します。<br>
             ・ステータスを<strong>キャンセル</strong>に変更します。<br>
             <br>
@@ -621,11 +742,11 @@
                 id: recordId,
                 record: {
                   [CONFIG.FIELDS.STATUS]: { value: CONFIG.UPDATE_VALUES.STATUS_CANCEL },
-                  [CONFIG.FIELDS.RES_DATE]: { value: null },
-                  [CONFIG.FIELDS.RES_TIME]: { value: null },
                   [CONFIG.FIELDS.SEND_DATE]: { value: null },
                   [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
-                  [CONFIG.FIELDS.READ_DATE]: { value: null }
+                  [CONFIG.FIELDS.READ_DATE]: { value: null },
+                  [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: 'スタッフ' },
+                  [CONFIG.FIELDS.CANCEL_DATE]: { value: new Date().toISOString() }
                 }
               };
               await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', body);
@@ -641,6 +762,79 @@
         };
       }
       cancelSpaceElement.appendChild(cancelBtn);
+    }
+
+    // --- 3.5 チケット終了/確認ボタン作成 (キャンセル済みの場合) ---
+    if (status === CONFIG.UPDATE_VALUES.STATUS_CANCEL) {
+      // --- A. スタッフによるキャンセルの場合：「このチケットを終了にする」ボタン ---
+      if (cancelExecutor === 'スタッフ' && cancelSpaceElement) {
+        if (!document.getElementById('finish-ticket-btn')) {
+          const finishBtn = document.createElement('button');
+          finishBtn.id = 'finish-ticket-btn';
+          finishBtn.innerText = 'このチケットを終了にする';
+          finishBtn.style.cssText = `padding: 10px 24px; background-color: #000000; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: background-color 0.2s;`;
+          finishBtn.onmouseover = () => { finishBtn.style.backgroundColor = '#333333'; };
+          finishBtn.onmouseout  = () => { finishBtn.style.backgroundColor = '#000000'; };
+
+          finishBtn.onclick = async () => {
+            const confirmMsg = 'このチケットを終了ステータスに変更しますか？<br>変更後は予約日時の編集ができなくなります。';
+            showModal('confirm', '確認', confirmMsg, async () => {
+              showSpinner();
+              try {
+                const body = {
+                  app: kintone.app.getId(),
+                  id: recordId,
+                  record: { [CONFIG.FIELDS.STATUS]: { value: CONFIG.UPDATE_VALUES.STATUS_FINISH } }
+                };
+                await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', body);
+                hideSpinner();
+                showModal('success', '完了', 'ステータスを「終了」に変更しました。', () => location.reload());
+              } catch (error) {
+                hideSpinner();
+                errorLog('Finish Ticket Update Failed', error);
+                showModal('error', 'エラー', '更新に失敗しました。<br>' + error.message);
+              }
+            });
+          };
+          cancelSpaceElement.appendChild(finishBtn);
+        }
+      }
+
+      // --- B. 本人によるキャンセルの場合：「スタッフ確認」ボタン ---
+      const staffConfirmedValue = getValue(record, CONFIG.FIELDS.STAFF_CONFIRM_CHECK);
+      const isStaffConfirmed = Array.isArray(staffConfirmedValue) && staffConfirmedValue.length > 0;
+
+      if (cancelExecutor === '本人' && !isStaffConfirmed && staffConfirmFieldElement) {
+        if (!document.getElementById('staff-ack-btn')) {
+          const ackBtn = document.createElement('button');
+          ackBtn.id = 'staff-ack-btn';
+          ackBtn.innerText = 'スタッフ確認';
+          ackBtn.style.cssText = `margin-left: 10px; padding: 5px 15px; background-color: #2c3e50; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;`;
+          ackBtn.onmouseover = () => { ackBtn.style.backgroundColor = '#34495e'; };
+          ackBtn.onmouseout  = () => { ackBtn.style.backgroundColor = '#2c3e50'; };
+
+          ackBtn.onclick = async () => {
+            showModal('confirm', '確認', 'Webからのキャンセルをスタッフ確認済として記録しますか？', async () => {
+              showSpinner();
+              try {
+                const body = {
+                  app: kintone.app.getId(),
+                  id: recordId,
+                  record: { [CONFIG.FIELDS.STAFF_CONFIRM_CHECK]: { value: ['確認済'] } }
+                };
+                await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', body);
+                hideSpinner();
+                location.reload();
+              } catch (error) {
+                hideSpinner();
+                errorLog('Staff Ack Failed', error);
+                showModal('error', 'エラー', '更新に失敗しました。<br>' + error.message);
+              }
+            });
+          };
+          staffConfirmFieldElement.appendChild(ackBtn);
+        }
+      }
     }
 
     // --- 4. 担当者アサインボタン作成 ---
@@ -762,14 +956,16 @@
 
     // 2. 予約日時フィールドの制御 (送信済・合意済の場合)
     const status = getValue(record, CONFIG.FIELDS.STATUS);
+    const cancelExecutor = getValue(record, CONFIG.FIELDS.CANCEL_EXECUTOR);
     const lockedStatuses = [
         CONFIG.UPDATE_VALUES.STATUS_SENT, 
         CONFIG.UPDATE_VALUES.STATUS_READ, 
         CONFIG.UPDATE_VALUES.STATUS_PHONE, 
-        '完了'
+        '完了',
+        CONFIG.UPDATE_VALUES.STATUS_FINISH
     ];
 
-    if (lockedStatuses.includes(status)) {
+    if (lockedStatuses.includes(status) || (status === CONFIG.UPDATE_VALUES.STATUS_CANCEL && cancelExecutor === '本人')) {
         if (record[CONFIG.FIELDS.RES_DATE]) record[CONFIG.FIELDS.RES_DATE].disabled = true;
         if (record[CONFIG.FIELDS.RES_TIME]) record[CONFIG.FIELDS.RES_TIME].disabled = true;
     }

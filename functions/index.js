@@ -69,7 +69,7 @@ exports.sendTestMail = functions.https.onRequest(async (req, res) => {
   }
 
   const mailOptions = {
-    from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
+    from: `"ふれあいグループ 湘南東部病院予約センター" <${config.user}@fureai-g.or.jp>`,
     to: to,
     subject: "【疎通テスト】Firebase Functions -> Kagoya SMTP",
     text: `このメールは、共通基盤/Mailerモジュールを使用して送信されています。\n送信時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
@@ -124,15 +124,15 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
     let htmlBody = "";
     
     const headerHtml = `<p>${recipientName} 様</p><p>当病院をご利用いただきありがとうございます。</p>`;
-    const footerHtml = `<br><hr><p>湘南東部病院 予約センター</p>`;
+    const footerHtml = `<br><hr><p>ふれあいグループ 湘南東部病院予約センター</p>`;
 
     switch (data.type) {
       case "初診":
         subject = "【予約確定】診療のご予約（初診）について";
         htmlBody = `
           ${headerHtml}
-          <p>診療のご予約（初診）につきまして確定しましたので<br>
-          以下のURLをクリックしてご確認ください。</p>
+          <p>診療のご予約（初診）についてお知らせします。<br>
+          以下のURLをクリックして内容をご確認ください。</p>
           <p><a href="${targetUrl}">${targetUrl}</a></p>
           ${footerHtml}
         `;
@@ -142,8 +142,8 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
         subject = "【予約変更】診療予約の変更について";
         htmlBody = `
           ${headerHtml}
-          <p>診療のご予約（変更）につきまして確定しましたので<br>
-          以下のURLをクリックしてご確認ください。</p>
+          <p>診療のご予約（変更）につきましてお知らせします。<br>
+          以下のURLをクリックして内容をご確認ください。</p>
           <p><a href="${targetUrl}">${targetUrl}</a></p>
           ${footerHtml}
         `;
@@ -170,7 +170,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
 
       default:
         console.warn(`[WARN] 未定義の用件タイプ: ${data.type}`);
-        subject = "【お知らせ】予約センターからのご連絡";
+        subject = "【お知らせ】ふれあいグループ 湘南東部病院予約センターからのご連絡";
         htmlBody = `
           ${headerHtml}
           <p>下記より内容をご確認ください。</p>
@@ -181,7 +181,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
     }
 
     const mailOptions = {
-      from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
+      from: `"ふれあいグループ 湘南東部病院予約センター" <${config.user}@fureai-g.or.jp>`,
       to: data.to,
       bcc: "akifumi.mishima@gmail.com",
       subject: subject,
@@ -261,7 +261,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         console.log(`[LOG] キャンセル処理開始: RecordID=${recordId}`);
 
         // 既にキャンセル済みの場合は専用画面へ
-        if (currentStatus === "予約キャンセル発生") {
+        if (currentStatus === "キャンセル") {
             res.status(200).send(getAlreadyCancelledHtml());
             return;
         }
@@ -273,8 +273,9 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             app: APP_ID,
             id: recordId,
             record: {
-                "管理ステータス": { value: "予約キャンセル発生" },
-                "キャンセル日時": { value: nowISO }
+                "管理ステータス": { value: "キャンセル" },
+                "キャンセル日時": { value: nowISO },
+                "キャンセル実行者": { value: "本人" }
             }
         };
 
@@ -318,7 +319,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
 
         if (email) {
             const mailOptions = {
-                from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
+                from: `"ふれあいグループ 湘南東部予約センター" <${config.user}@fureai-g.or.jp>`,
                 to: email,
                 bcc: "akifumi.mishima@gmail.com",
                 subject: "【予約キャンセル完了】診療予約のキャンセルについて",
@@ -334,7 +335,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
                     </ul>
                     <br>
                     <p>またのご利用をお待ちしております。</p>
-                    <br><hr><p>湘南東部病院 予約センター</p>
+                    <br><hr><p>ふれあいグループ 湘南東部病院予約センター</p>
                 `
             };
             await sendMailCore(mailOptions);
@@ -350,7 +351,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     // ---------------------------------------------------------
     
     // 1. 既にキャンセル済みの場合
-    if (currentStatus === "予約キャンセル発生") {
+    if (currentStatus === "キャンセル") {
         res.status(200).send(getAlreadyCancelledHtml());
         return;
     }
@@ -486,7 +487,7 @@ function getConfirmedHtml(record, recordId, showCancel) {
           ${cancelBtnHtml}
 
           <div class="footer">
-            湘南東部病院 予約センター<br>
+            ふれあいグループ 湘南東部病院予約センター<br>
             ※キャンセルは上記ボタン、またはお電話にてご連絡ください。
           </div>
         </div>
@@ -516,7 +517,7 @@ function getAlreadyCancelledHtml() {
       <body>
         <div class="container">
           <h1>この予約は無効になりました</h1>
-          <p>この予約は無効となったか、既に取り消し手続きが完了しています。<br>ご不明な点がございましたら、予約センターまでお問い合わせください。</p>
+          <p>この予約は無効となったか、既に取り消し手続きが完了しています。<br>ご不明な点がございましたら、ふれあいグループ 湘南東部病院予約センターまでお問い合わせください。</p>
         </div>
       </body>
       </html>
@@ -604,7 +605,7 @@ function getExpiredHtml() {
         <div class="icon">⚠️</div>
         <h1>このリンクは無効です</h1>
         <p>予約日時を過ぎているため、詳細を表示できません。<br>
-        ご不明な点がございましたら、予約センターまでお問い合わせください。</p>
+        ご不明な点がございましたら、ふれあいグループ 湘南東部病院予約センターまでお問い合わせください。</p>
       </div>
     </body>
     </html>
