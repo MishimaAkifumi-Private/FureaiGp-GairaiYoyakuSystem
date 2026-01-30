@@ -218,6 +218,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
 
   // クエリパラメータの取得 (?id=xxx)
   const recordId = req.query.id || req.body.id;
+  const mode = req.query.mode;
 
   if (!recordId) {
     console.error("[ERROR] パラメータ 'id' が不足しています。");
@@ -351,7 +352,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     // ---------------------------------------------------------
     
     // 1. 既にキャンセル済みの場合
-    if (currentStatus === "キャンセル") {
+    if (currentStatus === "キャンセル" || currentStatus === "スタッフ取下") {
         res.status(200).send(getAlreadyCancelledHtml());
         return;
     }
@@ -390,11 +391,13 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     // 3. キャンセルボタンの表示判定
     // - 既にステータスが「メール既読検知」だった場合 (再アクセス)
     // - または、電話確認日時が入っている場合 (電話調整済みなら初回アクセスでもキャンセル可)
-    const isAlreadyRead = (currentStatus === "メール既読検知");
+    // - mode=phone の場合 (電話対応での案内メール) は初回からキャンセル可能
+    // 既読日時が入っている場合も既読とみなす
+    const isAlreadyRead = !!mailReadDate || (currentStatus === "メール既読検知");
     const isPhoneConfirmed = !!phoneConfirmDate;
-    const showCancel = isAlreadyRead || isPhoneConfirmed;
+    const showCancel = isAlreadyRead || isPhoneConfirmed || (mode === 'phone');
 
-    const html = getConfirmedHtml(record, recordId, showCancel);
+    const html = getConfirmedHtml(record, recordId, showCancel, mode);
     res.status(200).send(html);
 
   } catch (error) {
@@ -410,8 +413,9 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
  * @param {object} record Kintoneレコード
  * @param {string} recordId レコードID
  * @param {boolean} showCancel キャンセルボタンを表示するかどうか
+ * @param {string} mode 表示モード (phone/mail)
  */
-function getConfirmedHtml(record, recordId, showCancel) {
+function getConfirmedHtml(record, recordId, showCancel, mode) {
     const lastName = (record["姓漢字"] && record["姓漢字"].value) || "";
     const firstName = (record["名漢字"] && record["名漢字"].value) || "";
     const name = lastName + " " + firstName;
@@ -434,12 +438,17 @@ function getConfirmedHtml(record, recordId, showCancel) {
     }
     const dateTimeStr = `${formattedDate} ${resTime}`;
 
+    // フッター注釈の出し分け
+    const footerNote = showCancel ? '※キャンセルは上記ボタン、またはお電話にてご連絡ください。' : '';
+
     // キャンセルボタンのHTML (POSTフォーム)
     const cancelBtnHtml = showCancel ? `
-        <form method="POST" action="?id=${recordId}" onsubmit="return confirm('本当に予約をキャンセルしますか？');">
-            <input type="hidden" name="action" value="cancel">
-            <button type="submit" class="btn-cancel">予約をキャンセルする</button>
-        </form>
+        <div class="btn-area">
+            <form method="POST" action="?id=${recordId}" onsubmit="return confirm('本当に予約をキャンセルしますか？');">
+                <input type="hidden" name="action" value="cancel">
+                <button type="submit" class="btn-cancel">予約をキャンセルする</button>
+            </form>
+        </div>
     ` : '';
 
     return `
@@ -459,9 +468,12 @@ function getConfirmedHtml(record, recordId, showCancel) {
           .info-row:last-child { border-bottom: none; }
           .label { width: 100px; font-weight: bold; color: #777; font-size: 14px; }
           .value { flex: 1; font-weight: bold; font-size: 15px; color: #333; }
-          .btn-cancel { display: inline-block; margin-top: 20px; padding: 12px 24px; background-color: #e74c3c; color: white; text-decoration: none; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; transition: background-color 0.3s; }
+          .btn-area { text-align: center; margin-top: 20px; }
+          .btn-cancel { display: inline-block; padding: 12px 24px; background-color: #e74c3c; color: white; text-decoration: none; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; transition: background-color 0.3s; }
           .btn-cancel:hover { background-color: #c0392b; }
-          .footer { margin-top: 30px; font-size: 12px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+          .footer { margin-top: 30px; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+          .footer-signature { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; }
+          .footer-note { font-size: 12px; color: #aaa; }
         </style>
       </head>
       <body>
@@ -487,8 +499,8 @@ function getConfirmedHtml(record, recordId, showCancel) {
           ${cancelBtnHtml}
 
           <div class="footer">
-            ふれあいグループ 湘南東部病院予約センター<br>
-            ※キャンセルは上記ボタン、またはお電話にてご連絡ください。
+            <div class="footer-signature">ふれあいグループ 湘南東部病院予約センター</div>
+            <div class="footer-note">${footerNote}</div>
           </div>
         </div>
       </body>

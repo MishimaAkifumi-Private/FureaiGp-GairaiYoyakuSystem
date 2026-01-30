@@ -3,7 +3,7 @@
 
   // ★追加: グローバルエラーハンドラによる詳細なデバッグ
   window.addEventListener('error', function (event) {
-    console.error('[Gemini FATAL] Uncaught Error:', {
+    console.error('[FATAL] Uncaught Error:', {
       message: event.message,
       filename: event.filename,
       lineno: event.lineno,
@@ -12,11 +12,8 @@
     });
   });
   window.addEventListener('unhandledrejection', function (event) {
-    console.error('[Gemini FATAL] Unhandled Promise Rejection:', event.reason);
+    console.error('[FATAL] Unhandled Promise Rejection:', event.reason);
   });
-
-  // 【デバッグ】起動確認ログ
-  console.log('%c[Gemini Debug] Script Loaded. Version: Force-Visible-v5', 'background: #000; color: #bada55; padding: 5px; font-weight: bold;');
 
   try {
       if (typeof window.fb === 'undefined') { window.fb = { events: { form: {} } }; }
@@ -29,14 +26,57 @@
       const isPreviewMode = urlParams.has('preview') && urlParams.get('preview') === '1';
 
       if (isPreviewMode) {
-          console.log('%c[Gemini] PREVIEW MODE ACTIVATED', 'background: #e74c3c; color: #fff; font-size: 14px; padding: 4px; font-weight: bold;');
-          
           // プレビューバナーの表示
           const banner = document.createElement('div');
           banner.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; background-color: #e67e22; color: #fff; text-align: center; padding: 10px 0; font-weight: bold; z-index: 9999999; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-size: 14px; letter-spacing: 0.05em;';
           banner.innerHTML = '⚠️ 現在プレビューモードで表示しています';
           document.body.appendChild(banner);
           document.body.style.marginTop = '40px'; // バナー分下げる
+
+          // ★追加: タイトル変更 (文字色は変えられないため文言で強調)
+          document.title = 'プレビュー';
+
+          // ★追加: タイトルがSPA遷移などで上書きされるのを防ぐ
+          new MutationObserver(() => {
+              if (document.title !== 'プレビュー') document.title = 'プレビュー';
+          }).observe(document.querySelector('title') || document.head, { childList: true, subtree: true });
+
+          // ★追加: ファビコンを動的に赤くする
+          setTimeout(() => {
+              const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+              link.type = 'image/x-icon';
+              link.rel = 'shortcut icon';
+              if (!link.parentNode) document.head.appendChild(link);
+
+              const img = new Image();
+              img.crossOrigin = 'Anonymous';
+              // 既存のファビコンがあればそれを使用、なければデフォルト
+              img.src = link.href || '/favicon.ico';
+
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = img.width || 32;
+                  canvas.height = img.height || 32;
+                  const ctx = canvas.getContext('2d');
+                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  
+                  // 赤色をオーバーレイ (source-atop: 描画済みの不透明部分にのみ上書き)
+                  ctx.globalCompositeOperation = 'source-atop';
+                  ctx.fillStyle = 'rgba(231, 76, 60, 0.8)'; // #e74c3c
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  
+                  link.href = canvas.toDataURL('image/png');
+              };
+              // 読み込み失敗時(CORS等)は赤い丸を表示
+              img.onerror = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 32; canvas.height = 32;
+                  const ctx = canvas.getContext('2d');
+                  ctx.fillStyle = '#e74c3c';
+                  ctx.beginPath(); ctx.arc(16, 16, 16, 0, Math.PI*2); ctx.fill();
+                  link.href = canvas.toDataURL('image/png');
+              };
+          }, 500);
       }
 
       let isProgrammaticChange = false;
@@ -409,11 +449,10 @@
 
       async function fetchData() {
           try {
-              console.log('[Gemini Debug] Start fetching data...');
               await Promise.all([fetchKintoneData(), fetchPublicHolidays()]);
-              console.log('[Gemini Debug] Fetch data complete.');
           } catch (error) {
               console.error('[ERROR] データ取得中にエラーが発生しました:', error);
+              throw error;
           }
       }
 
@@ -443,23 +482,34 @@
       async function fetchKintoneData() {
           // ★変更: モードに応じてAPI URLを切り替え
           const url = isPreviewMode ? config.API_URL_PREVIEW : config.API_URL_PUBLIC;
-          console.log(`[Gemini] Fetching Kintone data from: ${url} (Mode: ${isPreviewMode ? 'PREVIEW' : 'PUBLIC'})`);
           
           const response = await fetch(url);
           if (!response.ok) throw new Error(`kViewer API request failed: ${response.status}`);
           const data = await response.json();
-          console.log('[Gemini] Kintone data received:', data);
           if (!data.records || data.records.length === 0) throw new Error('kViewerからレコードが見つかりません。');
-          config.state.kintoneCommonRecord = data.records[0];
+          
+          // AppID = 156 のレコードを検索
+          let targetRecord = data.records.find(r => r['AppID'] && r['AppID'].value === '156');
+          
+          // 見つからない場合、有効なJSONデータを持っているレコードを探索 (フォールバック)
+          if (!targetRecord) {
+              const searchKey = isPreviewMode ? '設定情報2' : '設定情報';
+              targetRecord = data.records.find(r => r[searchKey] && r[searchKey].value && r[searchKey].value.trim().startsWith('{'));
+          }
+
+          if (!targetRecord) {
+              console.warn('適切なレコードが特定できませんでした。先頭のレコードを使用します。');
+              targetRecord = data.records[0];
+          }
+          config.state.kintoneCommonRecord = targetRecord;
           
           const commonRecord = config.state.kintoneCommonRecord;
           // ★変更: モードに応じて読み込むフィールドを切り替え
           const jsonFieldKey = isPreviewMode ? '設定情報2' : '設定情報';
-          console.log(`[Gemini] Reading JSON from field: ${jsonFieldKey}`);
 
           let jsonString = commonRecord[jsonFieldKey]?.value;
           if (isPreviewMode && !jsonString) {
-              console.warn('[Gemini] Preview JSON field (設定情報2) is empty. Falling back to Public JSON (設定情報).');
+              console.warn('Preview JSON field (設定情報2) is empty. Falling back to Public JSON (設定情報).');
               jsonString = commonRecord['設定情報']?.value;
           }
 
@@ -535,8 +585,6 @@
 
       function updateFbField(fieldCode, value) {
           const safeValue = (value === null || value === undefined) ? '' : value;
-          // ★追加: 入力された値をリアルタイムでログ出力
-          console.log(`[Gemini Input] ${fieldCode} = ${safeValue}`);
           config.state.submitData[fieldCode] = safeValue;
           syncToDom(fieldCode, safeValue);
       }
@@ -2242,19 +2290,13 @@
       }
 
       function handleDataInjection(state) {
-          console.log('[Gemini] Submitting Data... Injecting custom fields.');
           const data = config.state.submitData;
           
-          // ★追加: デバッグ用ログ (開発者ツールで確認してください)
-          console.log('[Gemini Debug] Submit Data (Custom UI):', JSON.parse(JSON.stringify(data)));
-          console.log('[Gemini Debug] FormBridge Record Fields:', Object.keys(state.record));
-
           Object.keys(data).forEach(fieldCode => {
               if (state.record[fieldCode]) {
                   state.record[fieldCode].value = data[fieldCode];
-                  console.log(`[Gemini Debug] Success: ${fieldCode} = ${data[fieldCode]}`);
               } else {
-                  console.warn(`[Gemini Warning] Failed: Field code "${fieldCode}" not found in FormBridge. Value not saved.`);
+                  console.warn(`Failed: Field code "${fieldCode}" not found in FormBridge. Value not saved.`);
               }
           });
           return state;
@@ -2274,30 +2316,22 @@
                               document.querySelector('.fb-custom--button--submit button') ||
                               document.querySelector('.fb-submit');
 
-          if (retryCount % 5 === 0) {
-             console.log(`[Gemini Debug] Polling for anchor element (Field: ${config.fbFields.REQUIREMENT})... (Attempt: ${retryCount}) Found: ${!!anchorElement}`);
-          }
-
           if (anchorElement && !document.getElementById(config.uiIds.WIZARD_CONTAINER)) {
               if (isInitializing) return; // 初期化中はスキップ
-              console.log('[Gemini Debug] Anchor element detected. Finding host container...');
               
               let host = anchorElement.closest('form') || 
                          anchorElement.closest('.fb-content') || 
                          anchorElement.closest('.el-form');
               
               if (!host) {
-                  console.warn('[Gemini Debug] Could not find standard host (form/.fb-content). Using generic parent.');
                   host = anchorElement.parentElement.parentElement; 
               }
 
               if (host) {
-                  console.log('[Gemini Debug] Host container determined:', host);
                   isInitializing = true; // フラグON
                   
                   // ★重要修正: Hostコンテナが非表示(hidden)の場合、強制的に表示させる
                   if (host.classList.contains('hidden')) {
-                      console.log('[Gemini Debug] Host is hidden! Removing hidden class.');
                       host.classList.remove('hidden');
                   }
                   host.style.display = 'block';
@@ -2325,55 +2359,46 @@
                   injectStyles();
                   
                   try {
-                      await fetchData(); // ログはここまで出ている
-                      console.log('[Gemini Debug] After fetchData. Initializing UI...');
+                      await fetchData();
 
                       initializeWizardUI(wizardContainer);
-                      console.log('[Gemini Debug] After initializeWizardUI.');
 
                       initializePatientFormUI(patientFormContainer);
-                      console.log('[Gemini Debug] After initializePatientFormUI.');
 
                       patientFormContainer.style.display = 'none';
                       navigationContainer.style.display = 'none';
-                      console.log('[Gemini Debug] UI containers hidden.');
 
                       updateFbField(config.fbFields.APPLICANT, '本人');
                       const applicantRadio = document.querySelector('input[name="申込者"][value="本人"]');
                       if (applicantRadio) {
-                          console.log('[Gemini Debug] Found applicant radio. Triggering change...');
                           handleApplicantChange({ target: applicantRadio });
-                      } else {
-                          console.warn('[Gemini Debug] Applicant radio not found.');
                       }
 
                       updateProxyLabels();
-                      console.log('[Gemini Debug] Proxy labels updated.');
                       
                       setTimeout(() => {
-                          console.log('[Gemini Debug] Switching to initial step...');
                           switchStep(config.state.currentStep);
                       }, 100);
                       
                       clearInterval(bootstrapper);
-                      console.log('[Gemini Debug] Bootstrapper cleared. Initialization complete.');
 
                   } catch (e) {
-                      console.error('[Gemini] Initialization Error:', e);
-                      wizardContainer.innerHTML = `<p style="color:red">システムエラーが発生しました: ${e.message}</p>`;
+                      console.error('Initialization Error:', e);
+                      wizardContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#d9534f; font-weight:bold;">本サービスは一時的に停止しています。<br>しばらく時間をおいてアクセスしてください。</div>';
                       isInitializing = false; // エラー時はリトライ可能にするならOFFに戻す（今回はコンテナが残るので実質リトライしないが念のため）
                   }
               }
           }
           
           if (retryCount >= MAX_RETRIES) {
-             console.warn('[Gemini Debug] Max retries reached. Stopping poller.');
+             console.warn('Max retries reached. Stopping poller.');
              clearInterval(bootstrapper);
           }
       }, 200);
 
   } catch (globalError) {
-      console.error('[Gemini FATAL] Script crashed at top-level:', globalError);
+      console.error('[FATAL] Script crashed at top-level:', globalError);
+      console.error('Script crashed at top-level:', globalError);
   }
 
 })();

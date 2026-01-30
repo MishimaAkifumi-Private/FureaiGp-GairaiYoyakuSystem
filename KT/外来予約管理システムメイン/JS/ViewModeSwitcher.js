@@ -6,7 +6,7 @@
   'use strict';
   console.log('ViewModeSwitcher.js: Loading...');
 
-  const APP_VERSION = '0.90'; // システムのバージョン番号
+  const APP_VERSION = '0.91'; // システムのバージョン番号
 
   function getUrlParam(name) {
     const url = window.location.href;
@@ -18,7 +18,16 @@
     return decodeURIComponent(results[2].replace(/\+/g, " "));
   }
 
-  const currentMode = getUrlParam('view_mode') || 'dashboard';
+  // ★変更: モード判定ロジックの改善 (絞り込み時はinputモードとみなす)
+  function determineViewMode() {
+      const mode = getUrlParam('view_mode');
+      if (mode) return mode;
+      // view(一覧ID) または q(検索クエリ) がある場合は標準一覧(input)とみなす
+      if (getUrlParam('view') || getUrlParam('q')) return 'input';
+      return 'dashboard';
+  }
+
+  const currentMode = determineViewMode();
   console.log('ViewModeSwitcher.js: Current mode is', currentMode);
 
   const INITIAL_HIDE_STYLE_ID = 'kintone-initial-hide-style';
@@ -225,8 +234,7 @@
         return event;
     }
 
-    let viewMode = getUrlParam('view_mode');
-    if (!viewMode) viewMode = 'dashboard';
+    let viewMode = determineViewMode();
 
     // 共通スタイル適用
     window.ShinryoApp.Viewer.applyStyles();
@@ -294,6 +302,20 @@
              // ★ 編集モード用フィルターの作成
              createEditModeFilters(div);
 
+             // ★ 追加: 詳細リンクを編集モードへのリンクに書き換え
+             const modifyLinks = () => {
+                 const links = document.querySelectorAll('a.recordlist-show-gaia');
+                 links.forEach(link => {
+                     if (link.href && !link.href.includes('mode=edit')) {
+                         link.href += '&mode=edit';
+                     }
+                 });
+             };
+             modifyLinks();
+             const observer = new MutationObserver(() => modifyLinks());
+             const listTable = document.querySelector('.recordlist-gaia');
+             if (listTable) observer.observe(listTable, { childList: true, subtree: true });
+
              // ★ 追加: ページャー部分へのボタン配置 (Dashboard, 予約待ち受け状況)
              const pager = document.querySelector('.gaia-argoui-app-index-pager');
              if (pager) {
@@ -309,9 +331,9 @@
                  btnDashboard.className = 'fa-solid fa-hospital';
                  btnDashboard.title = 'Dashboard';
                  btnDashboard.style.fontSize = '35px';
-                 btnDashboard.style.color = '#666';
+                 btnDashboard.style.color = 'rgb(60, 147, 225)'; // ★変更: 指定色
                  btnDashboard.style.cursor = 'pointer';
-                 btnDashboard.style.marginRight = '10px';
+                 btnDashboard.style.marginRight = '0px';
                  btnDashboard.style.marginLeft = '0px';
                  btnDashboard.style.marginBottom = '5px';
                  btnDashboard.onclick = () => location.href = '?view_mode=dashboard';
@@ -342,10 +364,8 @@
              const btnMainMenu = document.createElement('i');
              btnMainMenu.className = 'fa-solid fa-hospital';
              btnMainMenu.title = 'Dashboard';
-             btnMainMenu.style.fontSize = '24px';
-             btnMainMenu.style.color = '#28a745';
              btnMainMenu.style.fontSize = '40px';
-             btnMainMenu.style.color = '#666';
+             btnMainMenu.style.color = 'rgb(60, 147, 225)'; // ★変更: 指定色
              btnMainMenu.style.cursor = 'pointer';
              btnMainMenu.style.marginRight = '15px';
              btnMainMenu.style.marginRight = '10px';
@@ -379,7 +399,8 @@
              flowContainer.style.cssText = 'display: flex; align-items: center; border: 2px solid #ddd; border-radius: 8px; padding: 8px 15px; margin-left: 10px; background-color: #eee; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 25px;';
 
              const btnPreview = document.createElement('button');
-             btnPreview.className = 'mode-switch-btn';
+             btnPreview.id = 'btn-preview-mode'; // ★追加: ID付与
+             btnPreview.className = 'mode-switch-btn btn-disabled'; // ★変更: 初期状態は無効
              btnPreview.textContent = 'プレビュー';
              btnPreview.style.backgroundColor = '#e74c3c';
              btnPreview.style.marginLeft = '0';
@@ -401,6 +422,8 @@
 
              // ★追加: 中止ボタン (左向き矢印)
              const btnRevert = document.createElement('button');
+             btnRevert.id = 'btn-revert-mode'; // ★追加: ID付与
+             btnRevert.classList.add('btn-disabled'); // ★追加: 初期状態は無効
              btnRevert.textContent = '中止';
              btnRevert.style.cssText = `
                  background-color: #6c757d;
@@ -429,11 +452,24 @@
                       { ok: '中止して戻す', cancel: 'キャンセル' }
                   );
                   if (confirmed) {
+                      // 操作ブロック用のオーバーレイを表示
+                      const loadingOverlay = document.createElement('div');
+                      loadingOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); z-index: 20000; display: flex; align-items: center; justify-content: center; flex-direction: column; cursor: wait;';
+                      loadingOverlay.innerHTML = '<div class="kintone-spinner"></div><div style="margin-top: 10px; font-weight: bold; color: #333;">処理中...</div>';
+                      document.body.appendChild(loadingOverlay);
+
                       try {
                           await window.ShinryoApp.ConfigManager.revertFromProduction();
+                          
+                          // 完了メッセージ表示のために一旦隠す
+                          loadingOverlay.style.display = 'none';
                           await showCustomDialog('設定を公開中の状態に戻しました。', 'alert');
+                          
+                          // リロード前に再度表示して操作をブロック
+                          loadingOverlay.style.display = 'flex';
                           location.reload();
                       } catch(e) {
+                          if (document.body.contains(loadingOverlay)) document.body.removeChild(loadingOverlay);
                           await showCustomDialog('処理に失敗しました。\n' + e.message, 'alert');
                       }
                   }
@@ -441,6 +477,8 @@
              flowContainer.appendChild(btnRevert);
 
              const btnPublish = document.createElement('button');
+             btnPublish.id = 'btn-publish-mode'; // ★追加: ID付与
+             btnPublish.classList.add('btn-disabled'); // ★追加: 初期状態は無効
              btnPublish.textContent = '公開'; // ★変更: 名称変更
              btnPublish.style.cssText = `
                  background-color: #28a745;
@@ -509,24 +547,8 @@
 
                         await window.ShinryoApp.ConfigManager.fetchPublishedData();
                         
-                        // 2. 本番環境との差分チェック (Preview/Publishボタン用)
-                        const hasProdDiff = window.ShinryoApp.ConfigManager.hasProductionDiff();
-                        if (hasProdDiff) {
-                            // 差分あり: 点滅させる (公開ボタンは点滅させない)
-                            // btnPreview.classList.add('btn-blink');
-                            // btnPublish.classList.add('btn-blink'); // ★変更: 点滅停止
-                            btnPreview.classList.remove('btn-disabled');
-                            btnPublish.classList.remove('btn-disabled');
-                            btnRevert.classList.remove('btn-disabled'); // ★追加: 中止ボタン有効化
-                        } else {
-                            // 差分なし: グレーアウトして操作不可
-                            btnPreview.classList.remove('btn-blink');
-                            // btnPublish.classList.remove('btn-blink');
-                            btnPreview.classList.add('btn-disabled');
-                            btnPublish.classList.add('btn-disabled');
-                            btnRevert.classList.add('btn-disabled'); // ★追加: 中止ボタン無効化
-                        }
-
+                        // ★変更: ボタンの有効/無効制御は ShinryoViewer.js 側で行うため、
+                        // ここでの上書き処理は削除しました。
                     } catch (e) {
                         console.error('Update check failed:', e);
                     }
@@ -2678,5 +2700,39 @@
           });
       }
   }
+
+  // ★追加: 詳細・編集画面へのナビゲーションボタン追加
+  kintone.events.on(['app.record.detail.show', 'app.record.edit.show'], function(event) {
+      const headerSpace = kintone.app.record.getHeaderMenuSpaceElement();
+      if (headerSpace && !document.getElementById('custom-nav-buttons')) {
+          const container = document.createElement('div');
+          container.id = 'custom-nav-buttons';
+          // ★修正: z-indexを追加してクリック可能にする (ヘッダー領域外へのはみ出し対策)
+          container.style.cssText = "float: left; display: flex; gap: 10px; margin-left: 10px; align-items: center; margin-top: 15px; margin-right: 40px; position: relative; z-index: 1000;";
+          
+          // ★修正: アプリルートURLを動的に生成 (絶対パス化して確実に遷移させる)
+          const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+
+          const btnDashboard = document.createElement('i');
+          btnDashboard.className = 'fa-solid fa-hospital';
+          btnDashboard.title = 'Dashboard';
+          btnDashboard.style.cssText = "font-size: 35px; color: rgb(60, 147, 225); cursor: pointer; margin-right:0px; margin-left: 0px; margin-bottom: 5px;"; // ★変更: 指定色
+          // 詳細・編集画面(show/edit)からは階層を一つ上がって一覧へ遷移
+          btnDashboard.onclick = () => window.location.href = appRoot + '?view_mode=dashboard';
+
+          const btnOverview = document.createElement('span');
+          btnOverview.className = 'material-symbols-outlined';
+          btnOverview.textContent = '📅';
+          btnOverview.title = '予約待ち受け管理';
+          btnOverview.style.cssText = "font-size: 35px; color: rgb(102, 102, 102); cursor: pointer; margin-bottom: 12px;";
+          btnOverview.onclick = () => window.location.href = appRoot + '?view_mode=overview';
+
+          container.appendChild(btnDashboard);
+          container.appendChild(btnOverview);
+          
+          headerSpace.appendChild(container);
+      }
+      return event;
+  });
 
 })();

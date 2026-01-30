@@ -127,6 +127,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       if (obj === null || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map(canonicalize);
       return Object.keys(obj).sort().reduce((acc, key) => {
+          if (key === '$id' || key === '_debug_info') return acc; // ★変更: IDとデバッグ情報は比較から除外
           acc[key] = canonicalize(obj[key]);
           return acc;
       }, {});
@@ -248,7 +249,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   /**
    * 現在のアプリの状態をJSONとして共通設定保管アプリに保存（公開）する
    */
-  async function saveConfig(currentRecords, currentDescriptions, currentDeptSettings, currentCommonSettings, currentLabelSettings) {
+  async function saveConfig(currentRecords, currentDescriptions, currentDeptSettings, currentCommonSettings, currentLabelSettings, targetRecordId = null) {
     const myAppId = kintone.app.getId();
 
     // 設定の解決
@@ -389,20 +390,26 @@ window.ShinryoApp = window.ShinryoApp || {};
     console.groupEnd();
 
     try {
-      // 既存レコードの確認 (fetchPublishedDataのロジックを再利用または別途クエリ)
-      // ここでは簡易的にGETしてレコードIDを取得
-      const query = `${STORAGE_KEY_FIELD} = "${myAppId}" limit 1`;
-      const apiPathGet = kintone.api.url('/k/v1/records', true);
-      const baseUrlGet = /^https?:\/\//.test(apiPathGet) ? apiPathGet : window.location.origin + apiPathGet;
-      const getUrl = baseUrlGet + `?app=${STORAGE_APP_ID}&query=${encodeURIComponent(query)}&_t=${new Date().getTime()}`; // ★変更: タイムスタンプ付与
+      let recordId = targetRecordId;
+
+      // IDが指定されていない場合は検索して特定する
+      if (!recordId) {
+          const query = `${STORAGE_KEY_FIELD} = "${myAppId}" limit 1`;
+          const apiPathGet = kintone.api.url('/k/v1/records', true);
+          const baseUrlGet = /^https?:\/\//.test(apiPathGet) ? apiPathGet : window.location.origin + apiPathGet;
+          const getUrl = baseUrlGet + `?app=${STORAGE_APP_ID}&query=${encodeURIComponent(query)}&_t=${new Date().getTime()}`;
       
-      // GETリクエスト用ヘッダー (Content-Typeを含めない)
-      const getHeaders = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN };
+          // GETリクエスト用ヘッダー (Content-Typeを含めない)
+          const getHeaders = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN };
       
-      const [getBody, getStatus] = await kintone.proxy(getUrl, 'GET', getHeaders, {});
-      if (getStatus !== 200) throw new Error(`Failed to check existing records. Status: ${getStatus}, Body: ${getBody}`);
+          const [getBody, getStatus] = await kintone.proxy(getUrl, 'GET', getHeaders, {});
+          if (getStatus !== 200) throw new Error(`Failed to check existing records. Status: ${getStatus}, Body: ${getBody}`);
       
-      const getResp = JSON.parse(getBody);
+          const getResp = JSON.parse(getBody);
+          if (getResp.records && getResp.records.length > 0) {
+              recordId = getResp.records[0].$id.value;
+          }
+      }
 
       let method = 'POST';
       const apiPathSave = kintone.api.url('/k/v1/record', true);
@@ -418,11 +425,11 @@ window.ShinryoApp = window.ShinryoApp || {};
       // 保存用ヘッダー (Content-Typeが必要)
       const saveHeaders = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN, 'Content-Type': 'application/json' };
 
-      if (getResp.records && getResp.records.length > 0) {
+      if (recordId) {
         method = 'PUT';
         bodyParams = {
           app: STORAGE_APP_ID,
-          id: getResp.records[0].$id.value,
+          id: recordId,
           record: {
             [STORAGE_JSON_FIELD]: { value: jsonStr }
           }
@@ -489,11 +496,14 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
 
   /**
-   * ★追加: 「設定情報」(本番) の内容を 「設定情報2」(プレビュー) に上書きコピーする (Revert)
+   * ★追加: 「設定情報」(本番) の内容を 「設定情報2」(プレビュー) に上書きコピーし、
+   * さらに現在のアプリ(App156)のレコードも本番データに合わせて復元する (Revert)
    */
   async function revertFromProduction() {
-    console.log('ConfigManager: Reverting from Production (Copying 設定情報 to 設定情報2)...');
+    console.log('ConfigManager: Reverting from Production...');
     const myAppId = kintone.app.getId();
+    
+    // 1. App200から本番データ(設定情報)を取得
     const query = `${STORAGE_KEY_FIELD} = "${myAppId}" limit 1`;
     const apiPath = kintone.api.url('/k/v1/records', true);
     const baseUrl = /^https?:\/\//.test(apiPath) ? apiPath : window.location.origin + apiPath;
@@ -501,37 +511,156 @@ window.ShinryoApp = window.ShinryoApp || {};
     const headers = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN };
 
     try {
-      // 1. 現在のレコードを取得
       const [body, status] = await kintone.proxy(url, 'GET', headers, {});
       if (status !== 200) throw new Error(`Fetch failed. Status: ${status}`);
       const resp = JSON.parse(body);
       if (resp.records.length === 0) throw new Error('Target record not found in App 200.');
 
       const rec = resp.records[0];
-      const prodJson = rec['設定情報']?.value; // 設定情報 (本番)
-      const recId = rec.$id.value;
-
-      if (!prodJson) throw new Error('Production data (設定情報) is empty.');
-
-      // 2. 設定情報2フィールドを更新
-      const updateUrl = kintone.api.url('/k/v1/record', true);
-      const updateBody = {
-        app: STORAGE_APP_ID,
-        id: recId,
-        record: {
-          [STORAGE_JSON_FIELD]: { value: prodJson } // 設定情報2
-        }
-      };
-      const updateHeaders = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN, 'Content-Type': 'application/json' };
+      const recId = rec.$id.value; // ★追加: レコードIDを取得
+      const prodJsonStr = rec['設定情報']?.value; // 設定情報 (本番)
       
-      const [putBody, putStatus] = await kintone.proxy(updateUrl, 'PUT', updateHeaders, JSON.stringify(updateBody));
-      if (putStatus !== 200) throw new Error(`Update failed. Status: ${putStatus}`);
+      if (!prodJsonStr) throw new Error('Production data (設定情報) is empty.');
+      
+      const prodData = JSON.parse(prodJsonStr);
+      const prodRecords = (prodData.records || []).map(inflateRecord); // 展開
+
+      // 2. App156のレコードを本番データに合わせて同期(復元)
+      await syncAppRecords(prodRecords);
+
+      // 3. 同期後の最新レコードをApp156から再取得
+      // ※ syncAppRecordsでレコードが再作成された場合、IDが変わっているため、
+      //    prodRecords(旧ID)ではなく、実際のアプリ上のレコード(新ID)を保存する必要がある
+      let currentRecords = [];
+      let offset = 0;
+      while(true) {
+          const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', { app: myAppId, query: `limit 500 offset ${offset}` });
+          currentRecords = currentRecords.concat(resp.records);
+          if(resp.records.length < 500) break;
+          offset += 500;
+      }
+
+      // ★追加: 保存前にソートして順序を安定させる (本番データとの差分誤検知を防止)
+      currentRecords.sort((a, b) => {
+          const oa = parseInt(a['表示順']?.value || 9999, 10);
+          const ob = parseInt(b['表示順']?.value || 9999, 10);
+          if (oa !== ob) return oa - ob;
+          return parseInt(a.$id.value, 10) - parseInt(b.$id.value, 10);
+      });
+
+      // 4. 設定情報2(プレビュー)を最新のアプリ状態で上書き保存
+      // ※ 本番データの設定値でプレビューを上書きする (undefinedの場合は空オブジェクトで上書き)
+      await saveConfig(
+          currentRecords, 
+          prodData.descriptions || {}, 
+          prodData.departmentSettings || {}, 
+          prodData.commonSettings || {}, 
+          prodData.labelSettings || {},
+          recId // ★追加: 特定したレコードIDを渡して更新を強制する
+      );
       
       console.log('ConfigManager: Reverted from Production successfully.');
     } catch (e) {
       console.error('ConfigManager: Revert failed.', e);
       throw e;
     }
+  }
+
+  // App156のレコードを同期する内部関数
+  async function syncAppRecords(targetRecords) {
+      const appId = kintone.app.getId();
+      
+      // 現在のレコードを全取得
+      let currentRecords = [];
+      let offset = 0;
+      while(true) {
+          const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', { app: appId, query: `limit 500 offset ${offset}` });
+          currentRecords = currentRecords.concat(resp.records);
+          if(resp.records.length < 500) break;
+          offset += 500;
+      }
+
+      const requests = [];
+      const targetMap = new Map(targetRecords.map(r => [String(r.$id.value), r]));
+      const currentMap = new Map(currentRecords.map(r => [String(r.$id.value), r]));
+      
+      // ★修正: ゲストスペース環境に対応したAPI URLを取得
+      const recordsApiUrl = kintone.api.url('/k/v1/records', true).replace(/^https?:\/\/[^\/]+/, '');
+
+      // 削除対象 (現在あるが、ターゲットにない)
+      const deleteIds = currentRecords.filter(r => !targetMap.has(String(r.$id.value))).map(r => r.$id.value);
+      if (deleteIds.length > 0) {
+          // 100件ずつ
+          for (let i = 0; i < deleteIds.length; i += 100) {
+              requests.push({
+                  method: 'DELETE',
+                  api: recordsApiUrl, // ★修正: 正しいURLを使用
+                  payload: { app: appId, ids: deleteIds.slice(i, i + 100) }
+              });
+          }
+      }
+
+      // 更新・追加対象
+      const recordsToUpdate = [];
+      const recordsToAdd = [];
+
+      targetRecords.forEach(tRec => {
+          const tId = String(tRec.$id.value);
+          const cRec = currentMap.get(tId);
+          
+          // API用ペイロード作成
+          const recordPayload = {};
+          Object.keys(tRec).forEach(key => {
+              if (['$id', 'レコード番号', '作成者', '更新者', '作成日時', '更新日時', '$revision'].includes(key)) return;
+              if (key.startsWith('_')) return; // ★追加: _debug_info などの内部プロパティを除外
+              
+              if (tRec[key].type === 'SUBTABLE') {
+                  recordPayload[key] = {
+                      value: tRec[key].value.map(row => {
+                          const rowVal = {};
+                          Object.keys(row.value).forEach(f => {
+                              rowVal[f] = { value: row.value[f].value };
+                          });
+                          return { value: rowVal };
+                      })
+                  };
+              } else {
+                  recordPayload[key] = { value: tRec[key].value };
+              }
+          });
+
+          if (cRec) {
+              recordsToUpdate.push({ id: tId, record: recordPayload });
+          } else {
+              recordsToAdd.push(recordPayload);
+          }
+      });
+
+      // Updateリクエスト (100件ずつ)
+      for (let i = 0; i < recordsToUpdate.length; i += 100) {
+          requests.push({
+              method: 'PUT',
+              api: recordsApiUrl, // ★修正: 正しいURLを使用
+              payload: { app: appId, records: recordsToUpdate.slice(i, i + 100) }
+          });
+      }
+
+      // Addリクエスト (100件ずつ)
+      for (let i = 0; i < recordsToAdd.length; i += 100) {
+          requests.push({
+              method: 'POST',
+              api: recordsApiUrl, // ★修正: 正しいURLを使用
+              payload: { app: appId, records: recordsToAdd.slice(i, i + 100) }
+          });
+      }
+
+      // 実行 (bulkRequestの上限は20リクエスト)
+      if (requests.length > 0) {
+          for (let i = 0; i < requests.length; i += 20) {
+              const bulkBody = { requests: requests.slice(i, i + 20) };
+              await kintone.api(kintone.api.url('/k/v1/bulkRequest', true), 'POST', bulkBody);
+          }
+      }
   }
 
   /**

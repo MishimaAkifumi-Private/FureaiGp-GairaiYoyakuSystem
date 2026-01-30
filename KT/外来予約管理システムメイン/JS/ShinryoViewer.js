@@ -321,13 +321,12 @@ window.ShinryoApp = window.ShinryoApp || {};
       }
       .doctor-name-wrapper {
           background-color: #fff;
-          padding: 6px;
           padding: 6px 10px;
           display: flex;
           align-items: center;
-          justify-content: center;
           justify-content: space-between; /* ボタンを右寄せにするため変更 */
           border-bottom: 1px solid #eee;
+          box-sizing: border-box;
       }
     `;
     const styleElement = document.createElement('style');
@@ -930,14 +929,14 @@ window.ShinryoApp = window.ShinryoApp || {};
         console.log(`[Viewer Debug] Published Map Keys:`, Array.from(publishedMap.keys()));
         console.log(`[Viewer Debug] Local Merged Keys:`, mergedRecords.map(r => String(r.$id.value)));
 
-        renderTable(mergedRecords, descriptions, container, publishedMap, deptSettings, commonSettings); // ★変更: commonSettingsも渡す
+        renderTable(mergedRecords, descriptions, container, publishedMap, deptSettings, commonSettings, validRecords); // ★変更: validRecords(ソース)も渡す
     }).catch(err => {
         console.error('Overview load error:', err);
         container.innerHTML = '<div style="color:red;padding:20px;">データの読み込みに失敗しました。<br>ページをリロードしてください。</div>';
     });
   }
 
-  function renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings) {
+  function renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings, sourceRecords) {
     container.innerHTML = '';
     records.sort((a, b) => {
         const oa = parseInt(a['表示順']?.value || 9999, 10);
@@ -1085,6 +1084,8 @@ window.ShinryoApp = window.ShinryoApp || {};
         return false;
     };
 
+    let hasAnyChanges = false; // ★追加: 変更有無フラグ
+
     const tbody = table.createTBody();
     records.forEach((rec, idx) => {
         const row = tbody.insertRow();
@@ -1174,6 +1175,7 @@ window.ShinryoApp = window.ShinryoApp || {};
 
             if (col.field !== '掲載' && col.field !== '医師名' && col.type !== 'detail_btn' && isChanged) {
                 cell.classList.add('cell-changed');
+                hasAnyChanges = true;
             }
 
             if (col.type === 'dept_toggle') {
@@ -1207,7 +1209,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                         
                         // descriptionsを更新して再描画
                         descriptions['__status__' + currentDept] = newState;
-                        renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings); // 再描画
+                        renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings, sourceRecords); // 再描画
                     } catch(e) {
                         await showCustomDialog('更新に失敗しました', 'alert');
                         deptInput.checked = !deptInput.checked;
@@ -1225,7 +1227,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 iconSpan.className = 'material-symbols-outlined';
                 iconSpan.textContent = 'calendar_month';
                 iconSpan.style.cursor = 'pointer';
-                iconSpan.style.fontSize = '24px';
+                iconSpan.style.fontSize = '45px';
                 iconSpan.style.color = '#007bff';
                 iconSpan.title = 'カレンダーを表示';
                 iconSpan.onclick = (e) => {
@@ -1329,13 +1331,13 @@ window.ShinryoApp = window.ShinryoApp || {};
                     if (rowSpan === 1) {
                         containerDiv.style.height = '100%';
                         containerDiv.style.borderBottom = 'none';
-                        containerDiv.style.paddingTop = '0px';
                     }
 
                     // ★追加: 個別レコードの変更判定（医師名枠を点滅させる）
                     const targetPubRec = publishedMap ? publishedMap.get(String(targetRec.$id.value)) : null;
                     if (hasRecordChange(targetRec, targetPubRec)) {
                         containerDiv.classList.add('cell-changed');
+                        hasAnyChanges = true;
                     }
 
                     const textSpan = document.createElement('span');
@@ -1406,6 +1408,9 @@ window.ShinryoApp = window.ShinryoApp || {};
         });
     });
     container.appendChild(table);
+
+    // ★追加: ヘッダーのプレビューボタンを制御して保存機能を統合
+    updateHeaderPreviewButton(hasAnyChanges, sourceRecords, descriptions, deptSettings, commonSettings);
 
     // 凡例は削除（スケジュール表内に移動したため）
   }
@@ -1559,6 +1564,100 @@ window.ShinryoApp = window.ShinryoApp || {};
       box.appendChild(btnGroup);
       overlay.appendChild(box);
       document.body.appendChild(overlay);
+  }
+
+  // ★追加: ヘッダーボタン制御関数
+  function updateHeaderPreviewButton(hasChanges, records, descriptions, deptSettings, commonSettings) {
+      // ヘッダーのボタンをIDで探す (ViewModeSwitcher.jsで付与されたID)
+      const previewBtn = document.getElementById('btn-preview-mode');
+      const revertBtn = document.getElementById('btn-revert-mode');
+      const publishBtn = document.getElementById('btn-publish-mode');
+      
+      if (!previewBtn) return;
+
+      // プレビュー表示共通関数
+      const openPreview = () => {
+          const formUrl = localStorage.getItem('shinryo_form_url');
+          if (formUrl) {
+              const url = new URL(formUrl);
+              url.searchParams.set('preview', '1');
+              window.open(url.toString(), '_blank');
+          } else {
+              alert('公開用URLが設定されていません。');
+          }
+      };
+
+      if (hasChanges) {
+          // 変更がある場合: 保存してプレビュー
+          previewBtn.textContent = 'プレビュー';
+          previewBtn.classList.remove('btn-disabled'); // ★重要: グレーアウト解除
+          // スタイル適用
+          previewBtn.style.backgroundColor = '#e74c3c';
+          previewBtn.style.color = '#fff';
+          previewBtn.style.animation = 'pulse-animation 2s infinite';
+          previewBtn.title = '未保存の変更があります。クリックして保存し、プレビューを表示します。';
+          previewBtn.style.cursor = 'pointer';
+          previewBtn.style.pointerEvents = 'auto'; // ★重要: クリック有効化
+
+          // ★追加: 未保存の変更がある間は、公開・中止ボタンは無効化する
+          if (revertBtn) {
+              revertBtn.classList.add('btn-disabled');
+              revertBtn.style.pointerEvents = 'none';
+          }
+          if (publishBtn) {
+              publishBtn.classList.add('btn-disabled');
+              publishBtn.style.pointerEvents = 'none';
+          }
+
+          previewBtn.onclick = async () => {
+              try {
+                  // 保存処理（確認なしで即実行）
+                  await window.ShinryoApp.ConfigManager.saveConfig(records, descriptions, deptSettings, commonSettings);
+                  
+                  // プレビューを開く & リロード
+                  openPreview();
+                  setTimeout(() => location.reload(), 1000);
+              } catch(e) {
+                  await window.ShinryoApp.Viewer.showCustomDialog('保存に失敗しました。\n' + e.message, 'alert');
+              }
+          };
+      } else {
+          // 変更がない場合: 本番環境との差分チェックに基づいて状態を復元
+          const hasProdDiff = window.ShinryoApp.ConfigManager.hasProductionDiff();
+          
+          previewBtn.textContent = 'プレビュー';
+          previewBtn.style.animation = '';
+          
+          if (hasProdDiff) {
+              // 差分あり: 有効化
+              previewBtn.classList.remove('btn-disabled');
+              previewBtn.style.pointerEvents = 'auto';
+              previewBtn.style.cursor = 'pointer';
+              previewBtn.onclick = openPreview;
+              
+              if (revertBtn) {
+                  revertBtn.classList.remove('btn-disabled');
+                  revertBtn.style.pointerEvents = 'auto';
+              }
+              if (publishBtn) {
+                  publishBtn.classList.remove('btn-disabled');
+                  publishBtn.style.pointerEvents = 'auto';
+              }
+          } else {
+              // 差分なし: 無効化
+              previewBtn.classList.add('btn-disabled');
+              previewBtn.style.pointerEvents = 'none';
+              
+              if (revertBtn) {
+                  revertBtn.classList.add('btn-disabled');
+                  revertBtn.style.pointerEvents = 'none';
+              }
+              if (publishBtn) {
+                  publishBtn.classList.add('btn-disabled');
+                  publishBtn.style.pointerEvents = 'none';
+              }
+          }
+      }
   }
 
   // ★追加: Quill.js ライブラリの動的ロード
