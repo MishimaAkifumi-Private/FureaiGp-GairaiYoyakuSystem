@@ -1,4 +1,4 @@
-﻿﻿(function() {
+﻿﻿﻿﻿(function() {
   'use strict';
 
   // --- 設定値 ---
@@ -61,7 +61,7 @@
       // 5. ★追加: 差分チェック（更新された未完了チケットがあるか確認）
       try {
         const appId = kintone.app.getId();
-        const query = `更新日時 > "${pageLoadTime}" and 管理ステータス not in ("完了") limit 1`;
+        const query = `更新日時 > "${pageLoadTime}" and 管理状況 not in ("完了") limit 1`;
         
         const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
           app: appId,

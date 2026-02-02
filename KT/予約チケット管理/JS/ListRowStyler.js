@@ -9,7 +9,7 @@
   'use strict';
 
   const CONFIG = {
-    STATUS_FIELD: '管理ステータス', // 判定に使うフィールドコード
+    STATUS_FIELD: '管理状況', // 判定に使うフィールドコード
     EXECUTOR_FIELD: 'キャンセル実行者', // キャンセル実行者フィールド
     RES_DATE_FIELD: '確定予約日',   // 予約日フィールド
     STAFF_CONFIRM_FIELD: 'スタッフ確認', // スタッフ確認フィールド
