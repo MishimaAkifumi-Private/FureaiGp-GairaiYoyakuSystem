@@ -168,6 +168,9 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
         const resDate = data.reservationDate || "（日付未定）";
         const resTime = data.reservationTime || "";
         const resDept = data.department || "（診療科不明）";
+        const resMessage = data.message || "";
+        const resMessageHtml = resMessage ? `<br><p>${resMessage.replace(/\n/g, '<br>')}</p>` : "";
+        const resMessageText = resMessage ? `\n\n${resMessage}` : "";
 
         subject = "【予約取消】診療予約の取り消しについて";
         htmlBody = `
@@ -178,10 +181,11 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
             <li>日時: ${resDate} ${resTime}</li>
             <li>診療科: ${resDept}</li>
           </ul>
-          <p>本メールは手続き完了の通知のみとなります。別途お手続きは不要です。\nお大事になさってください。</p>
+          ${resMessageHtml}
+          <p>本メールは手続き完了の通知のみとなります。\n\n別途お手続きは不要です。\n\nお大事になさってください。</p>
           ${footerHtml}
         `;
-        textBody = `${headerText}\n以下のご予約を取消しさせていただきました。\n\n[取り消したご予約]\n日時: ${resDate} ${resTime}\n診療科: ${resDept}\n\n通知のみとなりますので、URLのクリックは不要です。${footerText}`;
+        textBody = `${headerText}\n以下のご予約を取消しさせていただきました。\n\n[取り消したご予約]\n日時: ${resDate} ${resTime}\n診療科: ${resDept}${resMessageText}\n\n通知のみとなりますので、URLのクリックは不要です。${footerText}`;
         break;
 
       default:
@@ -300,11 +304,11 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     if (req.method === 'POST') {
       const action = req.body.action;
       
-      if (action === 'cancel') {
-        console.log(`[LOG] キャンセル処理開始: RecordID=${recordId}`);
+      if (action === 'cancel' || action === 'cancel_timeout') {
+        console.log(`[LOG] キャンセル処理開始: RecordID=${recordId}, Action=${action}`);
 
         // 既にキャンセル済みの場合は専用画面へ
-        if (currentStatus === "キャンセル") {
+        if (currentStatus === "キャンセル" || currentStatus === "URL取下") {
             res.status(200).send(getAlreadyCancelledHtml());
             return;
         }
@@ -316,9 +320,10 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             app: APP_ID,
             id: recordId,
             record: {
-                "管理状況": { value: "キャンセル" },
+                "管理状況": { value: "URL取下" },
                 "キャンセル日時": { value: nowISO },
-                "キャンセル実行者": { value: "本人" }
+                "キャンセル実行者": { value: "本人" },
+                "ReserveLock": { value: "unlock" } // ★追加: URL取下(キャンセル)時はunlock
             }
         };
 
@@ -336,52 +341,17 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             throw new Error(`Kintone Update Failed (Cancel): ${errText}`);
         }
 
-        // キャンセル完了メール送信
-        const email = (record["メールアドレス"] && record["メールアドレス"].value) || "";
-        const lastName = (record["姓漢字"] && record["姓漢字"].value) || "";
-        const firstName = (record["名漢字"] && record["名漢字"].value) || "";
-        const name = lastName + " " + firstName;
-
-        // 予約情報のフォーマット（メール本文用）
-        const resTime = (record["確定予約時刻"] && record["確定予約時刻"].value) || "";
-        let dept = (record["診療科"] && record["診療科"].value) || "-";
-        if (dept.includes('/')) {
-            const parts = dept.split('/');
-            dept = parts[parts.length - 1].trim();
+        // URL取下完了画面へ (メール送信はしない)
+        if (action === 'cancel') {
+            res.status(200).send(getWithdrawnHtml());
+            return;
         }
-        let formattedDate = (record["確定予約日"] && record["確定予約日"].value) || "未定";
-        if (record["確定予約日"] && record["確定予約日"].value) {
-            try {
-                const d = new Date(record["確定予約日"].value);
-                formattedDate = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', {
-                    era: 'long', year: 'numeric', month: 'long', day: 'numeric'
-                }).format(d);
-            } catch (e) { /* ignore */ }
-        }
-        const dateTimeStr = `${formattedDate} ${resTime}`;
 
-        if (email) {
-            const mailOptions = {
-                from: `"ふれあいグループ 湘南東部予約センター" <${config.user}@fureai-g.or.jp>`,
-                to: email,
-                bcc: "akifumi.mishima@gmail.com",
-                subject: "【予約キャンセル完了】診療予約のキャンセルについて",
-                html: `
-                    <p>${name} 様</p>
-                    <p>いつもご利用ありがとうございます。</p>
-                    <p>ご依頼いただきました以下の診療予約のキャンセル手続きが完了いたしました。</p>
-                    <br>
-                    <p><strong>【キャンセルされた予約】</strong></p>
-                    <ul>
-                        <li>日時: ${dateTimeStr}</li>
-                        <li>診療科: ${dept}</li>
-                    </ul>
-                    <br>
-                    <p>またのご利用をお待ちしております。</p>
-                    <br><hr><p>ふれあいグループ 湘南東部病院予約センター</p>
-                `
-            };
-            await sendMailCore(mailOptions);
+        // タイムアウトキャンセルならWEBフォームへリダイレクト
+        if (action === 'cancel_timeout') {
+            const formUrl = "https://93ac276f.form.kintoneapp.com/waiting/?_formCode=34f65f5aac95cf65e480602f89cf3846c2dfd4345bc2b4cb05d97a20dea6c46d";
+            res.redirect(formUrl);
+            return;
         }
 
         res.status(200).send(getCancellationCompletedHtml());
@@ -445,7 +415,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         
         // ステータス更新判定
         // 以下のステータスの場合は、ステータス自体は変更せず、既読日時のみ記録する
-        const keepStatusList = ["キャンセル", "スタッフ取下", "閲覧期限切れ", "電話合意済", "完了", "終了", "メール既読", "メール合意済"];
+        const keepStatusList = ["キャンセル", "URL取下", "スタッフ取下", "閲覧期限切れ", "電話合意済", "完了", "終了", "メール既読", "メール合意済"];
         
         // ステータスが上記以外（主に「メール送信済」）の場合のみ「メール既読」に変更
         if (!keepStatusList.includes(currentStatus)) {
@@ -463,8 +433,14 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     }
 
     // 1. 既にキャンセル済みの場合
-    if (currentStatus === "キャンセル" || currentStatus === "スタッフ取下") {
+    if (currentStatus === "キャンセル" || currentStatus === "URL取下" || currentStatus === "スタッフ取下") {
         res.status(200).send(getAlreadyCancelledHtml());
+        return;
+    }
+
+    // 1.2 再依頼済みの場合
+    if (currentStatus === "申込者再依頼") {
+        res.status(200).send(getReRequestProcessingHtml());
         return;
     }
 
@@ -550,7 +526,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         };
         
         // ステータス更新 (キャンセル等でなければ「メール既読」へ)
-        const keepStatusList = ["キャンセル", "スタッフ取下", "閲覧期限切れ", "電話合意済", "完了", "終了", "メール既読", "メール合意済"];
+        const keepStatusList = ["キャンセル", "URL取下", "スタッフ取下", "閲覧期限切れ", "電話合意済", "完了", "終了", "メール既読", "メール合意済"];
         if (!keepStatusList.includes(currentStatus)) {
             updateBody.record["管理状況"] = { value: "メール既読" };
         }
@@ -627,7 +603,7 @@ function getConfirmedHtml(record, recordId, showCancel, mode) {
     // キャンセルボタンのHTML (POSTフォーム)
     const cancelBtnHtml = showCancel ? `
         <div class="btn-area">
-            <form method="POST" action="?id=${recordId}" onsubmit="return confirm('本当に予約をキャンセルしますか？');">
+            <form method="POST" action="?id=${recordId}" onsubmit="return confirm('本当に予約を取り下げますか？');">
                 <input type="hidden" name="action" value="cancel">
                 <button type="submit" class="btn-cancel">予約をキャンセルする</button>
             </form>
@@ -712,7 +688,7 @@ function getAlreadyCancelledHtml() {
       <body>
         <div class="container">
           <h1>この予約は無効になりました</h1>
-          <p>この予約は無効となったか、既に取り消し手続きが完了しています。<br>ご不明な点がございましたら、ふれあいグループ 湘南東部病院予約センターまでお問い合わせください。</p>
+          <p>この予約は無効となったか、既に取り下げ手続きが完了しています。<br>ご不明な点がございましたら、ふれあいグループ 湘南東部病院予約センターまでお問い合わせください。</p>
         </div>
       </body>
       </html>
@@ -720,9 +696,9 @@ function getAlreadyCancelledHtml() {
 }
 
 /**
- * キャンセル完了時のHTML
+ * URL取下完了時のHTML (新規追加)
  */
-function getCancellationCompletedHtml() {
+function getWithdrawnHtml() {
     return `
       <!DOCTYPE html>
       <html lang="ja">
@@ -733,14 +709,14 @@ function getCancellationCompletedHtml() {
         <style>
           body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
           .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-          h1 { color: #e74c3c; font-size: 20px; }
+          h1 { color: #7f8c8d; font-size: 20px; }
           p { color: #555; line-height: 1.6; }
         </style>
       </head>
       <body>
         <div class="container">
-          <h1>キャンセル処理が完了しました</h1>
-          <p>予約の取り消しを受け付けました。<br>確認メールを送信しましたのでご確認ください。</p>
+          <h1>予約を取り下げました</h1>
+          <p>ご予約の取り下げを受け付けました。<br>またのご利用をお待ちしております。</p>
         </div>
       </body>
       </html>
@@ -765,17 +741,27 @@ function getTimeoutRetryHtml(recordId) {
           p { line-height: 1.8; margin-bottom: 20px; text-align: left; }
           .btn-retry { display: inline-block; padding: 15px 40px; background-color: #3498db; color: #fff; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
           .btn-retry:hover { background-color: #2980b9; }
+          .btn-cancel { display: inline-block; padding: 15px 40px; background-color: #95a5a6; color: #fff; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
+          .btn-cancel:hover { background-color: #7f8c8d; }
+          .btn-group { display: flex; justify-content: center; gap: 15px; margin-top: 30px; flex-wrap: wrap; }
         </style>
       </head>
       <body>
         <div class="container">
           <h1>予約確認の期限が切れました</h1>
           <p>所定の時間内にご確認いただけなかったため、予約枠の確保を解除いたしました。</p>
-          <p>まだ本日中ですので、以下のボタンから<strong>再依頼</strong>を行うことが可能です。<br>再依頼を行うと、予約センターにて再度調整を行いご連絡いたします。</p>
-          <form method="POST" action="?id=${recordId}">
-            <input type="hidden" name="action" value="re_request">
-            <button type="submit" class="btn-retry">再依頼する</button>
-          </form>
+          <p>本日中であれば以下のボタンから<strong>再依頼</strong>を行うことが可能です。<br>再依頼を行うと、すでに頂ている希望内容をもとに再調整してご連絡いたします。</p>
+          <p>再依頼を行わない場合は「再依頼しない」を選択してください。<br>この予約はキャンセル扱いとなりますが、明日まで待つことなくWEBフォームから新たな予約を行うことができます。</p>
+          <div class="btn-group">
+            <form method="POST" action="?id=${recordId}">
+              <input type="hidden" name="action" value="re_request">
+              <button type="submit" class="btn-retry">再依頼する</button>
+            </form>
+            <form method="POST" action="?id=${recordId}" onsubmit="return confirm('再依頼を行わずに終了しますか？\\nこの予約はキャンセル扱いとなります。');">
+              <input type="hidden" name="action" value="cancel_timeout">
+              <button type="submit" class="btn-cancel">再依頼しない</button>
+            </form>
+          </div>
         </div>
       </body>
       </html>
@@ -803,6 +789,34 @@ function getReRequestCompletedHtml() {
       <body>
         <div class="container">
           <h1>再依頼を受け付けました</h1>
+          <p>担当者が内容を確認し、改めてご連絡いたします。<br>しばらくお待ちください。</p>
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
+ * 再依頼手続き中画面
+ */
+function getReRequestProcessingHtml() {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>再依頼手続き中</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #27ae60; font-size: 20px; }
+          p { color: #555; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>現在再依頼手続き中です</h1>
           <p>担当者が内容を確認し、改めてご連絡いたします。<br>しばらくお待ちください。</p>
         </div>
       </body>

@@ -1,4 +1,4 @@
-﻿(function() {
+﻿﻿(function() {
   "use strict";
 
   // ★追加: グローバルエラーハンドラによる詳細なデバッグ
@@ -128,6 +128,7 @@
               WISH_4: '第4希望日時',
               WISH_5: '第5希望日時',
               OTHER_NOTES: 'その他備考',
+              RESERVE_LOCK: 'ReserveLock', // ★追加: 初期状態ロック用
           },
 
           jsonKeys: {
@@ -192,7 +193,7 @@
 
           state: {
               currentStep: 1,
-              submitData: {}, 
+              submitData: { 'ReserveLock': 'lock' }, // ★追加: 初期値をlockに設定
               kintoneCommonRecord: null,
               kintoneRecords: [],
               publicHolidays: {},
@@ -785,6 +786,7 @@
               for (let i = 1; i <= config.MAX_WISH_DATES; i++) {
                   updateFbField(config.fbFields['WISH_' + i], '');
               }
+              updateFbField(config.fbFields.RESERVE_LOCK, 'lock'); // ★追加: 用件変更時もlockを維持
               resetSelections('requirement');
 
               const reasonTextarea = document.getElementById(config.uiIds.REASON_TEXTAREA);

@@ -160,10 +160,11 @@
       
       /* Date Editor Styles */
       .rcb-date-editor {
-        background-color: #fafafa;
-        border: 1px solid #eee;
-        padding: 15px;
-        border-radius: 6px;
+        background-color: #fff;
+        border: 1px solid #e0e0e0;
+        padding: 25px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
       }
       .rcb-input-row {
         display: flex;
@@ -173,7 +174,7 @@
         flex-wrap: wrap;
       }
       .rcb-date-input {
-        padding: 8px;
+        padding: 10px;
         border: 1px solid #ccc;
         border-radius: 4px;
         font-size: 14px;
@@ -275,6 +276,110 @@
         box-sizing: border-box; font-family: inherit; font-size: 14px;
         resize: vertical;
       }
+      
+      /* Cancel Form Styles (Improved) */
+      .rcb-cancel-container {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 25px;
+        text-align: left;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+      .rcb-form-group {
+        margin-bottom: 20px;
+      }
+      .rcb-label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #2c3e50;
+        font-size: 14px;
+      }
+      .rcb-input-text {
+        width: 100%;
+        max-width: 400px;
+        padding: 10px;
+        border: 1px solid #dcdfe6;
+        border-radius: 4px;
+        font-size: 14px;
+        transition: border-color 0.2s;
+      }
+      .rcb-input-text:focus {
+        border-color: #3498db;
+        outline: none;
+      }
+      .rcb-info-block {
+        background-color: #f8f9fa;
+        padding: 12px 15px;
+        border-radius: 4px;
+        font-size: 13px;
+        color: #555;
+        margin-bottom: 15px;
+        border-left: 4px solid #3498db;
+        line-height: 1.5;
+      }
+      
+      /* Modal Confirm Styles (New) */
+      .rcb-confirm-msg {
+        margin-bottom: 20px;
+        font-size: 15px;
+        color: #333;
+        text-align: center;
+        font-weight: bold;
+      }
+      .rcb-confirm-box {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        padding: 20px;
+        text-align: left;
+      }
+      .rcb-confirm-row {
+        display: flex;
+        margin-bottom: 10px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .rcb-confirm-label {
+        flex: 0 0 80px;
+        font-weight: bold;
+        color: #7f8c8d;
+      }
+      .rcb-confirm-value {
+        flex: 1;
+        color: #2c3e50;
+        font-weight: 500;
+        word-break: break-word;
+      }
+      .rcb-confirm-divider {
+        border: 0;
+        border-top: 1px dashed #ccc;
+        margin: 15px 0;
+      }
+      .rcb-confirm-note {
+        display: block;
+        font-size: 12px;
+        color: #95a5a6;
+      }
+      .rcb-confirm-sub {
+        font-size: 12px;
+        color: #7f8c8d;
+        margin-left: 5px;
+      }
+      
+      /* Hide Standard Kintone Elements */
+      .gaia-argoui-app-menu-add,
+      .gaia-argoui-app-menu-copy,
+      .sidebar-tab-comments-gaia,
+      .sidebar-tab-history-gaia,
+      .gaia-argoui-app-infobar-iconlist,
+      .gaia-argoui-app-subtotalbutton,
+      .gaia-argoui-optionmenubutton,
+      .gaia-argoui-app-viewtoggle,
+      .gaia-argoui-app-filterbutton {
+        display: none !important;
+      }
     `;
   
     // スタイル適用
@@ -298,6 +403,11 @@
         
         const modal = document.createElement('div');
         modal.className = 'rcb-modal';
+
+        // ★追加: メールプレビューの場合は幅を広げる
+        if (message.includes('rcb-confirm-box')) {
+          modal.style.width = '600px';
+        }
         
         let headerTitle = title;
         let headerIcon = '';
@@ -315,7 +425,12 @@
         
         const body = document.createElement('div');
         body.className = 'rcb-modal-body';
-        body.innerHTML = message.replace(/\n/g, '<br>');
+        // HTMLタグで始まる場合はそのまま、それ以外（テキストのみ）は改行を<br>に変換
+        if (message.trim().startsWith('<')) {
+            body.innerHTML = message;
+        } else {
+            body.innerHTML = message.replace(/\n/g, '<br>');
+        }
         
         let textarea = null;
         if (type === 'prompt') {
@@ -383,6 +498,18 @@
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
       return `${y}-${m}-${d}`;
+    };
+
+    // 和暦フォーマット (例: 令和8年4月18日)
+    const formatToJapaneseDate = (dateStr) => {
+      if (!dateStr) return '';
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString("ja-JP-u-ca-japanese", {
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
     };
 
     // 過去時刻チェック (本日かつ現在時刻以前ならtrue)
@@ -621,7 +748,7 @@
       // === 担当者本人の場合 (以下、既存のメインロジック) ===
 
       // 取消完了メール送信処理
-      const processCancelMail = async (targetDate, targetTime, inputDept) => {
+      const processCancelMail = async (targetDate, targetTime, inputDept, message) => {
           const email = record[CONFIG.FIELDS.EMAIL]?.value || '';
           const lastName = record[CONFIG.FIELDS.LAST_NAME]?.value || '';
           const firstName = record[CONFIG.FIELDS.FIRST_NAME]?.value || '';
@@ -633,15 +760,41 @@
               return;
           }
 
+          if (!targetDate || !targetTime) {
+              await showDialog('正しい予約日時（日付・時刻）を入力してください。', 'error');
+              return;
+          }
+
+          // メール本文プレビューの構築
+          const mailBody = `
+            ${fullName} 様<br>
+            <br>
+            当病院をご利用いただきありがとうございます。<br>
+            <br>
+            以下のご予約を取消しさせていただきました。<br>
+            <br>
+            取り消したご予約:<br>
+            <br>
+            日時: ${formatToJapaneseDate(targetDate)} ${targetTime}<br>
+            診療科: ${dept}<br>
+            ${message ? `<br>${message.replace(/\n/g, '<br>')}<br>` : ''}
+            <br>
+            本メールは手続き完了の通知のみとなります。別途お手続きは不要です。 お大事になさってください。
+          `;
+
           const confirmMsg = `
-            以下の内容で取消完了メールを送信します。<br>よろしいですか？<br><br>
-            <div style="background:#f9f9f9; padding:10px; border-radius:4px; text-align:left;">
-              <strong>宛先:</strong> ${fullName} 様 (${email})<br>
-              <strong>用件:</strong> ${purpose}<br>
-              <strong>予約日時:</strong> ${targetDate} ${targetTime}<br>
-              <strong>診療科:</strong> ${dept}<br>
-              <hr style="margin:5px 0; border:0; border-top:1px dashed #ccc;">
-              <small>※送信後、レコードのステータスは「${CONFIG.STATUS_WEB_WITHDRAWN_VALUE}」に更新されます。</small>
+            <div class="rcb-confirm-msg">以下のメールを送信します。よろしいですか？</div>
+            <div class="rcb-confirm-box" style="padding: 0; overflow: hidden; border: 1px solid #ccc;">
+              <div style="background: #f5f5f5; padding: 10px; border-bottom: 1px solid #ddd; font-size: 12px; text-align: left;">
+                <div style="margin-bottom: 4px;"><strong>To:</strong> ${fullName} 様 (${email})</div>
+                <div><strong>Subject:</strong> 【予約取消】診療予約の取消しについて</div>
+              </div>
+              <div style="padding: 15px; background: #fff; font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #333; text-align: left; max-height: 300px; overflow-y: auto;">
+                ${mailBody}
+              </div>
+            </div>
+            <div style="margin-top: 10px; text-align: right;">
+              <span class="rcb-confirm-note">※送信後、ステータスは「${CONFIG.STATUS_WEB_WITHDRAWN_VALUE}」に更新されます。</span>
             </div>
           `;
 
@@ -653,10 +806,11 @@
               to: email,
               name: fullName,
               type: '取消',
-              reservationDate: targetDate,
+              reservationDate: formatToJapaneseDate(targetDate),
               reservationTime: targetTime,
               department: dept,
-              url: '' // URLなし
+              url: '', // URLなし
+              message: message // 追加メッセージ
             };
 
             await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -664,6 +818,10 @@
             const updateData = { 
                 [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_WEB_WITHDRAWN_VALUE },
                 [CONFIG.FIELDS.SEND_DATE]: { value: new Date().toISOString() }
+                ,'WEB取下メッセージ': { value: message || '' },
+                'WEB取下診療科': { value: dept || '' },
+                'WEB取下修正予約日時': { value: `${targetDate} ${targetTime}` },
+                'ReserveLock': { value: 'unlock' } // ★追加: WEB取下時はunlock
             };
             // 診療科が入力されていれば更新
             if (dept) {
@@ -711,17 +869,65 @@
           const fullName = `${lastName} ${firstName}`.trim();
           const dept = record[CONFIG.FIELDS.DEPT]?.value || '（未指定）';
 
-          const timeoutDisplay = selectedTimeout ? `<strong>タイムアウト:</strong> ${selectedTimeout}<br>` : '';
+          // メール本文プレビューの構築
+          let subject = '';
+          let bodyContent = '';
+          const targetUrlPreview = `${CONFIG.CONFIRM_BASE_URL}?token=${token}`;
+
+          // ボタン表示用HTML (プレビュー用)
+          const btnHtml = `
+            <div style="margin: 20px 0;">
+              <a href="javascript:void(0);" style="display: inline-block; padding: 12px 24px; background-color: #005a9e; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold; pointer-events: none; cursor: default;">ご予約情報</a>
+            </div>
+            <p style="font-size: 12px; color: #777;">※上記ボタンがクリックできない場合は、以下のURLをご確認ください。<br><a href="javascript:void(0);" style="color:#005a9e; pointer-events: none; cursor: default;">${targetUrlPreview}</a></p>
+          `;
+          if (purpose === '初診') {
+              subject = '【予約確定】診療のご予約（初診）について';
+              bodyContent = `
+                  <p>診療のご予約（初診）についてお知らせします。<br>
+                  以下のボタンをクリックして内容をご確認ください。</p>
+                  ${btnHtml}
+              `;
+          } else if (purpose === '変更') {
+              subject = '【予約変更】診療予約の変更について';
+              bodyContent = `
+                  <p>診療のご予約（変更）につきましてお知らせします。<br>
+                  以下のボタンをクリックして内容をご確認ください。</p>
+                  ${btnHtml}
+              `;
+          } else {
+              subject = '【お知らせ】予約センターからのご連絡';
+              bodyContent = `
+                  <p>下記より内容をご確認ください。</p>
+                  ${btnHtml}
+              `;
+          }
+
+          const mailBody = `
+            ${fullName} 様<br>
+            <br>
+            当病院をご利用いただきありがとうございます。<br>
+            <br>
+            ${bodyContent}<br>
+            <br>
+            <hr style="border:0; border-top:1px solid #ccc;">
+            ふれあいグループ 湘南東部病院予約センター
+          `;
+
           const confirmMsg = `
-            以下の内容でメールを送信します。<br>よろしいですか？<br><br>
-            <div style="background:#f9f9f9; padding:10px; border-radius:4px; text-align:left;">
-              <strong>宛先:</strong> ${fullName} 様 (${email})<br>
-              <strong>用件:</strong> ${purpose}<br>
-              <strong>日時:</strong> ${targetDate} ${targetTime}<br>
-              <strong>診療科:</strong> ${dept}<br>
-              <hr style="margin:5px 0; border:0; border-top:1px dashed #ccc;">
-              ${timeoutDisplay}
-              <small>※送信後、レコードのステータスは「${CONFIG.STATUS_SENT_VALUE}」に更新されます。</small>
+            <div class="rcb-confirm-msg">以下のメールを送信します。よろしいですか？</div>
+            <div class="rcb-confirm-box" style="padding: 0; overflow: hidden; border: 1px solid #ccc;">
+              <div style="background: #f5f5f5; padding: 10px; border-bottom: 1px solid #ddd; font-size: 12px; text-align: left;">
+                <div style="margin-bottom: 4px;"><strong>To:</strong> ${fullName} 様 (${email})</div>
+                <div><strong>Subject:</strong> ${subject}</div>
+              </div>
+              <div style="padding: 15px; background: #fff; font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #333; text-align: left; max-height: 300px; overflow-y: auto;">
+                ${mailBody}
+              </div>
+            </div>
+            <div style="margin-top: 10px; text-align: right;">
+              ${selectedTimeout ? `<span style="font-size:12px; color:#e67e22; font-weight:bold; margin-right:10px;">期限: ${selectedTimeout}</span>` : ''}
+              <span class="rcb-confirm-note" style="display:inline;">※送信後、ステータスは「${CONFIG.STATUS_SENT_VALUE}」に更新されます。</span>
             </div>
           `;
 
@@ -812,18 +1018,17 @@
         const dateEditor = document.createElement('div');
         dateEditor.className = 'rcb-date-editor';
     
-        // 日付入力
-        const inputRow = document.createElement('div');
-        inputRow.className = 'rcb-input-row';
-        
+        // 1. 日付入力
+        const dateGroup = document.createElement('div');
+        dateGroup.className = 'rcb-form-group';
+
         const dateLabel = document.createElement('label');
-        dateLabel.textContent = '日付: ';
-        dateLabel.style.fontWeight = 'bold';
+        dateLabel.className = 'rcb-label';
+        dateLabel.textContent = '日付 (必須)';
         
         const dateInput = document.createElement('input');
         dateInput.type = 'date';
         dateInput.className = 'rcb-date-input';
-        dateInput.value = currentDate; // 初期値はレコードの値（または空）
         
         // 日付制限 (本日 ～ 60日後)
         const today = new Date();
@@ -831,12 +1036,21 @@
         maxDate.setDate(today.getDate() + 60);
         dateInput.min = formatDateISO(today);
         dateInput.max = formatDateISO(maxDate);
+        dateInput.value = currentDate; // 初期値
         
-        inputRow.appendChild(dateLabel);
-        inputRow.appendChild(dateInput);
-        dateEditor.appendChild(inputRow);
+        dateGroup.appendChild(dateLabel);
+        dateGroup.appendChild(dateInput);
+        dateEditor.appendChild(dateGroup);
     
-        // 時刻選択
+        // 2. 時刻選択
+        const timeGroup = document.createElement('div');
+        timeGroup.className = 'rcb-form-group';
+
+        const timeLabel = document.createElement('label');
+        timeLabel.className = 'rcb-label';
+        timeLabel.textContent = '時刻 (必須)';
+        timeGroup.appendChild(timeLabel);
+
         const timeContainer = document.createElement('div');
         
         let selectedTime = currentTime;
@@ -902,7 +1116,8 @@
         dateInput.addEventListener('change', updateTimeButtons);
         updateTimeButtons(); // 初期描画
 
-        dateEditor.appendChild(timeContainer);
+        timeGroup.appendChild(timeContainer);
+        dateEditor.appendChild(timeGroup);
     
         // 保存ボタンエリア
         const actionRow = document.createElement('div');
@@ -1036,10 +1251,8 @@
         dateSection.innerHTML = ''; // 初期化
 
         const confirmedContainer = document.createElement('div');
-        confirmedContainer.style.padding = '20px';
-        confirmedContainer.style.backgroundColor = '#EEE';
-        confirmedContainer.style.border = '1px solid rgb(224, 224, 224)';
-        confirmedContainer.style.borderRadius = '6px';
+        // デザイン改善: 白背景・カードスタイル
+        confirmedContainer.className = 'rcb-cancel-container';
         confirmedContainer.style.textAlign = 'center';
 
         // 申込者再依頼時のメッセージ表示
@@ -1083,7 +1296,8 @@
             try {
                 const payload = {
                     [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_WITHDRAWN_VALUE },
-                    [CONFIG.FIELDS.NOTE]: { value: '' }
+                    [CONFIG.FIELDS.NOTE]: { value: '' },
+                    'ReserveLock': { value: 'unlock' } // ★追加: スタッフ取下(手動取下)時はunlock
                 };
 
                 // メール送信 (メール対応 & 既読後の場合)
@@ -1140,73 +1354,336 @@
         let displayTimeVal = currentTime;
         
         const textSpan = document.createElement('span');
+        
+        // 取消用入力要素の参照保持用
+        let cancelDateInput, cancelTimeInput, cancelMsgInput;
 
         if (purpose === '取消') {
-            // 取消の場合: チケット情報をそのまま使用
-            displayDateVal = record['予約日時']?.value || '（未設定）';
-            displayTimeVal = ''; // 時刻は分離しない
+            // 取消の場合: チケット情報を初期値として解析
+            let initDate = '';
+            let initTime = '';
+            const valDateTime = record['予約日時']?.value || '';
+            
+            if (valDateTime) {
+                let dt = new Date(valDateTime);
+                // 日付解析の強化 (日本語フォーマット対応)
+                if (isNaN(dt.getTime())) {
+                    // 例: "4月 18日 (土) 14:00" -> 月, 日, 時, 分
+                    const match = valDateTime.match(/(\d+)\s*月\s*(\d+)\s*日.*?(\d{1,2})\s*:\s*(\d{2})/);
+                    if (match) {
+                        const now = new Date();
+                        let year = now.getFullYear();
+                        // 年が含まれているか確認
+                        const yearMatch = valDateTime.match(/(\d{4})\s*年/);
+                        if (yearMatch) year = parseInt(yearMatch[1], 10);
+                        
+                        const month = parseInt(match[1], 10);
+                        const day = parseInt(match[2], 10);
+                        const hour = parseInt(match[3], 10);
+                        const minute = parseInt(match[4], 10);
+                        
+                        dt = new Date(year, month - 1, day, hour, minute);
+                        
+                        // 過去日付補正 (現在より1ヶ月以上前なら来年と推測)
+                        if (!yearMatch && dt < new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)) {
+                            dt.setFullYear(year + 1);
+                        }
+                    }
+                }
+
+                if (!isNaN(dt.getTime())) {
+                    initDate = formatDateISO(dt);
+                    initTime = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+                    // 時刻フォーマット (9:00形式に合わせる)
+                    const h = dt.getHours();
+                    const m = String(dt.getMinutes()).padStart(2, '0');
+                    initTime = `${h}:${m}`;
+                }
+            }
+            // 解析できなければフォールバック
+            if (!initDate && record['予約日']?.value) initDate = record['予約日'].value;
+            if (!initTime && record['予約時刻']?.value) initTime = record['予約時刻'].value;
+
+            displayDateVal = initDate;
+            displayTimeVal = initTime;
 
             const ticketLastName = record['姓漢字']?.value || '';
             const ticketFirstName = record['名漢字']?.value || '';
             const ticketDept = record['診療科']?.value || '（未設定）';
             const ticketName = `${ticketLastName} ${ticketFirstName} 様`.trim();
 
-            // レイアウト調整
-            dateTimeDisplay.style.flexDirection = 'column';
-            dateTimeDisplay.style.gap = '5px';
-            dateTimeDisplay.style.alignItems = 'center';
+            // コンテナスタイルのリセットと適用 (デザイン改善)
+            confirmedContainer.style.backgroundColor = 'transparent';
+            confirmedContainer.style.border = 'none';
+            confirmedContainer.style.padding = '0';
+            confirmedContainer.innerHTML = ''; // クリア
 
-            textSpan.innerHTML = '';
+            const cancelContainer = document.createElement('div');
+            cancelContainer.className = 'rcb-cancel-container';
 
-            // 診療科入力
-            const deptDiv = document.createElement('div');
-            deptDiv.style.fontSize = '16px';
-            deptDiv.innerHTML = '<strong>診療科:</strong> ';
+            if (isWebWithdrawn) {
+                // --- WEB取下済み（ReadOnly） ---
+                const savedDateTime = record['WEB取下修正予約日時']?.value || '';
+                const savedDept = record['WEB取下診療科']?.value || record[CONFIG.FIELDS.DEPT]?.value || '';
+                const savedMsg = record['WEB取下メッセージ']?.value || '';
+
+                let showDate = displayDateVal;
+                let showTime = displayTimeVal;
+                if (savedDateTime) {
+                    const parts = savedDateTime.split(' ');
+                    if (parts.length >= 2) {
+                        showDate = parts[0];
+                        showTime = parts[1];
+                    }
+                }
+
+                // 1. お名前
+                const nameGroup = document.createElement('div');
+                nameGroup.className = 'rcb-form-group';
+                nameGroup.innerHTML = `<div class="rcb-label">お名前</div><div style="font-size:16px; padding-left:5px; color:#333;">${ticketName}</div>`;
+                cancelContainer.appendChild(nameGroup);
+
+                // 2. 診療科
+                const deptGroup = document.createElement('div');
+                deptGroup.className = 'rcb-form-group';
+                deptGroup.innerHTML = `<div class="rcb-label">診療科</div><div style="font-size:16px; padding-left:5px; color:#333;">${savedDept}</div>`;
+                cancelContainer.appendChild(deptGroup);
+
+                // 3. 日時
+                const dateGroup = document.createElement('div');
+                dateGroup.className = 'rcb-form-group';
+                let dateDisplay = `${showDate} ${showTime}`;
+                try {
+                    const d = new Date(showDate);
+                    if (!isNaN(d.getTime())) {
+                        dateDisplay = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${showTime}`;
+                    }
+                } catch(e){}
+                dateGroup.innerHTML = `<div class="rcb-label">取消対象日時</div><div style="font-size:16px; padding-left:5px; color:#333;">${dateDisplay}</div>`;
+                cancelContainer.appendChild(dateGroup);
+
+                // 4. メッセージ
+                const msgGroup = document.createElement('div');
+                msgGroup.className = 'rcb-form-group';
+                const msgContent = savedMsg ? savedMsg.replace(/\n/g, '<br>') : '（なし）';
+                msgGroup.innerHTML = `<div class="rcb-label">メッセージ</div><div style="font-size:14px; padding:10px; background:#f9f9f9; border:1px solid #eee; border-radius:4px; color:#555;">${msgContent}</div>`;
+                cancelContainer.appendChild(msgGroup);
+
+            } else {
+                // --- 編集モード ---
+                // 1. お名前表示
+                const nameGroup = document.createElement('div');
+                nameGroup.className = 'rcb-form-group';
+                nameGroup.innerHTML = `<div class="rcb-label">お名前</div><div style="font-size:16px; padding-left:5px; color:#333;">${ticketName}</div>`;
+                cancelContainer.appendChild(nameGroup);
+
+                // 2. 診療科入力
+                const deptGroup = document.createElement('div');
+                deptGroup.className = 'rcb-form-group';
+                
+                const deptLabel = document.createElement('label');
+                deptLabel.className = 'rcb-label';
+                deptLabel.textContent = '診療科 (必須)';
+                deptGroup.appendChild(deptLabel);
+
+                const deptInput = document.createElement('input');
+                deptInput.type = 'text';
+                deptInput.className = 'rcb-input-text';
+                deptInput.value = currentDeptInput;
+                deptInput.placeholder = '例: 内科';
+                deptInput.oninput = (e) => { currentDeptInput = e.target.value; };
+                deptGroup.appendChild(deptInput);
+                cancelContainer.appendChild(deptGroup);
+
+                // 3. 日時設定
+                const dateGroup = document.createElement('div');
+                dateGroup.className = 'rcb-form-group';
+                
+                const dateLabel = document.createElement('label');
+                dateLabel.className = 'rcb-label';
+                dateLabel.textContent = '取消対象日時 (必須)';
+                dateGroup.appendChild(dateLabel);
+
+                // 申込者入力値の表示
+                const infoBlock = document.createElement('div');
+                infoBlock.className = 'rcb-info-block';
+                infoBlock.style.display = 'flex';
+                infoBlock.style.justifyContent = 'space-between';
+                infoBlock.style.alignItems = 'flex-start';
+
+                const infoText = document.createElement('div');
+                infoText.innerHTML = `<strong>申込者入力値:</strong> ${valDateTime || '（未入力）'}`;
+                infoBlock.appendChild(infoText);
+
+                dateGroup.appendChild(infoBlock);
+
+                // 編集エリア
+                const editArea = document.createElement('div');
+                editArea.style.cssText = 'background-color: #fafafa; padding: 15px; border: 1px solid #eee; border-radius: 6px;';
+                
+                // 日時が未設定かどうか
+                const isDateSet = !!(displayDateVal && displayTimeVal);
+                
+                // 入力要素作成
+                cancelDateInput = document.createElement('input');
+                cancelDateInput.type = 'date';
+                cancelDateInput.className = 'rcb-date-input';
+                cancelDateInput.value = displayDateVal;
+                
+                cancelTimeInput = document.createElement('select');
+                cancelTimeInput.className = 'rcb-date-input';
+                
+                // 時刻選択肢 (30分刻み + 現在の値)
+                let timeFound = false;
+                CONFIG.ALLOWED_TIMES.forEach(time => {
+                    const opt = document.createElement('option');
+                    opt.value = time;
+                    opt.textContent = time;
+                    if (time === displayTimeVal) {
+                        opt.selected = true;
+                        timeFound = true;
+                    }
+                    cancelTimeInput.appendChild(opt);
+                });
+                if (displayTimeVal && !timeFound) {
+                    const opt = document.createElement('option');
+                    opt.value = displayTimeVal;
+                    opt.textContent = displayTimeVal;
+                    opt.selected = true;
+                    cancelTimeInput.insertBefore(opt, cancelTimeInput.firstChild);
+                } else if (!displayTimeVal) {
+                    const placeholder = document.createElement('option');
+                    placeholder.value = '';
+                    placeholder.textContent = '時刻を選択';
+                    placeholder.selected = true;
+                    placeholder.disabled = true;
+                    cancelTimeInput.insertBefore(placeholder, cancelTimeInput.firstChild);
+                }
+
+                // フォーム表示ロジック
+                const formDiv = document.createElement('div');
+                formDiv.style.display = 'flex';
+                formDiv.style.gap = '10px';
+                formDiv.style.alignItems = 'center';
+                formDiv.appendChild(cancelDateInput);
+                formDiv.appendChild(cancelTimeInput);
+
+                if (!isDateSet) {
+                    // 未設定なら最初からフォームを表示
+                    editArea.appendChild(formDiv);
+                } else {
+                    // 設定済みなら表示＋修正ボタン
+                    const displayDiv = document.createElement('div');
+                    displayDiv.style.display = 'flex';
+                    displayDiv.style.alignItems = 'center';
+                    displayDiv.style.gap = '15px';
+                    
+                    // 和暦(日本語)フォーマット変換
+                    const d = new Date(displayDateVal);
+                    const dateJp = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+                    
+                    displayDiv.innerHTML = `
+                        <div style="display:flex; flex-direction:column; align-items:flex-start;">
+                            <span style="font-size:11px; color:#888; font-weight:bold;">取消実行日時</span>
+                            <span style="font-size:16px; font-weight:bold; color:#2c3e50;">${dateJp} ${displayTimeVal}</span>
+                        </div>
+                    `;
+                    
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = '修正';
+                    editBtn.style.cssText = 'padding: 6px 12px; font-size: 12px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 4px; color: #555; align-self: center;';
+                    
+                    formDiv.style.display = 'none'; // 初期は隠す
+
+                    editBtn.onclick = () => {
+                        if (formDiv.style.display === 'none') {
+                            formDiv.style.display = 'flex';
+                            displayDiv.style.display = 'none';
+                            editBtn.textContent = 'キャンセル';
+                        } else {
+                            formDiv.style.display = 'none';
+                            displayDiv.style.display = 'flex';
+                            editBtn.textContent = '修正';
+                            cancelDateInput.value = displayDateVal;
+                        }
+                    };
+
+                    displayDiv.appendChild(editBtn);
+
+                    const noteSpan = document.createElement('span');
+                    noteSpan.style.cssText = 'font-size: 11px; color: #888;';
+                    noteSpan.textContent = '※申込者入力値に間違いがある場合';
+                    displayDiv.appendChild(noteSpan);
+
+                    editArea.appendChild(displayDiv);
+                    editArea.appendChild(formDiv);
+                }
+                
+                dateGroup.appendChild(editArea);
+                cancelContainer.appendChild(dateGroup);
+
+                // 4. メッセージ
+                const msgGroup = document.createElement('div');
+                msgGroup.className = 'rcb-form-group';
+                
+                const msgLabel = document.createElement('label');
+                msgLabel.className = 'rcb-label';
+                msgLabel.textContent = 'メッセージ (任意)';
+                msgGroup.appendChild(msgLabel);
+                
+                cancelMsgInput = document.createElement('textarea');
+                cancelMsgInput.className = 'rcb-modal-textarea';
+                cancelMsgInput.style.marginTop = '0';
+                cancelMsgInput.placeholder = '必要に応じてメッセージを入力してください（例：予約日時の相違について等）';
+                msgGroup.appendChild(cancelMsgInput);
+                
+                cancelContainer.appendChild(msgGroup);
+            }
+
+            // コンテナに追加
+            confirmedContainer.appendChild(cancelContainer);
             
-            const deptInput = document.createElement('input');
-            deptInput.type = 'text';
-            deptInput.value = currentDeptInput;
-            deptInput.placeholder = '診療科を入力';
-            deptInput.style.cssText = 'margin-left: 5px; padding: 4px; font-size: 16px; width: 200px; border: 1px solid #ccc; border-radius: 4px;';
-            deptInput.oninput = (e) => { currentDeptInput = e.target.value; };
-            
-            deptDiv.appendChild(deptInput);
-            textSpan.appendChild(deptDiv);
-
-            // 予約日時
-            const dateDiv = document.createElement('div');
-            dateDiv.style.fontSize = '16px';
-            dateDiv.innerHTML = `<strong>予約日時:</strong> <span style="color:#3498db; font-size: 1.2em;">${displayDateVal}</span>`;
-            textSpan.appendChild(dateDiv);
-
-            // お名前
-            const nameDiv = document.createElement('div');
-            nameDiv.style.fontSize = '16px';
-            nameDiv.innerHTML = `<strong>お名前:</strong> ${ticketName}`;
-            textSpan.appendChild(nameDiv);
+            // dateTimeDisplay は使わないので非表示
+            dateTimeDisplay.innerHTML = '';
+            dateTimeDisplay.style.display = 'none';
         } else {
             // 通常の場合
             const dObj = displayDateVal ? new Date(displayDateVal) : null;
             const dateStr = dObj ? `${dObj.getFullYear()}年${dObj.getMonth() + 1}月${dObj.getDate()}日` : '（日付未定）';
             const timeStr = displayTimeVal || '（時刻未定）';
             
-            textSpan.innerHTML = `<span style="background-color: ${reservationStatusColor}; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 14px; margin-right: 8px; vertical-align: middle;">${reservationStatusLabel}</span>${reservationDateLabel}: <span style="color:#3498db; font-size: 1.2em;">${dateStr} ${timeStr}</span>`;
-        }
-        dateTimeDisplay.appendChild(textSpan);
-
-        // メール送信済みでない場合、または申込者再依頼の場合に再設定ボタンを表示（ただし「取消」の場合は再設定不要）
-        if ((!sendDateVal || isReRequest) && purpose !== '取消') {
-            const editBtn = document.createElement('button');
-            editBtn.innerHTML = '⚙️再設定';
-            editBtn.style.cssText = 'background-color: rgb(245, 245, 225); border: 1px solid rgb(221, 221, 221); color: rgb(102, 102, 102); padding: 5px 10px; border-radius: 9px; cursor: pointer; font-size: 16px; font-weight: bold; display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;';
+            // デザイン改善: ラベルと値を分離して見やすく
+            const statusBadge = `<span style="background-color: ${reservationStatusColor}; color: #fff; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight:bold; vertical-align: middle;">${reservationStatusLabel}</span>`;
             
-            editBtn.onmouseover = () => { editBtn.style.backgroundColor = '#e8e8d2'; editBtn.style.borderColor = '#bbb'; };
-            editBtn.onmouseout = () => { editBtn.style.backgroundColor = 'rgb(245, 245, 225)'; editBtn.style.borderColor = 'rgb(221, 221, 221)'; };
-            editBtn.onclick = () => renderEditorView();
-            dateTimeDisplay.appendChild(editBtn);
+            const dateRow = document.createElement('div');
+            dateRow.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+            dateRow.innerHTML = `${statusBadge}<span style="font-size: 14px; color: #666; font-weight: bold;">${reservationDateLabel}</span>`;
+            
+            const timeRow = document.createElement('div');
+            timeRow.style.cssText = 'font-size: 24px; font-weight: bold; color: #2c3e50; font-family: "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.5px;';
+            timeRow.textContent = `${dateStr} ${timeStr}`;
+
+            dateTimeDisplay.appendChild(dateRow);
+            dateTimeDisplay.appendChild(timeRow);
         }
 
-        confirmedContainer.appendChild(dateTimeDisplay);
+        // 日時表示エリアのスタイル適用
+        if (purpose !== '取消') {
+            dateTimeDisplay.style.cssText = 'background-color: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 25px; display: flex; flex-direction: column; align-items: center; gap: 10px;';
+            
+            // メール送信済みでない場合、または申込者再依頼の場合に再設定ボタンを表示
+            if (!sendDateVal || isReRequest) {
+                const editBtn = document.createElement('button');
+                editBtn.innerHTML = '<span style="font-size:14px;">⚙️</span> 日時を再設定する';
+                editBtn.style.cssText = 'margin-top: 5px; background-color: #fff; border: 1px solid #ccc; color: #555; padding: 6px 15px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 5px; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
+                
+                editBtn.onmouseover = () => { editBtn.style.backgroundColor = '#f8f9fa'; editBtn.style.borderColor = '#bbb'; editBtn.style.color = '#333'; };
+                editBtn.onmouseout = () => { editBtn.style.backgroundColor = '#fff'; editBtn.style.borderColor = '#ccc'; editBtn.style.color = '#555'; };
+                editBtn.onclick = () => renderEditorView();
+                dateTimeDisplay.appendChild(editBtn);
+            }
+            confirmedContainer.appendChild(dateTimeDisplay);
+        }
 
         // 送信履歴・既読情報の表示
         if (isSent) {
@@ -1365,18 +1842,17 @@
 
         // アクションエリア（メール送信ボタン + タイムアウト設定）
         const actionContainer = document.createElement('div');
-        actionContainer.style.display = 'flex';
-        actionContainer.style.alignItems = 'center';
-        actionContainer.style.justifyContent = 'center';
-        actionContainer.style.gap = '10px';
-        actionContainer.style.width = '100%';
-        actionContainer.style.maxWidth = '480px';
-        actionContainer.style.margin = '0 auto';
+        actionContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; max-width: 400px; margin: 0 auto;';
+        
+        const mainActionRow = document.createElement('div');
+        mainActionRow.style.cssText = 'display: flex; width: 100%; gap: 10px;';
 
         // メール送信ボタン
         const sendMailBtn = document.createElement('button');
         sendMailBtn.className = 'rcb-btn-save';
-        sendMailBtn.style.flex = '1'; // 幅を自動調整
+        sendMailBtn.style.width = '100%'; // 幅いっぱい
+        sendMailBtn.style.padding = '12px'; // 少し大きく
+        sendMailBtn.style.fontSize = '16px';
         
         if (isSent) {
             sendMailBtn.textContent = 'メール送信済み';
@@ -1398,6 +1874,8 @@
             sendMailBtn.style.backgroundColor = '#7f8c8d';
             sendMailBtn.disabled = true;
             sendMailBtn.style.cursor = 'not-allowed';
+            sendMailBtn.style.marginTop = '20px';
+            sendMailBtn.style.marginBottom = '20px';
         } else if (isRead) {
             sendMailBtn.textContent = 'メール既読';
             sendMailBtn.style.backgroundColor = '#27ae60';
@@ -1410,7 +1888,9 @@
             if (purpose === '取消') {
                 sendMailBtn.textContent = '取消完了メールを送信する';
                 sendMailBtn.style.backgroundColor = '#c0392b'; // 赤色
-                sendMailBtn.onclick = () => processCancelMail(displayDateVal, displayTimeVal, currentDeptInput);
+                sendMailBtn.style.marginTop = '30px'; // ★追加: マージン確保
+                sendMailBtn.style.marginBottom = '20px'; // ★追加: 下部マージン
+                sendMailBtn.onclick = () => processCancelMail(cancelDateInput.value, cancelTimeInput.value, currentDeptInput, cancelMsgInput.value);
             } else {
                 sendMailBtn.textContent = 'メールを送信する';
                 sendMailBtn.style.backgroundColor = '#e67e22'; // オレンジ色
@@ -1559,6 +2039,24 @@
             };
             actionGroup.appendChild(reconfigBtn);
 
+            // ③ 再設定しないボタン
+            const noReconfigBtn = document.createElement('button');
+            noReconfigBtn.textContent = '再設定しない';
+            noReconfigBtn.className = 'rcb-btn-save';
+            noReconfigBtn.style.backgroundColor = '#82b369'; // グレー系
+            noReconfigBtn.style.flex = '1 1 0%';
+            noReconfigBtn.style.maxWidth = '200px';
+
+            noReconfigBtn.onclick = async () => {
+                const confirmed = await showDialog('この予約の再設定を行わずロックを解除しますか？\nこの操作により、この予約は完全に無効になり申込者はすぐに新たな予約ができるようになります。', 'confirm');
+                if (!confirmed) return;
+
+                const payload = { 'ReserveLock': { value: 'unlock' } };
+                const success = await updateRecord(recordId, payload);
+                if (success) location.reload();
+            };
+            actionGroup.appendChild(noReconfigBtn);
+
             confirmedContainer.appendChild(actionGroup);
         }
 
@@ -1604,7 +2102,8 @@
                 [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
                 [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
                 [CONFIG.FIELDS.TIMEOUT]: { value: null },
-                [CONFIG.FIELDS.NOTE]: { value: null }
+                [CONFIG.FIELDS.NOTE]: { value: null },
+                'ReserveLock': { value: 'lock' } // ★追加: リセット時はlock (未着手状態)
             };
             
             const success = await updateRecord(recordId, payload);
@@ -1612,88 +2111,6 @@
         };
         
         spaceElement.appendChild(btn);
-    };
-
-    // 担当アサインボタン描画関数 (EmailSender.jsから移植・統合)
-    // 担当アサインボタン描画関数 (RreservationContorlBoardスペース用)
-    const renderAssignButton = (spaceElement, record) => {
-        // 管理状況が「未着手」の場合のみ表示
-        const currentStatus = record[CONFIG.FIELDS.STATUS]?.value;
-        if (currentStatus !== '未着手') return;
-
-        if (document.getElementById('rcb-assign-staff-btn')) return;
-
-        // 端末の担当者名を取得
-        const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey');
-
-        const assignBtn = document.createElement('button');
-        assignBtn.id = 'rcb-assign-staff-btn';
-        assignBtn.innerText = currentStaff ? `私（${currentStaff}）がこのチケットを担当する` : '担当者設定が必要です';
-        assignBtn.style.cssText = `
-            padding: 10px 24px;
-            background-color: #2c3e50;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 14px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            transition: background-color 0.2s;
-            height: 60px;
-            width:300px;
-        `;
-        
-        assignBtn.onmouseover = () => { assignBtn.style.backgroundColor = '#34495e'; };
-        assignBtn.onmouseout = () => { assignBtn.style.backgroundColor = '#2c3e50'; };
-
-        assignBtn.onclick = async () => {
-            if (!currentStaff) {
-                await showDialog('この端末には担当者が設定されていません。\nダッシュボード等で担当者を設定してください。', 'error');
-                return;
-            }
-
-            const recordStaff = record[CONFIG.FIELDS.STAFF]?.value;
-            const recordId = kintone.app.record.getId();
-
-            const doAssign = async () => {
-                assignBtn.disabled = true;
-                assignBtn.textContent = '処理中...';
-                
-                const updatePayload = {
-                    [CONFIG.FIELDS.STAFF]: { value: currentStaff }
-                };
-
-                // 初めて担当が設定される場合のみステータスを更新
-                if (!recordStaff) {
-                    updatePayload[CONFIG.FIELDS.STATUS] = { value: '担当設定' };
-                }
-
-                const success = await updateRecord(recordId, updatePayload);
-                if (success) {
-                    await showDialog(`担当者を「${currentStaff}」に設定しました。`, 'success');
-                    location.reload();
-                } else {
-                    assignBtn.disabled = false;
-                    assignBtn.textContent = '担当する';
-                }
-            };
-
-            if (recordStaff) {
-                const confirmed = await showDialog(
-                    `すでに担当者「${recordStaff}」が設定されています。\n強制的に担当をあなた（${currentStaff}）に変更しますか？`,
-                    'confirm',
-                    '担当者変更',
-                    '',
-                    '強制的に自分が担当する'
-                );
-                if (confirmed) doAssign();
-            } else {
-                doAssign();
-            }
-        };
-        
-        spaceElement.appendChild(assignBtn);
     };
 
     // ポーリング管理用
@@ -1820,10 +2237,14 @@
         }, POLLING_INTERVAL);
     };
 
+    // スタイル適用イベント (一覧・詳細共通)
+    kintone.events.on(['app.record.index.show', 'app.record.detail.show'], function(event) {
+        applyStyles();
+        return event;
+    });
+
     // イベントリスナー
     kintone.events.on('app.record.detail.show', function(event) {
-      // ★重要: スタイルを必ず適用する (担当アサインボタン表示時にもダイアログスタイルが必要なため)
-      applyStyles();
 
       // タイマーリセット (画面遷移時)
       if (pollingTimer) {
@@ -1853,5 +2274,4 @@
 
       return event;
     });
-
 })();

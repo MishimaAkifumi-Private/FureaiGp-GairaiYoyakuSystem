@@ -13,6 +13,9 @@
     EXECUTOR_FIELD: 'キャンセル実行者', // キャンセル実行者フィールド
     RES_DATE_FIELD: '確定予約日',   // 予約日フィールド
     STAFF_CONFIRM_FIELD: 'スタッフ確認', // スタッフ確認フィールド
+    RESERVE_LOCK_FIELD: 'ReserveLock', // ロックフィールド
+    TIMEOUT_FIELD: 'タイムアウト', // タイムアウトフィールド
+    SEND_DATE_FIELD: 'メール送信日時', // 送信日時フィールド
     CANCEL_VALUE: 'キャンセル',     // グレーアウトする値
     FINISH_VALUE: '終了',           // 終了ステータス（グレーアウト）
     EXECUTOR_SELF: '本人',            // 本人キャンセルの値
@@ -36,17 +39,20 @@
         // 必要なフィールドが一覧にあるか確認
         const hasExecutor = records[0].hasOwnProperty(CONFIG.EXECUTOR_FIELD);
         const hasStaffConfirm = records[0].hasOwnProperty(CONFIG.STAFF_CONFIRM_FIELD);
+        const hasLock = records[0].hasOwnProperty(CONFIG.RESERVE_LOCK_FIELD);
+        const hasTimeout = records[0].hasOwnProperty(CONFIG.TIMEOUT_FIELD);
+        const hasSendDate = records[0].hasOwnProperty(CONFIG.SEND_DATE_FIELD);
         
         let recordMap = {};
 
         // フィールドが不足している場合はAPIで取得
-        if (!hasExecutor || !hasStaffConfirm) {
+        if (!hasExecutor || !hasStaffConfirm || !hasLock || !hasTimeout || !hasSendDate) {
             const ids = records.map(r => r.$id.value);
             try {
                 const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
                     app: kintone.app.getId(),
                     query: `$id in ("${ids.join('","')}")`,
-                    fields: ['$id', CONFIG.EXECUTOR_FIELD, CONFIG.STAFF_CONFIRM_FIELD]
+                    fields: ['$id', CONFIG.EXECUTOR_FIELD, CONFIG.STAFF_CONFIRM_FIELD, CONFIG.RESERVE_LOCK_FIELD, CONFIG.TIMEOUT_FIELD, CONFIG.SEND_DATE_FIELD]
                 });
                 resp.records.forEach(r => {
                     recordMap[r.$id.value] = r;
@@ -57,7 +63,7 @@
         }
 
         // 自動終了更新用のリスト
-        const recordsToFinish = [];
+        const recordsToUpdate = [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -79,6 +85,16 @@
             } else if (recordMap[recordId]) {
                 staffConfirm = (recordMap[recordId][CONFIG.STAFF_CONFIRM_FIELD] && recordMap[recordId][CONFIG.STAFF_CONFIRM_FIELD].value) || [];
             }
+
+            let lockStatus = '';
+            let timeoutVal = '';
+            let sendDateVal = '';
+            
+            const getVal = (key) => (record[key] && record[key].value) || (recordMap[recordId] && recordMap[recordId][key] && recordMap[recordId][key].value) || '';
+            
+            lockStatus = getVal(CONFIG.RESERVE_LOCK_FIELD);
+            timeoutVal = getVal(CONFIG.TIMEOUT_FIELD);
+            sendDateVal = getVal(CONFIG.SEND_DATE_FIELD);
 
             const isStaffConfirmed = Array.isArray(staffConfirm) && staffConfirm.includes(CONFIG.CONFIRMED_VALUE);
             const resDateStr = (record[CONFIG.RES_DATE_FIELD] && record[CONFIG.RES_DATE_FIELD].value) ? record[CONFIG.RES_DATE_FIELD].value : null;
@@ -103,30 +119,80 @@
                 }
             }
 
-            // 3. 自動終了判定
+            // 3. 自動更新ロジック (終了判定 & ロック解除)
+            let updatePayload = {};
+            let needsUpdate = false;
+
+            // (A) 自動終了判定
             if (status !== CONFIG.FINISH_VALUE && resDateStr) {
                 const resDate = new Date(resDateStr);
                 if (resDate < today) {
-                    recordsToFinish.push({
-                        id: recordId,
-                        record: {
-                            [CONFIG.STATUS_FIELD]: { value: CONFIG.FINISH_VALUE }
-                        }
-                    });
+                    updatePayload[CONFIG.STATUS_FIELD] = { value: CONFIG.FINISH_VALUE };
+                    // 自動終了時はunlock
+                    if (lockStatus !== 'unlock') {
+                        updatePayload[CONFIG.RESERVE_LOCK_FIELD] = { value: 'unlock' };
+                    }
+                    needsUpdate = true;
                 }
+            }
+
+            // (B) ロック解除判定 (unlock条件)
+            // 条件: WEB取下, URL取下(キャンセル), 自動終了(上記でカバー), 手動取下(スタッフ取下), 終了
+            // ※URL取下は「キャンセル」ステータスと仮定
+            const unlockStatuses = ['WEB取下', 'キャンセル', 'スタッフ取下', '終了'];
+            
+            if (unlockStatuses.includes(status) && lockStatus !== 'unlock') {
+                updatePayload[CONFIG.RESERVE_LOCK_FIELD] = { value: 'unlock' };
+                needsUpdate = true;
+            }
+
+            // (C) 閲覧期限切れ & 翌日判定
+            if (status === '閲覧期限切れ' && lockStatus !== 'unlock' && sendDateVal) {
+                const sentTime = new Date(sendDateVal);
+                let expireDate = new Date(sentTime);
+
+                // タイムアウト計算
+                if (timeoutVal === '今日中') {
+                    expireDate.setHours(23, 59, 59, 999);
+                } else if (timeoutVal === '明日中') {
+                    expireDate.setDate(expireDate.getDate() + 1);
+                    expireDate.setHours(23, 59, 59, 999);
+                } else {
+                    // 時間指定 (例: 2時間)
+                    // 期限切れ日の「翌日」になったらunlock
+                    // 2時間後の日付を取得
+                    const match = (timeoutVal || '2時間').match(/(\d+)/);
+                    const num = match ? parseInt(match[1], 10) : 2;
+                    if ((timeoutVal || '').includes('分')) expireDate.setMinutes(expireDate.getMinutes() + num);
+                    else expireDate.setHours(expireDate.getHours() + num);
+                }
+
+                // 期限切れ日の翌日0時
+                const nextDayOfExpire = new Date(expireDate);
+                nextDayOfExpire.setDate(nextDayOfExpire.getDate() + 1);
+                nextDayOfExpire.setHours(0, 0, 0, 0);
+
+                if (new Date() >= nextDayOfExpire) {
+                    updatePayload[CONFIG.RESERVE_LOCK_FIELD] = { value: 'unlock' };
+                    needsUpdate = true;
+                }
+            }
+
+            if (needsUpdate) {
+                recordsToUpdate.push({ id: recordId, record: updatePayload });
             }
         });
 
         // 更新対象があれば一括更新を実行
-        if (recordsToFinish.length > 0) {
+        if (recordsToUpdate.length > 0) {
             kintone.api(kintone.api.url('/k/v1/records', true), 'PUT', {
                 app: kintone.app.getId(),
-                records: recordsToFinish
+                records: recordsToUpdate
             }).then(() => {
-                console.log(`[Auto Finish] ${recordsToFinish.length}件のレコードを終了ステータスに更新しました。`);
+                console.log(`[Auto Update] ${recordsToUpdate.length}件のレコードを更新しました。`);
                 location.reload();
             }).catch(err => {
-                console.error('[Auto Finish] 自動終了処理に失敗しました:', err);
+                console.error('[Auto Update] 自動更新処理に失敗しました:', err);
             });
         }
     })();

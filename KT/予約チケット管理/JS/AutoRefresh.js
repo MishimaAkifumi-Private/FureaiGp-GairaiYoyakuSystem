@@ -1,4 +1,4 @@
-﻿﻿﻿﻿(function() {
+﻿﻿(function() {
   'use strict';
 
   // --- 設定値 ---
