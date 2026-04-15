@@ -380,6 +380,17 @@
       .gaia-argoui-app-filterbutton {
         display: none !important;
       }
+
+      /* Group Label Style (for "チケット情報") */
+      .custom-ticket-text {
+        background-color: #444444 !important;
+        color: white !important;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: bold;
+        margin-left: 2px !important;
+        display: inline-block;
+      }
     `;
   
     // スタイル適用
@@ -391,6 +402,28 @@
       document.head.appendChild(style);
     };
   
+    // 特定のグループラベルにスタイルクラスを付与
+    const styleGroupLabels = () => {
+      // Kintoneの描画タイミングを考慮して少し待機
+      setTimeout(() => {
+        const labels = document.querySelectorAll('.group-label-gaia');
+        labels.forEach(label => {
+          if (label.textContent.trim() === 'チケット情報' && !label.querySelector('.custom-ticket-text')) {
+            // Kintone標準のアウトライン（フォーカス時の青枠）を消去
+            label.style.outline = 'none';
+            label.style.border = 'none';
+            
+            // テキスト部分だけを別のspanで囲んで、アイコンと分離させる
+            label.textContent = ''; 
+            const textSpan = document.createElement('span');
+            textSpan.className = 'custom-ticket-text';
+            textSpan.textContent = 'チケット情報';
+            label.appendChild(textSpan);
+          }
+        });
+      }, 100);
+    };
+
     // 独自モーダル表示関数
     const showDialog = (message, type = 'alert', title = null, placeholder = '', okLabel = null) => {
       return new Promise((resolve) => {
@@ -926,7 +959,7 @@
               </div>
             </div>
             <div style="margin-top: 10px; text-align: right;">
-              ${selectedTimeout ? `<span style="font-size:12px; color:#e67e22; font-weight:bold; margin-right:10px;">期限: ${selectedTimeout}</span>` : ''}
+              ${selectedTimeout ? `<span style="font-size:12px; color:#e67e22; font-weight:bold; margin-right:10px;">仮予約日時の有効期限: ${selectedTimeout}</span>` : ''}
               <span class="rcb-confirm-note" style="display:inline;">※送信後、ステータスは「${CONFIG.STATUS_SENT_VALUE}」に更新されます。</span>
             </div>
           `;
@@ -1674,7 +1707,7 @@
             // メール送信済みでない場合、または申込者再依頼の場合に再設定ボタンを表示
             if (!sendDateVal || isReRequest) {
                 const editBtn = document.createElement('button');
-                editBtn.innerHTML = '<span style="font-size:14px;">⚙️</span> 日時を再設定する';
+                editBtn.innerHTML = '<span style="font-size:14px;">⚙️</span> 仮予約日時を再設定する';
                 editBtn.style.cssText = 'margin-top: 5px; background-color: #fff; border: 1px solid #ccc; color: #555; padding: 6px 15px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 5px; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
                 
                 editBtn.onmouseover = () => { editBtn.style.backgroundColor = '#f8f9fa'; editBtn.style.borderColor = '#bbb'; editBtn.style.color = '#333'; };
@@ -1906,8 +1939,14 @@
         if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isRead && !isTimeoutStatus && currentMethod !== 'phone' && purpose !== '取消') {
             const timeoutWrapper = document.createElement('div');
             timeoutWrapper.style.display = 'flex';
+            timeoutWrapper.style.flexDirection = 'column';
             timeoutWrapper.style.alignItems = 'center';
             timeoutWrapper.style.gap = '5px';
+
+            const inputRow = document.createElement('div');
+            inputRow.style.display = 'flex';
+            inputRow.style.alignItems = 'center';
+            inputRow.style.gap = '5px';
 
             // アイコン表示
             const iconDiv = document.createElement('div');
@@ -1931,8 +1970,17 @@
                 timeoutSelect.appendChild(opt);
             });
 
-            timeoutWrapper.appendChild(iconDiv);
-            timeoutWrapper.appendChild(timeoutSelect);
+            inputRow.appendChild(iconDiv);
+            inputRow.appendChild(timeoutSelect);
+            timeoutWrapper.appendChild(inputRow);
+
+            const descSpan = document.createElement('span');
+        
+            descSpan.textContent = '※仮予約状態を維持できる期限です';
+            descSpan.style.fontSize = '12px';
+            descSpan.style.color = '#555';
+
+            timeoutWrapper.appendChild(descSpan);
             actionContainer.appendChild(timeoutWrapper);
         }
 
@@ -2240,6 +2288,7 @@
     // スタイル適用イベント (一覧・詳細共通)
     kintone.events.on(['app.record.index.show', 'app.record.detail.show'], function(event) {
         applyStyles();
+        styleGroupLabels();
         return event;
     });
 

@@ -1,150 +1,86 @@
 {
   "meta": {
-    "exported_at": "2026-01-11T04:26:22.656Z",
+    "exported_at": "2026-04-14T23:53:05.473Z",
     "executor": "akifumi.mishima@gmail.com",
     "domain": "w60013hke2ct.cybozu.com",
     "is_guest_space": true,
     "guest_space_id": "11",
-    "app_id": 156,
-    "app_name": "診療シフト管理 Version1.0"
+    "app_id": 142,
+    "app_name": "湘南東部_予約チケット管理 P01"
   },
   "app_info": {
     "properties": {
-      "appId": "156",
+      "appId": "142",
       "code": "",
-      "name": "診療シフト管理 Version1.0",
+      "name": "湘南東部_予約チケット管理 P01",
       "description": "",
-      "createdAt": "2025-05-16T04:13:20.000Z",
+      "createdAt": "2025-05-07T06:28:58.000Z",
       "creator": {
         "code": "akifumi.mishima@gmail.com",
-        "name": "情報システム室 室長"
+        "name": "三嶋（室長）"
       },
-      "modifiedAt": "2026-01-11T04:03:35.000Z",
+      "modifiedAt": "2026-02-04T15:40:34.000Z",
       "modifier": {
         "code": "akifumi.mishima@gmail.com",
-        "name": "情報システム室 室長"
+        "name": "三嶋（室長）"
       },
       "spaceId": "11",
       "threadId": "19"
     },
     "fields": {
-      "revision": "294",
+      "revision": "860",
       "properties": {
-        "木4": {
-          "type": "CHECK_BOX",
-          "code": "木4",
-          "label": "木曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+        "SYSTEM": {
+          "type": "GROUP",
+          "code": "SYSTEM",
+          "label": "内部処理",
+          "noLabel": false,
+          "openGroup": false
         },
-        "木5": {
-          "type": "CHECK_BOX",
-          "code": "木5",
-          "label": "木曜日",
-          "noLabel": true,
+        "第4希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第4希望日時",
+          "label": "第4希望日時",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "ReserveLock": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "ReserveLock",
+          "label": "ReserveLock",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": "lock"
         },
         "レコード番号": {
           "type": "RECORD_NUMBER",
           "code": "レコード番号",
-          "label": "レコード番号",
+          "label": "管理番号",
           "noLabel": false
         },
-        "木1": {
-          "type": "CHECK_BOX",
-          "code": "木1",
-          "label": "木曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "予約開始": {
-          "type": "NUMBER",
-          "code": "予約開始",
-          "label": "予約開始日",
+        "タイムアウト": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "タイムアウト",
+          "label": "タイムアウト",
           "noLabel": false,
           "required": false,
-          "minValue": "",
-          "maxValue": "",
-          "digit": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
           "unique": false,
-          "defaultValue": "",
-          "displayScale": "",
-          "unit": "営業日後から",
-          "unitPosition": "AFTER"
-        },
-        "木2": {
-          "type": "CHECK_BOX",
-          "code": "木2",
-          "label": "木曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "木3": {
-          "type": "CHECK_BOX",
-          "code": "木3",
-          "label": "木曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "defaultValue": ""
         },
         "ステータス": {
           "type": "STATUS",
@@ -152,203 +88,106 @@
           "label": "ステータス",
           "enabled": false
         },
-        "水5": {
-          "type": "CHECK_BOX",
-          "code": "水5",
-          "label": "水曜日",
-          "noLabel": true,
+        "名漢字": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "名漢字",
+          "label": "名漢字",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
-        "水4": {
-          "type": "CHECK_BOX",
-          "code": "水4",
-          "label": "水曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "金2": {
-          "type": "CHECK_BOX",
-          "code": "金2",
-          "label": "金曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "集合": {
+        "確定予約時刻": {
           "type": "DROP_DOWN",
-          "code": "集合",
-          "label": "タグ",
+          "code": "確定予約時刻",
+          "label": "確定予約時刻",
           "noLabel": false,
           "required": false,
           "options": {
-            "🔷": {
-              "label": "🔷",
-              "index": "19"
-            },
-            "🔶": {
-              "label": "🔶",
-              "index": "18"
-            },
-            "🔵": {
-              "label": "🔵",
-              "index": "14"
-            },
-            "🤎": {
-              "label": "🤎",
-              "index": "29"
-            },
-            "🔴": {
-              "label": "🔴",
-              "index": "10"
-            },
-            "🟨": {
-              "label": "🟨",
+            "10:30": {
+              "label": "10:30",
               "index": "3"
             },
-            "⭐": {
-              "label": "⭐",
-              "index": "20"
-            },
-            "🟧": {
-              "label": "🟧",
+            "10:00": {
+              "label": "10:00",
               "index": "2"
             },
-            "🟦": {
-              "label": "🟦",
-              "index": "5"
-            },
-            "🟥": {
-              "label": "🟥",
-              "index": "1"
-            },
-            "🤍": {
-              "label": "🤍",
-              "index": "32"
-            },
-            "🟫": {
-              "label": "🟫",
-              "index": "7"
-            },
-            "⭕": {
-              "label": "⭕",
-              "index": "21"
-            },
-            "🟪": {
-              "label": "🟪",
-              "index": "6"
-            },
-            "🟩": {
-              "label": "🟩",
+            "11:00": {
+              "label": "11:00",
               "index": "4"
             },
-            "🟠": {
-              "label": "🟠",
-              "index": "11"
+            "9:30": {
+              "label": "9:30",
+              "index": "1"
             },
-            "⬛": {
-              "label": "⬛",
-              "index": "8"
-            },
-            "⬜": {
-              "label": "⬜",
-              "index": "0"
-            },
-            "🟤": {
-              "label": "🟤",
-              "index": "16"
-            },
-            "🖤": {
-              "label": "🖤",
-              "index": "30"
-            },
-            "🟣": {
-              "label": "🟣",
-              "index": "15"
-            },
-            "🟢": {
-              "label": "🟢",
-              "index": "13"
-            },
-            "🟡": {
-              "label": "🟡",
-              "index": "12"
-            },
-            "🔘": {
-              "label": "🔘",
+            "15:30": {
+              "label": "15:30",
               "index": "9"
             },
-            "🩷": {
-              "label": "🩷",
-              "index": "22"
+            "16:30": {
+              "label": "16:30",
+              "index": "11"
             },
-            "🩶": {
-              "label": "🩶",
-              "index": "31"
+            "9:00": {
+              "label": "9:00",
+              "index": "0"
             },
-            "💜": {
-              "label": "💜",
-              "index": "28"
+            "14:00": {
+              "label": "14:00",
+              "index": "6"
             },
-            "💛": {
-              "label": "💛",
-              "index": "24"
+            "15:00": {
+              "label": "15:00",
+              "index": "8"
             },
-            "💚": {
-              "label": "💚",
-              "index": "25"
+            "11:30": {
+              "label": "11:30",
+              "index": "5"
             },
-            "💙": {
-              "label": "💙",
-              "index": "26"
+            "16:00": {
+              "label": "16:00",
+              "index": "10"
             },
-            "⚫": {
-              "label": "⚫",
-              "index": "17"
-            },
-            "🩵": {
-              "label": "🩵",
-              "index": "27"
-            },
-            "🧡": {
-              "label": "🧡",
-              "index": "23"
+            "14:30": {
+              "label": "14:30",
+              "index": "7"
             }
           },
+          "defaultValue": ""
+        },
+        "名かな": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "名かな",
+          "label": "名かな",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "メール既読日時": {
+          "type": "DATETIME",
+          "code": "メール既読日時",
+          "label": "メール既読日時",
+          "noLabel": false,
+          "required": false,
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
+        },
+        "経過情報": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "経過情報",
+          "label": "経過情報",
+          "noLabel": false,
+          "required": false,
           "defaultValue": ""
         },
         "カテゴリー": {
@@ -357,107 +196,12 @@
           "label": "カテゴリー",
           "enabled": false
         },
-        "金1": {
-          "type": "CHECK_BOX",
-          "code": "金1",
-          "label": "金曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "金4": {
-          "type": "CHECK_BOX",
-          "code": "金4",
-          "label": "金曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "金3": {
-          "type": "CHECK_BOX",
-          "code": "金3",
-          "label": "金曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "金5": {
-          "type": "CHECK_BOX",
-          "code": "金5",
-          "label": "金曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "掲載": {
-          "type": "RADIO_BUTTON",
-          "code": "掲載",
-          "label": "医師応診",
-          "noLabel": false,
-          "required": true,
-          "options": {
-            "受付": {
-              "label": "受付",
-              "index": "0"
-            },
-            "停止": {
-              "label": "停止",
-              "index": "1"
-            }
-          },
-          "defaultValue": "受付",
-          "align": "HORIZONTAL"
-        },
-        "診療科": {
+        "紹介元医療機関電話番号": {
           "type": "SINGLE_LINE_TEXT",
-          "code": "診療科",
-          "label": "診療科",
+          "code": "紹介元医療機関電話番号",
+          "label": "紹介元医療機関電話",
           "noLabel": false,
-          "required": true,
+          "required": false,
           "minLength": "",
           "maxLength": "",
           "expression": "",
@@ -465,43 +209,96 @@
           "unique": false,
           "defaultValue": ""
         },
-        "月4": {
-          "type": "CHECK_BOX",
-          "code": "月4",
-          "label": "月曜日",
-          "noLabel": true,
+        "メール送信日時": {
+          "type": "DATETIME",
+          "code": "メール送信日時",
+          "label": "メール送信日時",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "unique": false,
+          "defaultValue": "",
+          "defaultNowValue": false
         },
-        "月5": {
-          "type": "CHECK_BOX",
-          "code": "月5",
-          "label": "月曜日",
-          "noLabel": true,
+        "紹介元医療機関名": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "紹介元医療機関名",
+          "label": "紹介元医療機関名",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "第3希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第3希望日時",
+          "label": "第3希望日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "診療科": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "診療科",
+          "label": "診療科",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "業務連絡": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "業務連絡",
+          "label": "業務連絡",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "対応方法": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "対応方法",
+          "label": "対応方法",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "imgtext": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "imgtext",
+          "label": "画像テキスト",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "希望指定方法": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "希望指定方法",
+          "label": "希望指定方法",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
         "作業者": {
           "type": "STATUS_ASSIGNEE",
@@ -509,157 +306,101 @@
           "label": "作業者",
           "enabled": false
         },
-        "火4": {
-          "type": "CHECK_BOX",
-          "code": "火4",
-          "label": "火曜日",
-          "noLabel": true,
+        "建物": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "建物",
+          "label": "建物",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
-        "月1": {
-          "type": "CHECK_BOX",
-          "code": "月1",
-          "label": "月曜日",
-          "noLabel": true,
+        "担当医師": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "担当医師",
+          "label": "担当医師",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
-        "火3": {
-          "type": "CHECK_BOX",
-          "code": "火3",
-          "label": "火曜日",
-          "noLabel": true,
+        "個人情報同意": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "個人情報同意",
+          "label": "個人情報同意",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
-        "月2": {
-          "type": "CHECK_BOX",
-          "code": "月2",
-          "label": "第２週",
-          "noLabel": true,
+        "WEB取下修正予約日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "WEB取下修正予約日時",
+          "label": "WEB取下修正予約日時",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
-        "月3": {
-          "type": "CHECK_BOX",
-          "code": "月3",
-          "label": "月曜日",
-          "noLabel": true,
+        "第5希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第5希望日時",
+          "label": "第5希望日時",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
-        "火5": {
-          "type": "CHECK_BOX",
-          "code": "火5",
-          "label": "火曜日",
-          "noLabel": true,
+        "その他備考": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "その他備考",
+          "label": "その他備考",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "defaultValue": ""
         },
-        "火2": {
+        "人物情報": {
           "type": "CHECK_BOX",
-          "code": "火2",
-          "label": "火曜日",
-          "noLabel": true,
+          "code": "人物情報",
+          "label": "人物情報",
+          "noLabel": false,
           "required": false,
           "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
+            "要注意": {
+              "label": "要注意",
               "index": "0"
             }
           },
           "defaultValue": [],
-          "align": "VERTICAL"
+          "align": "HORIZONTAL"
         },
-        "火1": {
-          "type": "CHECK_BOX",
-          "code": "火1",
-          "label": "火曜日",
-          "noLabel": true,
+        "PublishedConfig": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "PublishedConfig",
+          "label": "スタッフ一覧",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "defaultValue": ""
         },
         "作成日時": {
           "type": "CREATED_TIME",
@@ -667,23 +408,52 @@
           "label": "作成日時",
           "noLabel": false
         },
-        "留意案内": {
-          "type": "RICH_TEXT",
-          "code": "留意案内",
-          "label": "ご案内",
+        "用件": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "用件",
+          "label": "用件",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "症状": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "症状",
+          "label": "症状",
           "noLabel": false,
           "required": false,
           "defaultValue": ""
         },
-        "着任日": {
-          "type": "DATE",
-          "code": "着任日",
-          "label": "着任日",
+        "カルテNo": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "カルテNo",
+          "label": "カルテNo",
           "noLabel": false,
           "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
           "unique": false,
-          "defaultValue": "",
-          "defaultNowValue": false
+          "defaultValue": ""
+        },
+        "姓かな": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "姓かな",
+          "label": "姓かな",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
         "更新者": {
           "type": "MODIFIER",
@@ -691,41 +461,10 @@
           "label": "更新者",
           "noLabel": false
         },
-        "診療分野": {
-          "type": "RADIO_BUTTON",
-          "code": "診療分野",
-          "label": "診療分野",
-          "noLabel": false,
-          "required": true,
-          "options": {
-            "がん健診系": {
-              "label": "がん健診系",
-              "index": "3"
-            },
-            "小児・婦人系": {
-              "label": "小児・婦人系",
-              "index": "2"
-            },
-            "外科系": {
-              "label": "外科系",
-              "index": "1"
-            },
-            "内科系": {
-              "label": "内科系",
-              "index": "0"
-            },
-            "その他": {
-              "label": "その他",
-              "index": "4"
-            }
-          },
-          "defaultValue": "内科系",
-          "align": "HORIZONTAL"
-        },
-        "診療選択": {
+        "申込者補足": {
           "type": "SINGLE_LINE_TEXT",
-          "code": "診療選択",
-          "label": "診療選択",
+          "code": "申込者補足",
+          "label": "申込者補足",
           "noLabel": false,
           "required": false,
           "minLength": "",
@@ -735,57 +474,159 @@
           "unique": false,
           "defaultValue": ""
         },
-        "直近NG日指定": {
-          "type": "SUBTABLE",
-          "code": "直近NG日指定",
+        "チケット情報": {
+          "type": "GROUP",
+          "code": "チケット情報",
+          "label": "チケット情報",
           "noLabel": false,
-          "label": "直近NG日指定",
-          "fields": {
-            "NG時間帯": {
-              "type": "CHECK_BOX",
-              "code": "NG時間帯",
-              "label": "NG時間帯",
-              "noLabel": false,
-              "required": false,
-              "options": {
-                "AM": {
-                  "label": "AM",
-                  "index": "0"
-                },
-                "PM": {
-                  "label": "PM",
-                  "index": "1"
-                }
-              },
-              "defaultValue": [],
-              "align": "HORIZONTAL"
-            },
-            "日付": {
-              "type": "DATE",
-              "code": "日付",
-              "label": "日付",
-              "noLabel": false,
-              "required": false,
-              "unique": false,
-              "defaultValue": "",
-              "defaultNowValue": false
-            }
-          }
+          "openGroup": false
         },
-        "予約可能期間": {
-          "type": "NUMBER",
-          "code": "予約可能期間",
-          "label": "予約可能期間",
+        "メールアドレス": {
+          "type": "LINK",
+          "code": "メールアドレス",
+          "label": "メールアドレス",
           "noLabel": false,
           "required": false,
-          "minValue": "",
-          "maxValue": "",
-          "digit": false,
+          "protocol": "MAIL",
+          "minLength": "",
+          "maxLength": "",
+          "unique": false,
+          "defaultValue": ""
+        },
+        "確定予約日": {
+          "type": "DATE",
+          "code": "確定予約日",
+          "label": "確定予約日",
+          "noLabel": false,
+          "required": false,
           "unique": false,
           "defaultValue": "",
-          "displayScale": "",
-          "unit": "日間",
-          "unitPosition": "AFTER"
+          "defaultNowValue": false
+        },
+        "性別": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "性別",
+          "label": "性別",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "連絡時間帯": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "連絡時間帯",
+          "label": "連絡時間帯",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "姓漢字": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "姓漢字",
+          "label": "姓漢字",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "住所": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "住所",
+          "label": "住所",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "電話2": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "電話2",
+          "label": "電話2",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "電話1": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "電話1",
+          "label": "電話1",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "丁目番地等": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "丁目番地等",
+          "label": "丁目番地等",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "URLトークン": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "URLトークン",
+          "label": "URLトークン",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "管理状況": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "管理状況",
+          "label": "管理状況",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": "未着手"
+        },
+        "理由": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "理由",
+          "label": "理由",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
         },
         "作成者": {
           "type": "CREATOR",
@@ -793,140 +634,10 @@
           "label": "作成者",
           "noLabel": false
         },
-        "離任日": {
-          "type": "DATE",
-          "code": "離任日",
-          "label": "離任日",
-          "noLabel": false,
-          "required": false,
-          "unique": false,
-          "defaultValue": "",
-          "defaultNowValue": false
-        },
-        "更新日時": {
-          "type": "UPDATED_TIME",
-          "code": "更新日時",
-          "label": "更新日時",
-          "noLabel": false
-        },
-        "水1": {
-          "type": "CHECK_BOX",
-          "code": "水1",
-          "label": "水曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "水3": {
-          "type": "CHECK_BOX",
-          "code": "水3",
-          "label": "水曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "水2": {
-          "type": "CHECK_BOX",
-          "code": "水2",
-          "label": "水曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "施設名": {
-          "type": "RADIO_BUTTON",
-          "code": "施設名",
-          "label": "診察施設",
-          "noLabel": false,
-          "required": true,
-          "options": {
-            "湘南東部クリニック": {
-              "label": "湘南東部クリニック",
-              "index": "1"
-            },
-            "湘南東部総合病院": {
-              "label": "湘南東部総合病院",
-              "index": "0"
-            }
-          },
-          "defaultValue": "湘南東部総合病院",
-          "align": "HORIZONTAL"
-        },
-        "土1": {
-          "type": "CHECK_BOX",
-          "code": "土1",
-          "label": "土曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "土2": {
-          "type": "CHECK_BOX",
-          "code": "土2",
-          "label": "土曜日",
-          "noLabel": true,
-          "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
-        },
-        "医師名": {
+        "第2希望日時": {
           "type": "SINGLE_LINE_TEXT",
-          "code": "医師名",
-          "label": "医師名",
+          "code": "第2希望日時",
+          "label": "第2希望日時",
           "noLabel": false,
           "required": false,
           "minLength": "",
@@ -936,115 +647,208 @@
           "unique": false,
           "defaultValue": ""
         },
-        "表示順": {
-          "type": "NUMBER",
-          "code": "表示順",
-          "label": "表示順",
+        "担当者": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "担当者",
+          "label": "担当者",
           "noLabel": false,
           "required": false,
-          "minValue": "0",
-          "maxValue": "",
-          "digit": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
           "unique": false,
-          "defaultValue": "",
-          "displayScale": "",
-          "unit": "",
-          "unitPosition": "BEFORE"
+          "defaultValue": ""
         },
-        "土5": {
-          "type": "CHECK_BOX",
-          "code": "土5",
-          "label": "土曜日",
-          "noLabel": true,
+        "WEB取下診療科": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "WEB取下診療科",
+          "label": "WEB取下診療科",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
-        "土3": {
-          "type": "CHECK_BOX",
-          "code": "土3",
-          "label": "土曜日",
-          "noLabel": true,
+        "おまかせ希望時間帯": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "おまかせ希望時間帯",
+          "label": "おまかせ希望時間帯",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         },
-        "土4": {
-          "type": "CHECK_BOX",
-          "code": "土4",
-          "label": "土曜日",
-          "noLabel": true,
+        "予約日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "予約日時",
+          "label": "予約日時",
+          "noLabel": false,
           "required": false,
-          "options": {
-            "午後": {
-              "label": "午後",
-              "index": "1"
-            },
-            "午前": {
-              "label": "午前",
-              "index": "0"
-            }
-          },
-          "defaultValue": [],
-          "align": "VERTICAL"
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "更新日時": {
+          "type": "UPDATED_TIME",
+          "code": "更新日時",
+          "label": "更新日時",
+          "noLabel": false
+        },
+        "施設名": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "施設名",
+          "label": "施設名",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "WEB取下メッセージ": {
+          "type": "MULTI_LINE_TEXT",
+          "code": "WEB取下メッセージ",
+          "label": "WEB取下メッセージ",
+          "noLabel": false,
+          "required": false,
+          "defaultValue": ""
+        },
+        "申込者": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "申込者",
+          "label": "申込者",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "持参画像CD": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "持参画像CD",
+          "label": "持参画像CD",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "postal_code": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "postal_code",
+          "label": "郵便番号",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "第1希望日時": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "第1希望日時",
+          "label": "第1希望日時",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
+        },
+        "生年月日": {
+          "type": "SINGLE_LINE_TEXT",
+          "code": "生年月日",
+          "label": "生年月日",
+          "noLabel": false,
+          "required": false,
+          "minLength": "",
+          "maxLength": "",
+          "expression": "",
+          "hideExpression": false,
+          "unique": false,
+          "defaultValue": ""
         }
       }
     },
     "views": {
       "views": {
-        "一覧1": {
+        "完了チケット一覧": {
           "type": "LIST",
-          "name": "一覧1",
-          "id": "8245877",
+          "name": "完了チケット一覧",
+          "id": "8247802",
           "filterCond": "",
-          "sort": "表示順 asc",
+          "sort": "レコード番号 desc",
+          "index": "1",
+          "fields": [
+            "レコード番号",
+            "人物情報",
+            "用件",
+            "姓漢字",
+            "名漢字",
+            "性別",
+            "カルテNo",
+            "確定予約日",
+            "業務連絡",
+            "作成日時"
+          ]
+        },
+        "チケット一覧": {
+          "type": "LIST",
+          "name": "チケット一覧",
+          "id": "8238699",
+          "filterCond": "",
+          "sort": "レコード番号 desc",
           "index": "0",
           "fields": [
-            "表示順",
-            "掲載",
-            "診療分野",
-            "診療科",
-            "診療選択",
-            "施設名",
-            "集合",
-            "医師名",
-            "着任日",
-            "離任日",
-            "直近NG日指定",
-            "予約開始",
-            "予約可能期間",
-            "留意案内",
-            "レコード番号"
+            "レコード番号",
+            "ReserveLock",
+            "用件",
+            "担当者",
+            "管理状況",
+            "対応方法",
+            "カルテNo",
+            "姓漢字",
+            "名漢字",
+            "メール送信日時",
+            "確定予約日",
+            "確定予約時刻",
+            "人物情報",
+            "性別",
+            "業務連絡",
+            "作成日時"
           ]
         }
       },
-      "revision": "294"
+      "revision": "860"
     },
     "status": {
       "enable": false,
       "states": null,
       "actions": null,
-      "revision": "294"
+      "revision": "860"
     },
     "acl_app": {
       "rights": [
@@ -1069,23 +873,23 @@
           },
           "includeSubs": false,
           "appEditable": false,
-          "recordViewable": true,
-          "recordAddable": true,
-          "recordEditable": true,
-          "recordDeletable": true,
+          "recordViewable": false,
+          "recordAddable": false,
+          "recordEditable": false,
+          "recordDeletable": false,
           "recordImportable": false,
           "recordExportable": false
         }
       ],
-      "revision": "294"
+      "revision": "860"
     },
     "acl_record": {
       "rights": [],
-      "revision": "294"
+      "revision": "860"
     },
     "acl_field": {
       "rights": [],
-      "revision": "294"
+      "revision": "860"
     }
   }
 }

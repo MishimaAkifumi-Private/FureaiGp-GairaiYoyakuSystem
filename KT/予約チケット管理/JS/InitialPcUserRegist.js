@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿/*
+﻿﻿﻿﻿﻿﻿﻿﻿/*
  * InitialPcUserRegist.js
  * 担当者表示スクリプト (APP142用)
  * 指定されたデザインで現在の端末利用者を表示します。
@@ -586,7 +586,7 @@
       return false;
   };
 
-  // ★追加: スタッフマスタ設定ダイアログ (管理者用)
+  // ★追加: スタッフマスタ設定ダイアログ
   async function showStaffMasterSettingDialog() {
       const hasConfigManager = await waitForConfigManager();
       const { overlay, box, content } = createModalBase();
@@ -737,7 +737,7 @@
       document.body.appendChild(overlay);
   }
 
-  // ★修正: 端末利用者（担当者）登録ダイアログ (リスト選択式)
+  // ★修正: 端末利用者登録ダイアログ (リスト選択式)
   async function showStaffRegistrationDialog() {
       const currentName = localStorage.getItem('shinryo_ticket_staff_name') || '';
       const hasConfigManager = await waitForConfigManager();
@@ -762,12 +762,12 @@
       const { overlay, box, content } = createModalBase();
       
       const title = document.createElement('h2');
-      title.textContent = '端末利用者（担当者）の設定';
+      title.textContent = '端末利用者の設定';
       title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
       content.appendChild(title);
 
       const desc = document.createElement('p');
-      desc.textContent = 'この端末を使用するスタッフを選択してください。';
+      desc.textContent = 'この端末を使用するスタッフ';
       desc.style.cssText = 'text-align: left; font-size: 14px; color: #666; margin-bottom: 10px; line-height: 1.5;';
       content.appendChild(desc);
 
@@ -794,12 +794,11 @@
 
       content.appendChild(select);
 
-      // 管理者用リンク
       const adminLinkDiv = document.createElement('div');
       adminLinkDiv.style.textAlign = 'right';
       adminLinkDiv.style.marginBottom = '20px';
       const adminLink = document.createElement('a');
-      adminLink.textContent = 'スタッフリストを編集する (管理者用)';
+      adminLink.textContent = 'スタッフリストを編集する';
       adminLink.style.cssText = 'font-size: 12px; color: #3498db; cursor: pointer; text-decoration: underline;';
       adminLink.onclick = () => {
           document.body.removeChild(overlay);
@@ -904,23 +903,7 @@
         </div>
     `;
     
-    // Settings Button
-    const settingsBtn = document.createElement('div');
-    settingsBtn.id = 'mail-settings-btn';
-    settingsBtn.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; margin-left: 15px; vertical-align: middle; cursor: pointer; transition: transform 0.2s; font-size: 45px;';
-    settingsBtn.innerHTML = '📧';
-    settingsBtn.title = 'メール設定';
-    
-    settingsBtn.onmouseover = () => {
-        settingsBtn.style.transform = 'scale(1.1)';
-    };
-    settingsBtn.onmouseout = () => {
-        settingsBtn.style.transform = 'scale(1)';
-    };
-    settingsBtn.onclick = showMailSettingsDialog;
-
     wrapper.appendChild(container);
-    wrapper.appendChild(settingsBtn);
     targetSpace.appendChild(wrapper);
   };
 
