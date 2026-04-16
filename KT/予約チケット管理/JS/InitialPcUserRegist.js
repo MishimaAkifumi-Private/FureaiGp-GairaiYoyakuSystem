@@ -123,198 +123,6 @@
       }
   }
 
-  async function showMailSettingsDialog() {
-      const { overlay, box, content, setOnCloseRequest } = createModalBase();
-      box.style.maxWidth = '500px';
-      box.style.maxHeight = '90vh';
-      box.style.overflowY = 'auto';
-      
-      let config = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
-      let staffList = [];
-      if (window.ShinryoApp && window.ShinryoApp.ConfigManager) {
-          try {
-              const pubData = await window.ShinryoApp.ConfigManager.fetchPublishedData();
-              if (pubData && pubData.commonSettings && Array.isArray(pubData.commonSettings.staffs)) {
-                  staffList = pubData.commonSettings.staffs;
-              }
-          } catch(e) { console.warn('Failed to fetch staff list', e); }
-      }
-
-      const titleStyle = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700; text-align: center;';
-
-      const renderMenu = () => {
-          setOnCloseRequest(null);
-          content.innerHTML = '';
-          const title = document.createElement('h2');
-          title.textContent = 'メール設定';
-          title.style.cssText = titleStyle;
-          content.appendChild(title);
-
-          const menuList = [
-              { label: 'BCC設定', icon: '📬', desc: 'BCC の設定', action: () => renderMailDestSettings() },
-              { label: '予約日リマインド設定', icon: '⏰', desc: 'リマインドメールの送信設定', action: () => renderReminderSettings() }
-          ];
-
-          menuList.forEach(item => {
-              const btn = document.createElement('button');
-              btn.className = 'custom-modal-menu-btn';
-              btn.innerHTML = `<div class="menu-btn-icon">${item.icon}</div><div class="menu-btn-content"><div class="menu-btn-title">${item.label}</div><div class="menu-btn-desc">${item.desc}</div></div>`;
-              btn.onclick = item.action;
-              content.appendChild(btn);
-          });
-
-          const closeBtn = document.createElement('button');
-          closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-          closeBtn.textContent = '閉じる';
-          closeBtn.style.marginTop = '20px';
-          closeBtn.onclick = () => document.body.removeChild(overlay);
-          content.appendChild(closeBtn);
-      };
-
-      const renderForm = (titleText, inputsDef, onSave, backAction) => {
-          content.innerHTML = '';
-          const title = document.createElement('h2');
-          title.textContent = titleText;
-          title.style.cssText = titleStyle;
-          content.appendChild(title);
-
-          const inputEls = {};
-          const initialValues = {};
-
-          inputsDef.forEach(def => {
-              let val = config[def.key] || '';
-              if (def.fallbackKey && !val) val = config[def.fallbackKey] || '';
-              if (def.default && !val) val = def.default;
-              initialValues[def.key] = val;
-          });
-
-          inputsDef.forEach(def => {
-              const div = document.createElement('div');
-              div.style.marginBottom = '15px';
-              div.style.textAlign = 'left';
-              const lbl = document.createElement('label');
-              lbl.textContent = def.label;
-              lbl.style.display = 'block';
-              lbl.style.fontSize = '12px';
-              lbl.style.fontWeight = 'bold';
-              lbl.style.marginBottom = '4px';
-              div.appendChild(lbl);
-
-              let inp;
-              if (def.type === 'select') {
-                  inp = document.createElement('select');
-                  inp.className = 'custom-modal-input';
-                  inp.style.marginBottom = '0';
-                  def.options.forEach(opt => {
-                      const o = document.createElement('option');
-                      o.value = opt;
-                      o.textContent = opt;
-                      if (opt === initialValues[def.key]) o.selected = true;
-                      inp.appendChild(o);
-                  });
-              } else if (def.type === 'textarea') {
-                  inp = document.createElement('textarea');
-                  inp.className = 'custom-modal-input';
-                  inp.style.marginBottom = '0';
-                  inp.style.height = '100px';
-                  inp.style.resize = 'vertical';
-                  inp.style.fontFamily = 'monospace';
-                  inp.value = initialValues[def.key];
-                  if (def.placeholder) inp.placeholder = def.placeholder;
-              } else {
-                  inp = document.createElement('input');
-                  inp.className = 'custom-modal-input';
-                  inp.style.marginBottom = '0';
-                  inp.type = def.type || 'text';
-                  inp.value = initialValues[def.key];
-                  if (def.placeholder) inp.placeholder = def.placeholder;
-              }
-              inputEls[def.key] = inp;
-              div.appendChild(inp);
-              content.appendChild(div);
-          });
-
-          const checkDirty = (action) => {
-              let isDirty = false;
-              Object.keys(inputEls).forEach(key => {
-                  if (inputEls[key].value != initialValues[key]) isDirty = true;
-              });
-              checkDirtyAndConfirm(isDirty, action);
-          };
-          setOnCloseRequest((doClose) => checkDirty(doClose));
-
-          const btnGroup = document.createElement('div');
-          btnGroup.className = 'custom-modal-btn-group';
-          btnGroup.style.marginTop = '20px';
-
-          const cancelBtn = document.createElement('button');
-          cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
-          cancelBtn.textContent = 'キャンセル';
-          cancelBtn.onclick = () => checkDirty(() => backAction());
-
-          const saveBtn = document.createElement('button');
-          saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
-          saveBtn.textContent = '保存';
-          saveBtn.onclick = () => {
-              const newValues = {};
-              Object.keys(inputEls).forEach(key => { newValues[key] = inputEls[key].value; });
-              if (onSave(newValues)) {
-                  config = { ...config, ...newValues };
-                  localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
-                  backAction();
-              }
-          };
-
-          btnGroup.appendChild(cancelBtn);
-          btnGroup.appendChild(saveBtn);
-          content.appendChild(btnGroup);
-      };
-
-      const renderMailDestSettings = () => {
-          renderForm('BCC設定', [
-              { label: 'BCC', key: 'mailBcc', placeholder: '例: bcc@example.com' }
-          ], () => true, renderMenu);
-      };
-
-      const renderReminderSettings = () => {
-          const staffOptions = ['(選択なし)', ...staffList.map(s => s.name)];
-          const inputs = [
-              { label: '送信タイミング (日前)', key: 'reminderDays', type: 'number', placeholder: '例: 1 (前日)' },
-              { label: '送信時間', key: 'reminderTime', type: 'time' },
-              { label: '担当スタッフ (署名用)', key: 'reminderStaffName', type: 'select', options: staffOptions, default: '(選択なし)' },
-              { label: '件名', key: 'reminderSubject', placeholder: '【リマインド】明日のご予約について' },
-              { label: '本文', key: 'reminderBody', type: 'textarea', placeholder: '{{name}} 様\n\n明日のご予約の日時をお知らせします。\n日時: {{date}} {{time}}\n診療科: {{dept}}\n担当医: {{doctor}}\n\n担当: {{staff_name}} ({{staff_email}})\nご来院をお待ちしております。' }
-          ];
-
-          renderForm('予約日リマインド設定', inputs, (vals) => {
-              if (vals.reminderStaffName && vals.reminderStaffName !== '(選択なし)') {
-                  const targetStaff = staffList.find(s => s.name === vals.reminderStaffName);
-                  if (targetStaff) config.reminderStaffEmail = targetStaff.email || '';
-              } else {
-                  config.reminderStaffEmail = '';
-              }
-              localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
-              return true;
-          }, renderMenu);
-          
-          const note = document.createElement('div');
-          note.style.fontSize = '11px';
-          note.style.color = '#666';
-          note.style.textAlign = 'left';
-          note.style.marginTop = '-10px';
-          note.style.marginBottom = '15px';
-          note.style.padding = '10px';
-          note.style.backgroundColor = '#f8f9fa';
-          note.style.borderRadius = '4px';
-          note.innerHTML = `<strong>利用可能な差し込みタグ:</strong><br>{{name}}: 患者名, {{date}}: 予約日, {{time}}: 予約時間<br>{{dept}}: 診療科, {{doctor}}: 医師名<br>{{staff_name}}: 担当スタッフ名, {{staff_email}}: スタッフEmail`;
-          const btnGroup = content.querySelector('.custom-modal-btn-group');
-          if (btnGroup) content.insertBefore(note, btnGroup);
-      };
-
-      renderMenu();
-      document.body.appendChild(overlay);
-  }
-
   const showBlockingDialog = () => {
       if (document.getElementById('staff-blocking-overlay')) return;
 
@@ -874,31 +682,29 @@
     wrapper.style.alignItems = 'center';
 
     const displayName = staffName;
-    const nameColor = '#666';
+    const nameColor = '#ffffff';
 
     const container = document.createElement('div');
     container.id = 'staff-display-badge';
     // 指定されたスタイル + 配置調整(inline-flex)
-    container.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-left: 20px; vertical-align: middle; background-color: #fff; border: 2px solid #e0e0e0; border-radius: 40px; padding: 6px 24px 6px 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: all 0.2s;';
+    container.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-left: 20px; vertical-align: middle; background: linear-gradient(145deg, #3a6161, #243d3d); border: 1px solid #1d3131; border-radius: 40px; padding: 6px 24px 6px 16px; box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3), inset -1px -1px 2px rgba(0,0,0,0.4), 0 2px 5px rgba(0,0,0,0.3); cursor: pointer; transition: all 0.2s;';
     container.onclick = showStaffRegistrationDialog; // ★修正: 担当者登録機能へ戻す
     
     // ホバーエフェクト
     container.onmouseover = () => {
-        container.style.backgroundColor = '#f8f9fa';
-        container.style.borderColor = '#ccc';
-        container.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+        container.style.background = 'linear-gradient(145deg, #426e6e, #294747)';
+        container.style.boxShadow = 'inset 1px 1px 2px rgba(255,255,255,0.4), inset -1px -1px 2px rgba(0,0,0,0.4), 0 4px 8px rgba(0,0,0,0.4)';
     };
     container.onmouseout = () => {
-        container.style.backgroundColor = '#fff';
-        container.style.borderColor = '#e0e0e0';
-        container.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+        container.style.background = 'linear-gradient(145deg, #3a6161, #243d3d)';
+        container.style.boxShadow = 'inset 1px 1px 2px rgba(255,255,255,0.3), inset -1px -1px 2px rgba(0,0,0,0.4), 0 2px 5px rgba(0,0,0,0.3)';
     };
 
     container.innerHTML = `
-        <div style="display: flex; align-items: center; font-size: 32px; color: #555;">
+        <div style="display: flex; align-items: center; font-size: 32px; color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
             <i class="fa-solid fa-headset"></i>
         </div>
-        <div style="font-size: 24px; font-weight: bold; color: ${nameColor}; margin-left: 2px; line-height: 1;">
+        <div style="font-size: 24px; font-weight: bold; color: ${nameColor}; margin-left: 2px; line-height: 1; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
             ${displayName}
         </div>
     `;

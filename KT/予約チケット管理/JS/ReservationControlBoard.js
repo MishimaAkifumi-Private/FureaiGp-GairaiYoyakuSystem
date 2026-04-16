@@ -1956,6 +1956,7 @@
             
             // プルダウン
             timeoutSelect = document.createElement('select');
+            timeoutSelect.id = 'rcb-timeout-select';
             timeoutSelect.style.padding = '5px';
             timeoutSelect.style.backgroundColor = 'rgb(245, 245, 225)';
             timeoutSelect.style.borderRadius = '4px';
@@ -1974,13 +1975,6 @@
             inputRow.appendChild(timeoutSelect);
             timeoutWrapper.appendChild(inputRow);
 
-            const descSpan = document.createElement('span');
-        
-            descSpan.textContent = '※仮予約状態を維持できる期限です';
-            descSpan.style.fontSize = '12px';
-            descSpan.style.color = '#555';
-
-            timeoutWrapper.appendChild(descSpan);
             actionContainer.appendChild(timeoutWrapper);
         }
 
