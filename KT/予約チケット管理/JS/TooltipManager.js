@@ -118,8 +118,8 @@
       position: 'inside' // 見出しのdiv内部に配置
     },
     {
-      match: (el) => el.tagName === 'BUTTON' && el.textContent.includes('仮予約日時を再設定する'),
-      text: '仮予約日時を再度設定し直します。',
+      match: (el) => el.tagName === 'BUTTON' && el.textContent.includes('再設定する'),
+      text: '対応方法や仮予約日時を再度設定し直します。',
       position: 'inside' // 幅が広いボタンなどを想定してボタン内部に配置
     },
     {

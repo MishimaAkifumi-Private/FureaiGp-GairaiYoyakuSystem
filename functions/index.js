@@ -204,7 +204,6 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
     const mailOptions = {
       from: `"ふれあいグループ 湘南東部病院予約センター" <${config.user}@fureai-g.or.jp>`,
       to: data.to,
-      bcc: "akifumi.mishima@gmail.com",
       subject: subject,
       html: htmlBody,
       text: textBody, // テキストパートを追加
@@ -237,6 +236,19 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     res.status(204).send('');
     return;
   }
+
+  // JST日時フォーマット関数
+  const getJSTFormattedDate = () => {
+    const d = new Date();
+    d.setTime(d.getTime() + 9 * 60 * 60 * 1000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const h = String(d.getUTCHours()).padStart(2, '0');
+    const min = String(d.getUTCMinutes()).padStart(2, '0');
+    const s = String(d.getUTCSeconds()).padStart(2, '0');
+    return `${y}/${m}/${day} ${h}:${min}:${s}`;
+  };
 
   // クエリパラメータの取得 (?id=xxx)
   let recordId = req.query.id || req.body.id;
@@ -271,8 +283,8 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
   }
 
   if (!recordId) {
-    console.error("[ERROR] パラメータ 'id' または有効な 'token' が不足しています。");
-    res.status(400).send("エラー: 不正なアクセスです (ID/Token不足)");
+    console.warn(`[WARN] パラメータ 'id' または有効な 'token' が不足、またはレコードが見つかりません。Token=${token}`);
+    res.status(200).send(getExpiredHtml());
     return;
   }
 
@@ -297,6 +309,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     const timeoutVal = (record["タイムアウト"] && record["タイムアウト"].value) || "2時間";
     const recordUrlToken = (record["URLトークン"] && record["URLトークン"].value) || "";
     const methodVal = (record["応対方法"] && record["応対方法"].value) || "";
+    const currentStaff = (record["担当者"] && record["担当者"].value) || "システム";
 
     // ---------------------------------------------------------
     // POSTリクエスト処理 (キャンセル実行)
@@ -315,6 +328,16 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
 
         const nowISO = new Date().toISOString();
 
+        // 履歴情報の追記
+        const currentHistories = record["経過情報"]?.value || [];
+        currentHistories.push({
+            value: {
+                "経過情報_日時": { value: getJSTFormattedDate() },
+                "経過情報_担当者": { value: currentStaff },
+                "経過情報_管理状態": { value: "URL取下" }
+            }
+        });
+
         // Kintone更新: ステータス変更 & キャンセル日時記録
         const updateBody = {
             app: APP_ID,
@@ -323,7 +346,8 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
                 "管理状況": { value: "URL取下" },
                 "キャンセル日時": { value: nowISO },
                 "キャンセル実行者": { value: "本人" },
-                "ReserveLock": { value: "unlock" } // ★追加: URL取下(キャンセル)時はunlock
+                "ReserveLock": { value: "unlock" }, // ★追加: URL取下(キャンセル)時はunlock
+                "経過情報": { value: currentHistories }
             }
         };
 
@@ -362,11 +386,21 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
       if (action === 're_request') {
         console.log(`[LOG] 再依頼処理開始: RecordID=${recordId}`);
         
+        const currentHistories = record["経過情報"]?.value || [];
+        currentHistories.push({
+            value: {
+                "経過情報_日時": { value: getJSTFormattedDate() },
+                "経過情報_担当者": { value: currentStaff },
+                "経過情報_管理状態": { value: "申込者再依頼" }
+            }
+        });
+
         const updateBody = {
             app: APP_ID,
             id: recordId,
             record: {
-                "管理状況": { value: "申込者再依頼" }
+                "管理状況": { value: "申込者再依頼" },
+                "経過情報": { value: currentHistories }
             }
         };
 
@@ -401,10 +435,18 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         return;
     }
 
-    // ★ 既読日時の更新 (順序変更: ステータス判定の前に実行)
-    // 未読の場合、アクセスがあった時点で既読日時を記録する
+    // 1. 既に無効ステータスの場合 (再設定、キャンセル済等)
+    // ※既読処理より先に判定し、無効画面を表示して処理を終了する
+    if (currentStatus === "キャンセル" || currentStatus === "URL取下" || currentStatus === "スタッフ取下" || currentStatus === "終了" || currentStatus === "担当設定") {
+        res.status(200).send(getAlreadyCancelledHtml());
+        return;
+    }
+
+    // 2. 既読日時の更新
+    // 有効なURLで、かつ未読の場合のみアクセスがあった時点で既読日時を記録する
     if (!mailReadDate) {
         const nowISO = new Date().toISOString();
+        const currentHistories = record["経過情報"]?.value || [];
         const updateBody = {
             app: APP_ID,
             id: recordId,
@@ -414,12 +456,20 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         };
         
         // ステータス更新判定
-        // 以下のステータスの場合は、ステータス自体は変更せず、既読日時のみ記録する
-        const keepStatusList = ["キャンセル", "URL取下", "スタッフ取下", "閲覧期限切れ", "電話合意済", "完了", "終了", "メール既読", "メール合意済"];
+        // 以下のステータスの場合は、ステータス自体は変更せず既読日時のみ記録する
+        const keepStatusList = ["閲覧期限切れ", "電話合意済", "完了", "メール既読", "メール合意済"];
         
         // ステータスが上記以外（主に「メール送信済」）の場合のみ「メール既読」に変更
         if (!keepStatusList.includes(currentStatus)) {
             updateBody.record["管理状況"] = { value: "メール既読" };
+            currentHistories.push({
+                value: {
+                    "経過情報_日時": { value: getJSTFormattedDate() },
+                    "経過情報_担当者": { value: currentStaff },
+                    "経過情報_管理状態": { value: "メール既読" }
+                }
+            });
+            updateBody.record["経過情報"] = { value: currentHistories };
         }
 
         try {
@@ -430,12 +480,6 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             });
             if (!updateResponse.ok) console.error(`[ERROR] 既読更新失敗: ${await updateResponse.text()}`);
         } catch (e) { console.error(`[ERROR] 既読更新エラー:`, e); }
-    }
-
-    // 1. 既にキャンセル済みの場合
-    if (currentStatus === "キャンセル" || currentStatus === "URL取下" || currentStatus === "スタッフ取下") {
-        res.status(200).send(getAlreadyCancelledHtml());
-        return;
     }
 
     // 1.2 再依頼済みの場合
@@ -492,12 +536,22 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         }
 
         if (isTimedOut) {
+            const currentHistories = record["経過情報"]?.value || [];
+            currentHistories.push({
+                value: {
+                    "経過情報_日時": { value: getJSTFormattedDate() },
+                    "経過情報_担当者": { value: currentStaff },
+                    "経過情報_管理状態": { value: "閲覧期限切れ" }
+                }
+            });
+
             // タイムアウト発生: ステータスを更新してエラー画面へ
             const updateBody = {
                 app: APP_ID,
                 id: recordId,
                 record: {
-                    "管理状況": { value: "閲覧期限切れ" }
+                    "管理状況": { value: "閲覧期限切れ" },
+                    "経過情報": { value: currentHistories }
                 }
             };
             await fetch(`${BASE_URI}/record.json`, {

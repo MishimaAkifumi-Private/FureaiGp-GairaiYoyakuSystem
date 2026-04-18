@@ -216,16 +216,23 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     return;
   }
 
+  // JST日時フォーマット関数
+  const getJSTFormattedDate = () => {
+    const d = new Date();
+    d.setTime(d.getTime() + 9 * 60 * 60 * 1000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const h = String(d.getUTCHours()).padStart(2, '0');
+    const min = String(d.getUTCMinutes()).padStart(2, '0');
+    const s = String(d.getUTCSeconds()).padStart(2, '0');
+    return `${y}/${m}/${day} ${h}:${min}:${s}`;
+  };
+
   // クエリパラメータの取得 (?id=xxx)
-  const recordId = req.query.id || req.body.id;
+  let recordId = req.query.id || req.body.id;
   const token = req.query.token; // トークン取得
   
-
-  if (!recordId) {
-    console.error("[ERROR] パラメータ 'id' が不足しています。");
-    res.status(400).send("エラー: 不正なアクセスです (ID不足)");
-    return;
-  }
 
   // --- Kintone API 設定 ---
   // 環境変数から設定を取得 (デフォルト値は既存環境に合わせています)
@@ -255,8 +262,8 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
   }
 
   if (!recordId) {
-    console.error("[ERROR] パラメータ 'id' または有効な 'token' が不足しています。");
-    res.status(400).send("エラー: 不正なアクセスです (ID/Token不足)");
+    console.warn(`[WARN] パラメータ 'id' または有効な 'token' が不足、またはレコードが見つかりません。Token=${token}`);
+    res.status(200).send(getExpiredHtml());
     return;
   }
 
@@ -277,6 +284,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     const currentStatus = (record["管理状況"] && record["管理状況"].value) || "";
     const phoneConfirmDate = (record["電話確認日時"] && record["電話確認日時"].value) || "";
     const mailReadDate = (record["メール既読日時"] && record["メール既読日時"].value) || "";
+    const currentStaff = (record["担当者"] && record["担当者"].value) || "システム";
 
     // ---------------------------------------------------------
     // POSTリクエスト処理 (キャンセル実行)
@@ -295,6 +303,15 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
 
         const nowISO = new Date().toISOString();
 
+        const currentHistories = record["経過情報"]?.value || [];
+        currentHistories.push({
+            value: {
+                "経過情報_日時": { value: getJSTFormattedDate() },
+                "経過情報_担当者": { value: currentStaff },
+                "経過情報_管理状態": { value: "キャンセル" }
+            }
+        });
+
         // Kintone更新: ステータス変更 & キャンセル日時記録
         const updateBody = {
             app: APP_ID,
@@ -302,7 +319,9 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             record: {
                 "管理状況": { value: "キャンセル" },
                 "キャンセル日時": { value: nowISO },
-                "キャンセル実行者": { value: "本人" }
+                "キャンセル実行者": { value: "本人" },
+                "ReserveLock": { value: "unlock" },
+                "経過情報": { value: currentHistories }
             }
         };
 
@@ -348,7 +367,6 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             const mailOptions = {
                 from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
                 to: email,
-                bcc: "akifumi.mishima@gmail.com",
                 subject: "【予約キャンセル完了】診療予約のキャンセルについて",
                 html: `
                     <p>${name} 様</p>
@@ -376,11 +394,21 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
       if (action === 're_request') {
         console.log(`[LOG] 再依頼処理開始: RecordID=${recordId}`);
         
+        const currentHistories = record["経過情報"]?.value || [];
+        currentHistories.push({
+            value: {
+                "経過情報_日時": { value: getJSTFormattedDate() },
+                "経過情報_担当者": { value: currentStaff },
+                "経過情報_管理状態": { value: "申込者再依頼" }
+            }
+        });
+
         const updateBody = {
             app: APP_ID,
             id: recordId,
             record: {
-                "管理状況": { value: "申込者再依頼" }
+                "管理状況": { value: "申込者再依頼" },
+                "経過情報": { value: currentHistories }
             }
         };
 
@@ -416,7 +444,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     }
 
     // 1. 既にキャンセル済みの場合
-    if (currentStatus === "キャンセル") {
+    if (currentStatus === "キャンセル" || currentStatus === "URL取下" || currentStatus === "スタッフ取下" || currentStatus === "終了" || currentStatus === "担当設定") {
         res.status(200).send(getAlreadyCancelledHtml());
         return;
     }
@@ -425,6 +453,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     // ステータスが既に「メール既読検知」でも、メール既読日時が空なら更新する
     if (!mailReadDate) {
         const nowISO = new Date().toISOString();
+        const currentHistories = record["経過情報"]?.value || [];
         const updateBody = {
             app: APP_ID,
             id: recordId,
@@ -432,9 +461,18 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
                 "メール既読日時": { value: nowISO }
             }
         };
-        // ステータスがまだ既読検知になっていなければ更新
-        if (currentStatus !== "メール既読検知") {
-            updateBody.record["管理状況"] = { value: "メール既読検知" };
+        // ステータス更新判定
+        const keepStatusList = ["閲覧期限切れ", "電話合意済", "完了", "メール既読", "メール合意済"];
+        if (!keepStatusList.includes(currentStatus)) {
+            updateBody.record["管理状況"] = { value: "メール既読" };
+            currentHistories.push({
+                value: {
+                    "経過情報_日時": { value: getJSTFormattedDate() },
+                    "経過情報_担当者": { value: currentStaff },
+                    "経過情報_管理状態": { value: "メール既読" }
+                }
+            });
+            updateBody.record["経過情報"] = { value: currentHistories };
         }
 
         const updateResponse = await fetch(`${BASE_URI}/record.json`, {

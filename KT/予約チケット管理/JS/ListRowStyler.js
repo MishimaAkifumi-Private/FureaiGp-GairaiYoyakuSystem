@@ -14,6 +14,10 @@
     RES_DATE_FIELD: '確定予約日',   // 予約日フィールド
     STAFF_CONFIRM_FIELD: 'スタッフ確認', // スタッフ確認フィールド
     RESERVE_LOCK_FIELD: 'ReserveLock', // ロックフィールド
+    METHOD_FIELD: '対応方法',
+    RES_TIME_FIELD: '確定予約時刻',
+    READ_DATE_FIELD: 'メール既読日時',
+    PHONE_CONFIRM_FIELD: '電話確認日時',
     TIMEOUT_FIELD: 'タイムアウト', // タイムアウトフィールド
     SEND_DATE_FIELD: 'メール送信日時', // 送信日時フィールド
     CANCEL_VALUE: 'キャンセル',     // グレーアウトする値
@@ -23,6 +27,17 @@
     GRAY_COLOR: '#838383',        // 背景色（薄いグレー）
     PINK_COLOR: '#ffe4e1',        // 背景色（ピンク）
     TEXT_COLOR: '#000'            // 文字色
+  };
+
+  // 日時フォーマット関数
+  const formatDateTime = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      const h = String(date.getHours()).padStart(2, '0');
+      const min = String(date.getMinutes()).padStart(2, '0');
+      const s = String(date.getSeconds()).padStart(2, '0');
+      return `${y}/${m}/${d} ${h}:${min}:${s}`;
   };
 
   kintone.events.on('app.record.index.show', function(event) {
@@ -42,17 +57,18 @@
         const hasLock = records[0].hasOwnProperty(CONFIG.RESERVE_LOCK_FIELD);
         const hasTimeout = records[0].hasOwnProperty(CONFIG.TIMEOUT_FIELD);
         const hasSendDate = records[0].hasOwnProperty(CONFIG.SEND_DATE_FIELD);
+        const hasHistory = records[0].hasOwnProperty('経過情報');
         
         let recordMap = {};
 
         // フィールドが不足している場合はAPIで取得
-        if (!hasExecutor || !hasStaffConfirm || !hasLock || !hasTimeout || !hasSendDate) {
+        if (!hasExecutor || !hasStaffConfirm || !hasLock || !hasTimeout || !hasSendDate || !hasHistory) {
             const ids = records.map(r => r.$id.value);
             try {
                 const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
                     app: kintone.app.getId(),
                     query: `$id in ("${ids.join('","')}")`,
-                    fields: ['$id', CONFIG.EXECUTOR_FIELD, CONFIG.STAFF_CONFIRM_FIELD, CONFIG.RESERVE_LOCK_FIELD, CONFIG.TIMEOUT_FIELD, CONFIG.SEND_DATE_FIELD]
+                    fields: ['$id', CONFIG.EXECUTOR_FIELD, CONFIG.STAFF_CONFIRM_FIELD, CONFIG.RESERVE_LOCK_FIELD, CONFIG.TIMEOUT_FIELD, CONFIG.SEND_DATE_FIELD, '経過情報']
                 });
                 resp.records.forEach(r => {
                     recordMap[r.$id.value] = r;
@@ -132,6 +148,20 @@
                     if (lockStatus !== 'unlock') {
                         updatePayload[CONFIG.RESERVE_LOCK_FIELD] = { value: 'unlock' };
                     }
+                    
+                    // 経過情報に「診療日時通過」と「終了」の記録を追加
+                    let currentHistories = getVal('経過情報');
+                    if (!Array.isArray(currentHistories)) currentHistories = [];
+                    const nowStr = formatDateTime(new Date());
+                    
+                    currentHistories.push({
+                        value: { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: '診療日時通過' } }
+                    });
+                    currentHistories.push({
+                        value: { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: CONFIG.FINISH_VALUE } }
+                    });
+                    
+                    updatePayload['経過情報'] = { value: currentHistories };
                     needsUpdate = true;
                 }
             }
@@ -173,7 +203,25 @@
                 nextDayOfExpire.setHours(0, 0, 0, 0);
 
                 if (new Date() >= nextDayOfExpire) {
-                    updatePayload[CONFIG.RESERVE_LOCK_FIELD] = { value: 'unlock' };
+                    // タイムアウト翌日になったら、電話対応に切り替える
+                    updatePayload[CONFIG.STATUS_FIELD] = { value: '要電話対応' };
+                    updatePayload[CONFIG.METHOD_FIELD] = { value: 'phone' };
+                    updatePayload[CONFIG.SEND_DATE_FIELD] = { value: null };
+                    updatePayload[CONFIG.READ_DATE_FIELD] = { value: null };
+                    updatePayload[CONFIG.TIMEOUT_FIELD] = { value: null };
+                    updatePayload[CONFIG.PHONE_CONFIRM_FIELD] = { value: null };
+                    
+                    // 経過情報に追加
+                    let currentHistories = getVal('経過情報');
+                    if (updatePayload['経過情報']) currentHistories = updatePayload['経過情報'].value;
+                    else if (!Array.isArray(currentHistories)) currentHistories = [];
+                    const nowStr = formatDateTime(new Date());
+                    
+                    currentHistories.push({
+                        value: { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: '要電話対応' } }
+                    });
+                    
+                    updatePayload['経過情報'] = { value: currentHistories };
                     needsUpdate = true;
                 }
             }
