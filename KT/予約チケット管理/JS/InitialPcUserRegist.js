@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿/*
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/*
  * InitialPcUserRegist.js
  * 担当者表示スクリプト (APP142用)
  * 指定されたデザインで現在の端末利用者を表示します。
@@ -687,7 +687,7 @@
     const container = document.createElement('div');
     container.id = 'staff-display-badge';
     // 指定されたスタイル + 配置調整(inline-flex)
-    container.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-left: 20px; vertical-align: middle; background: linear-gradient(145deg, #3a6161, #243d3d); border: 1px solid #1d3131; border-radius: 40px; padding: 6px 24px 6px 16px; box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3), inset -1px -1px 2px rgba(0,0,0,0.4), 0 2px 5px rgba(0,0,0,0.3); cursor: pointer; transition: all 0.2s;';
+    container.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-left: 20px; vertical-align: middle; background: linear-gradient(145deg, #3a6161, #243d3d); border: 1px solid #1d3131; border-radius: 40px; padding: 6px 8px 6px 16px; box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3), inset -1px -1px 2px rgba(0,0,0,0.4), 0 2px 5px rgba(0,0,0,0.3); cursor: pointer; transition: all 0.2s;';
     container.onclick = showStaffRegistrationDialog; // ★修正: 担当者登録機能へ戻す
     
     // ホバーエフェクト

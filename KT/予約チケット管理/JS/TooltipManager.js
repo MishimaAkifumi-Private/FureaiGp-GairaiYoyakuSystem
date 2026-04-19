@@ -15,14 +15,11 @@
         position: relative;
         display: inline-flex;
         align-items: center;
-        margin-left: 8px;
+        margin-left: 6px;
         color: #9DA0A4;
         cursor: help;
         vertical-align: middle;
-      }
-      .custom-tooltip-icon svg {
-        width: 24px;
-        height: 24px;
+        font-size: 16px;
       }
       /* ツールチップ吹き出し本体 */
       .custom-tooltip-icon::after {
@@ -77,15 +74,12 @@
     document.head.appendChild(style);
   };
 
-  // 指定されたSVGアイコン
-  const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"></path></svg>`;
-
   // アイコン生成関数
   const createTooltipIcon = (tooltipText) => {
     const span = document.createElement('span');
     span.className = 'custom-tooltip-icon';
     span.setAttribute('data-tooltip', tooltipText);
-    span.innerHTML = svgIcon;
+    span.innerHTML = '💡';
     return span;
   };
 
@@ -100,12 +94,12 @@
     {
       match: (el) => el.id === 'rcb-reset-btn',
       text: '担当者等を初期化してチケット到着時の状態まで戻します（チケット情報は維持されます）。メールを送信した後の場合、そのメールに含まれる予約時日時などのリンク(URL)情報をアクセスすると無効表示になります',
-      position: 'after' // ボタンの横に配置
+      position: 'inside' // ボタンの内部に配置
     },
     {
       match: (el) => el.classList && el.classList.contains('custom-ticket-text') && el.textContent.includes('チケット情報'),
       text: 'このチケットの詳細情報を表示します。',
-      position: 'after' // テキストの横に配置
+      position: 'inside' // テキストの内部（右横）に配置
     },
     {
       match: (el) => el.classList && el.classList.contains('rcb-section-title') && el.textContent.includes('対応方法の選択'),
@@ -123,29 +117,14 @@
       position: 'inside' // 幅が広いボタンなどを想定してボタン内部に配置
     },
     {
-      match: (el) => el.id === 'staff-badge-wrapper',
+      match: (el) => el.parentNode && el.parentNode.id === 'staff-display-badge' && el.style.fontSize === '24px',
       text: '現在この端末を操作している担当者です。\nクリックすると担当者を設定・変更できます。',
-      position: 'inside' // ラッパーの内側（右端）に配置して中央揃えにする
+      position: 'inside' // 名前の右横（ボタンの内側）に配置する
     },
     {
       match: (el) => el.classList && el.classList.contains('rcb-btn-save') && el.textContent.includes('メールを送信する'),
       text: '仮予約日時など、設定した内容で依頼者にメールを送信します。',
-      position: 'after', // ボタンの外に配置
-      onAdd: (el, icon) => {
-        // ボタンとアイコンを横並びにするためのラッパーを作成
-        const wrapper = document.createElement('div');
-        wrapper.style.display = 'flex';
-        wrapper.style.alignItems = 'center';
-        wrapper.style.width = '100%';
-
-        // ボタンの幅をアイコン分だけ縮める
-        el.style.width = 'calc(100% - 40px)';
-
-        // ラッパーを元の位置に挿入し、ボタンとアイコンをその中に移動させる
-        el.parentNode.insertBefore(wrapper, el);
-        wrapper.appendChild(el);
-        wrapper.appendChild(icon);
-      }
+      position: 'inside' // ボタンの内部に配置
     }
   ];
 
@@ -163,10 +142,22 @@
 
         if (target.position === 'inside') {
             node.appendChild(icon);
+            
+            // ツールチップ追加による右側のスペース空きすぎを防ぐため、親要素の右パディングを少し削る
+            const computedStyle = window.getComputedStyle(node);
+            const currentPaddingRight = parseInt(computedStyle.paddingRight, 10);
+            if (!isNaN(currentPaddingRight) && currentPaddingRight > 8) {
+                node.style.setProperty('padding-right', Math.max(4, currentPaddingRight - 8) + 'px', 'important');
+            }
+
             // 要素が flex でない場合はレイアウトを整える
             const style = window.getComputedStyle(node);
             if (style.display !== 'flex' && style.display !== 'inline-flex') {
-                node.style.display = 'flex';
+                if (style.display === 'inline' || style.display === 'inline-block') {
+                    node.style.display = 'inline-flex';
+                } else {
+                    node.style.display = 'flex';
+                }
                 node.style.alignItems = 'center';
                 if (node.tagName === 'BUTTON') {
                      node.style.justifyContent = 'center';

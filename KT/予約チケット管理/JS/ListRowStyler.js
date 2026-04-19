@@ -22,10 +22,17 @@
     SEND_DATE_FIELD: 'メール送信日時', // 送信日時フィールド
     CANCEL_VALUE: 'キャンセル',     // グレーアウトする値
     FINISH_VALUE: '終了',           // 終了ステータス（グレーアウト）
+    FORCE_FINISH_VALUE: '強制終了', // 強制終了ステータス
+    UNTOUCHED_VALUE: '未着手',      // 未着手ステータス
+    READ_VALUE: 'メール既読',        // メール既読ステータス
+    PHONE_AGREE_VALUE: '電話合意済', // 電話合意済ステータス
     EXECUTOR_SELF: '本人',            // 本人キャンセルの値
     CONFIRMED_VALUE: '確認済',      // 確認済の値
     GRAY_COLOR: '#838383',        // 背景色（薄いグレー）
     PINK_COLOR: '#ffe4e1',        // 背景色（ピンク）
+    LIGHT_PINK_COLOR: '#fff0f5',  // 背景色（薄いピンク）
+    LIGHT_GREEN_COLOR: '#e8f5e9', // 背景色（薄い緑）
+    LIGHT_YELLOW_COLOR: '#fff9c4', // 背景色（薄い黄色）
     TEXT_COLOR: '#000'            // 文字色
   };
 
@@ -47,7 +54,65 @@
 
     // 管理ステータスフィールドの要素を取得（一覧に表示されている必要があります）
     const statusElements = kintone.app.getFieldElements(CONFIG.STATUS_FIELD);
+    const methodElements = kintone.app.getFieldElements(CONFIG.METHOD_FIELD);
     if (!statusElements) return event;
+
+    // --- 1. 同期的なDOM操作（スタイル適用とアイコン化） ---
+    // Kintoneの再描画によるDOM参照切れを防ぐため、イベント発火後すぐに実行する
+    const applyStylesSync = (record, index, executorVal, staffConfirmVal) => {
+        const status = record[CONFIG.STATUS_FIELD]?.value || '';
+        const methodVal = (record[CONFIG.METHOD_FIELD]?.value || '').trim().toLowerCase();
+        const isStaffConfirmed = Array.isArray(staffConfirmVal) && staffConfirmVal.includes(CONFIG.CONFIRMED_VALUE);
+        
+        const el = statusElements[index];
+        const row = el ? el.closest('tr') : null;
+        let isGrayOut = false;
+
+        if (row) {
+            if (status === CONFIG.UNTOUCHED_VALUE) {
+                row.style.backgroundColor = CONFIG.LIGHT_PINK_COLOR;
+                row.style.color = CONFIG.TEXT_COLOR;
+            } else if (status === CONFIG.CANCEL_VALUE && executorVal === CONFIG.EXECUTOR_SELF && !isStaffConfirmed) {
+                row.style.backgroundColor = CONFIG.PINK_COLOR;
+                row.style.color = CONFIG.TEXT_COLOR;
+            } else if (status === CONFIG.CANCEL_VALUE || status === CONFIG.FINISH_VALUE || status === CONFIG.FORCE_FINISH_VALUE) {
+                row.style.backgroundColor = CONFIG.GRAY_COLOR;
+                row.style.color = CONFIG.TEXT_COLOR;
+                isGrayOut = true;
+                
+                const links = row.querySelectorAll('a');
+                links.forEach(link => link.style.color = CONFIG.TEXT_COLOR);
+            } else if (status === CONFIG.READ_VALUE || status === CONFIG.PHONE_AGREE_VALUE) {
+                row.style.backgroundColor = CONFIG.LIGHT_GREEN_COLOR;
+                row.style.color = CONFIG.TEXT_COLOR;
+            } else {
+                row.style.backgroundColor = CONFIG.LIGHT_YELLOW_COLOR;
+                row.style.color = CONFIG.TEXT_COLOR;
+            }
+        }
+
+        // 対応方法アイコンの書き換え
+        if (methodElements && methodElements[index]) {
+            const methodEl = methodElements[index];
+            let iconHtml = '';
+            if (methodVal === 'phone' || methodVal === '電話対応') {
+                const shadowColor = isGrayOut ? '#ffffff' : '#000000';
+                iconHtml = `<div style="font-size:26px; color:transparent; text-shadow:0 0 0 ${shadowColor}; display:flex; justify-content:center; align-items:center; width:100%; height:100%;">📞</div>`;
+            } else if (methodVal === 'email' || methodVal === 'mail' || methodVal === 'メール対応') {
+                iconHtml = `<div style="font-size:26px; display:flex; justify-content:center; align-items:center; width:100%; height:100%;">📩</div>`;
+            } else {
+                iconHtml = ''; // staffなどその他の場合は非表示
+            }
+            methodEl.innerHTML = iconHtml;
+        }
+    };
+
+    // 最初に同期的に実行して画面に即反映させる
+    records.forEach((record, index) => {
+        const executor = record[CONFIG.EXECUTOR_FIELD]?.value || '';
+        const staffConfirm = record[CONFIG.STAFF_CONFIRM_FIELD]?.value || [];
+        applyStylesSync(record, index, executor, staffConfirm);
+    });
 
     // 非同期で処理を実行（DOM操作およびデータ補完）
     (async () => {
@@ -115,24 +180,9 @@
             const isStaffConfirmed = Array.isArray(staffConfirm) && staffConfirm.includes(CONFIG.CONFIRMED_VALUE);
             const resDateStr = (record[CONFIG.RES_DATE_FIELD] && record[CONFIG.RES_DATE_FIELD].value) ? record[CONFIG.RES_DATE_FIELD].value : null;
 
-            // スタイル適用
-            const el = statusElements[index];
-            const row = el.closest('tr');
-
-            if (row) {
-                // 1. 本人キャンセルの場合（未確認） -> ピンク色
-                if (status === CONFIG.CANCEL_VALUE && executor === CONFIG.EXECUTOR_SELF && !isStaffConfirmed) {
-                    row.style.backgroundColor = CONFIG.PINK_COLOR;
-                    row.style.color = CONFIG.TEXT_COLOR;
-                }
-                // 2. それ以外のキャンセル（スタッフ実行 OR 本人確認済） または 終了ステータス -> グレーアウト
-                else if (status === CONFIG.CANCEL_VALUE || status === CONFIG.FINISH_VALUE) {
-                    row.style.backgroundColor = CONFIG.GRAY_COLOR;
-                    row.style.color = CONFIG.TEXT_COLOR;
-                    
-                    const links = row.querySelectorAll('a');
-                    links.forEach(link => link.style.color = CONFIG.TEXT_COLOR);
-                }
+            // データ補完が必要だった場合のみ、スタイルを再適用（DOMが残っていれば）
+            if (!hasExecutor || !hasStaffConfirm) {
+                try { applyStylesSync(record, index, executor, staffConfirm); } catch(e){}
             }
 
             // 3. 自動更新ロジック (終了判定 & ロック解除)
@@ -167,9 +217,9 @@
             }
 
             // (B) ロック解除判定 (unlock条件)
-            // 条件: WEB取下, URL取下(キャンセル), 自動終了(上記でカバー), 手動取下(スタッフ取下), 終了
+            // 条件: WEB取下, URL取下(キャンセル), 自動終了(上記でカバー), 手動取下(スタッフ取下), 終了, 強制終了
             // ※URL取下は「キャンセル」ステータスと仮定
-            const unlockStatuses = ['WEB取下', 'キャンセル', 'スタッフ取下', '終了'];
+            const unlockStatuses = ['WEB取下', 'キャンセル', 'スタッフ取下', '終了', '強制終了'];
             
             if (unlockStatuses.includes(status) && lockStatus !== 'unlock') {
                 updatePayload[CONFIG.RESERVE_LOCK_FIELD] = { value: 'unlock' };

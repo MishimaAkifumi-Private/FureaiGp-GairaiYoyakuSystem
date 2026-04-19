@@ -22,16 +22,19 @@
         const urlParams = new URLSearchParams(window.location.search);
         const queryParam = urlParams.get('query') || '';
 
-        const isActiveQuery = queryParam.includes('not in ("終了")');
-        const isFinishedQuery = queryParam.includes('in ("終了")') && !isActiveQuery;
-
-        // モードと現在のURLクエリが一致していない場合は、リダイレクトして強制適用（状態の復元）
-        if (currentMode === ACTIVE && !isActiveQuery) {
-            applyFilter(ACTIVE);
-            return event; // リダイレクト待ち
+        // 他のフィルター（担当者絞り込み等）との統合クエリを構築して期待値と比較する
+        const staffName = localStorage.getItem('shinryo_staff_filter_selected') || '全担当';
+        const expectedBase = currentMode === ACTIVE ? '管理状況 not in ("終了", "強制終了")' : '管理状況 in ("終了", "強制終了")';
+        let expectedStaff = '';
+        if (staffName !== '全担当') {
+            expectedStaff = ` and (担当者 in ("${staffName}") or 管理状況 in ("未着手"))`;
         }
-        if (currentMode === FINISHED && !isFinishedQuery) {
-            applyFilter(FINISHED);
+        const expectedOrder = 'order by 管理状況 desc, 更新日時 desc';
+        const expectedQuery = `${expectedBase}${expectedStaff} ${expectedOrder}`;
+
+        // 現在のURLクエリが期待される統合クエリと完全一致しない場合はリダイレクトして適用
+        if (queryParam !== expectedQuery) {
+            applyFilter(currentMode);
             return event; // リダイレクト待ち
         }
 
@@ -118,14 +121,16 @@
     function applyFilter(mode) {
         localStorage.setItem(STORAGE_KEY, mode);
         
-        // 現在のビューのソート条件などを維持するため、現在のクエリから「order by」以降を抽出
-        const currentFullQuery = kintone.app.getQuery() || '';
-        const orderMatch = currentFullQuery.match(/order by.*/i);
-        const orderClause = orderMatch ? orderMatch[0] : 'order by $id desc'; // デフォルトソート
-        const newCondition = mode === ACTIVE ? '管理状況 not in ("終了")' : '管理状況 in ("終了")';
+        const staffName = localStorage.getItem('shinryo_staff_filter_selected') || '全担当';
+        const baseCondition = mode === ACTIVE ? '管理状況 not in ("終了", "強制終了")' : '管理状況 in ("終了", "強制終了")';
+        let staffCondition = '';
+        if (staffName !== '全担当') {
+            staffCondition = ` and (担当者 in ("${staffName}") or 管理状況 in ("未着手"))`;
+        }
+        const orderClause = 'order by 管理状況 desc, 更新日時 desc';
         
         const url = new URL(window.location.href);
-        url.searchParams.set('query', `${newCondition} ${orderClause}`);
+        url.searchParams.set('query', `${baseCondition}${staffCondition} ${orderClause}`);
         window.location.href = url.toString();
     }
 

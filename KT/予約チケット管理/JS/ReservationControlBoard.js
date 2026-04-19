@@ -393,10 +393,33 @@
       /* Subtable Header Style (経過情報などのサブテーブルヘッダーを濃いグレーに) */
       thead.subtable-header-gaia th.subtable-label-gaia {
         background-color: #555555 !important;
-        border-color: #444444 !important;
+        border-color: #cccccc !important;
       }
       thead.subtable-header-gaia th.subtable-label-gaia .subtable-label-inner-gaia {
         color: #ffffff !important;
+      }
+
+      /* RecordList Header Style (一覧画面ヘッダーを濃いグレーに) */
+      thead th.recordlist-header-cell-gaia {
+        background-color: #555555 !important;
+        border-color: #cccccc !important;
+        text-align: center !important;
+      }
+      thead th.recordlist-header-cell-gaia .recordlist-header-label-gaia {
+        color: #ffffff !important;
+      }
+      thead th.recordlist-header-cell-gaia .recordlist-header-cell-inner-wrapper-gaia {
+        justify-content: center !important;
+      }
+
+      /* 一覧画面のレコードセルを中央揃えに */
+      table.recordlist-gaia td.recordlist-cell-gaia {
+        text-align: center !important;
+        vertical-align: middle !important;
+      }
+      table.recordlist-gaia td.recordlist-cell-gaia > div {
+        text-align: center !important;
+        justify-content: center !important;
       }
 
       /* Group Label Style (for "チケット情報") */
@@ -755,7 +778,7 @@
 
       // 管理状況バッジ
       let statusBadgeColor = '#e67e22'; // デフォルト: オレンジ
-      if (currentStatus === '終了' || isWithdrawn || isWebWithdrawn || isUrlWithdrawn) {
+      if (currentStatus === '終了' || currentStatus === '強制終了' || isWithdrawn || isWebWithdrawn || isUrlWithdrawn) {
           statusBadgeColor = '#7f8c8d'; // グレー
       } else if (isPhoneConfirmed || isRead) {
           statusBadgeColor = '#27ae60'; // 緑
@@ -888,11 +911,58 @@
       // === 担当者本人の場合 (以下、既存のメインロジック) ===
 
       // ★ 終了ステータスの場合は専用のメッセージを表示して処理を終了する
-      if (currentStatus === '終了') {
+      if (currentStatus === '終了' || currentStatus === '強制終了') {
           const finishedMsg = document.createElement('div');
           finishedMsg.style.cssText = 'text-align: center; padding: 50px 20px; background-color: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; margin-top: 20px;';
-          finishedMsg.innerHTML = '<div style="font-size: 48px; margin-bottom: 15px;">🏁</div><div style="font-size: 20px; font-weight: bold; color: #7f8c8d;">この予約チケットは終了しています</div><div style="font-size: 14px; color: #95a5a6; margin-top: 10px;">これ以上の操作はできません。</div>';
+          finishedMsg.innerHTML = `<div style="font-size: 48px; margin-bottom: 15px;">🏁</div><div style="font-size: 20px; font-weight: bold; color: #7f8c8d;">この予約チケットは${currentStatus}しています</div><div style="font-size: 14px; color: #95a5a6; margin-top: 10px;">これ以上の操作はできません。</div>`;
           
+          // --- チケット復活ボタン ---
+          const reviveBtn = document.createElement('button');
+          reviveBtn.textContent = 'チケットを復活する';
+          reviveBtn.className = 'rcb-btn-save';
+          reviveBtn.style.cssText = 'margin-top: 25px; background-color: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; padding: 10px 24px; transition: background-color 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);';
+          reviveBtn.onmouseover = () => reviveBtn.style.backgroundColor = '#e67e22';
+          reviveBtn.onmouseout = () => reviveBtn.style.backgroundColor = '#f39c12';
+
+          reviveBtn.onclick = async () => {
+              const confirmed = await showDialog(`チケットを${currentStatus === '強制終了' ? '直前の状態' : '「要電話対応」'}で復活させますか？`, 'confirm', 'チケット復活');
+              if (!confirmed) return;
+
+              let payload = { 'ReserveLock': { value: 'lock' } }; // 復活のためデフォルトでロックをかけ直す
+
+              if (currentStatus === '強制終了') {
+                  // 履歴を遡って直前の有効なステータスを探す
+                  let previousStatus = '担当設定'; // 見つからなかった場合のフォールバック
+                  if (record['経過情報'] && record['経過情報'].value) {
+                      const histories = record['経過情報'].value;
+                      for (let i = histories.length - 1; i >= 0; i--) {
+                          const st = histories[i].value['経過情報_管理状態']?.value;
+                          // 瞬間的なステータスや終了系ステータスを除外
+                          if (st && !['強制終了', 'チケット復活', '終了', '予約日時通過', '診療日時通過'].includes(st)) {
+                              previousStatus = st;
+                              break;
+                          }
+                      }
+                  }
+                  payload[CONFIG.FIELDS.STATUS] = { value: previousStatus };
+                  // 直前の状態がキャンセルや取下だった場合はロックを解除したままにする
+                  if (['WEB取下', 'キャンセル', 'スタッフ取下'].includes(previousStatus)) {
+                      payload['ReserveLock'] = { value: 'unlock' };
+                  }
+              } else {
+                  // 「終了」からの復活（日時経過） -> 要電話対応で復活
+                  payload[CONFIG.FIELDS.STATUS] = { value: CONFIG.STATUS_REQUIRE_PHONE_VALUE };
+                  payload[CONFIG.FIELDS.METHOD] = { value: 'phone' };
+              }
+
+              // 「チケット復活」を瞬間ステータスとして履歴に残す（skipStatusHistoryはfalseなので復活先のステータスも記録される）
+              const success = await updateRecord(recordId, payload, ['チケット復活'], false, false);
+              if (success) location.reload();
+          };
+
+          finishedMsg.appendChild(document.createElement('br'));
+          finishedMsg.appendChild(reviveBtn);
+
           container.appendChild(finishedMsg);
           spaceElement.appendChild(container);
           return;
@@ -1222,6 +1292,10 @@
         const dateInput = document.createElement('input');
         dateInput.type = 'date';
         dateInput.className = 'rcb-date-input';
+        // 入力欄のどこをクリックしてもカレンダーを表示する
+        dateInput.addEventListener('click', function() {
+            try { if (typeof this.showPicker === 'function') this.showPicker(); } catch(e) {}
+        });
         
         // 日付制限 (本日 ～ 60日後)
         const today = new Date();
@@ -1809,6 +1883,10 @@
             cancelDateInput = document.createElement('input');
             cancelDateInput.type = 'date';
             cancelDateInput.className = 'rcb-date-input';
+            // 入力欄のどこをクリックしてもカレンダーを表示する
+            cancelDateInput.addEventListener('click', function() {
+                try { if (typeof this.showPicker === 'function') this.showPicker(); } catch(e) {}
+            });
             cancelDateInput.value = displayDateVal;
             cancelDateInput.addEventListener('change', () => {
                 if (cancelDateInput.value) cancelDateInput.classList.add('selected');
@@ -2412,6 +2490,28 @@
             };
             btnContainer.appendChild(changeBtn);
         }
+
+        // --- 強制終了ボタン ---
+        const forceEndBtn = document.createElement('button');
+        forceEndBtn.id = 'rcb-force-end-btn';
+        forceEndBtn.textContent = '強制終了';
+        forceEndBtn.style.cssText = 'padding: 8px 16px; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;';
+        forceEndBtn.onmouseover = () => forceEndBtn.style.backgroundColor = '#c0392b';
+        forceEndBtn.onmouseout = () => forceEndBtn.style.backgroundColor = '#e74c3c';
+        
+        forceEndBtn.onclick = async () => {
+            const confirmed = await showDialog('このチケットを強制終了します。\n本当によろしいですか？', 'confirm', '強制終了の確認');
+            if (!confirmed) return;
+            
+            const payload = {
+                [CONFIG.FIELDS.STATUS]: { value: '強制終了' },
+                'ReserveLock': { value: 'unlock' }
+            };
+            
+            const success = await updateRecord(recordId, payload);
+            if (success) location.reload();
+        };
+        btnContainer.appendChild(forceEndBtn);
 
         // --- リセットボタン (管理者のみ) ---
         // 管理者チェック (Kintoneのアプリ設定ボタン「歯車マーク」がDOMに存在するかで同期的に判定)
