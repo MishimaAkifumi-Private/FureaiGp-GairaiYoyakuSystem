@@ -22,13 +22,15 @@
     SEND_DATE_FIELD: 'メール送信日時', // 送信日時フィールド
     CANCEL_VALUE: 'キャンセル',     // グレーアウトする値
     FINISH_VALUE: '終了',           // 終了ステータス（グレーアウト）
+    EVALUATION_WAIT_VALUE: '評価待ち', // 評価待ちステータス
     FORCE_FINISH_VALUE: '強制終了', // 強制終了ステータス
     UNTOUCHED_VALUE: '未着手',      // 未着手ステータス
     READ_VALUE: 'メール既読',        // メール既読ステータス
     PHONE_AGREE_VALUE: '電話合意済', // 電話合意済ステータス
     EXECUTOR_SELF: '本人',            // 本人キャンセルの値
     CONFIRMED_VALUE: '確認済',      // 確認済の値
-    GRAY_COLOR: '#838383',        // 背景色（薄いグレー）
+    GRAY_COLOR: '#cccccc',        // 背景色（薄いグレー）
+    BLUE_COLOR: '#e3f2fd',        // 背景色（青）
     PINK_COLOR: '#ffe4e1',        // 背景色（ピンク）
     LIGHT_PINK_COLOR: '#fff0f5',  // 背景色（薄いピンク）
     LIGHT_GREEN_COLOR: '#e8f5e9', // 背景色（薄い緑）
@@ -69,11 +71,19 @@
         let isGrayOut = false;
 
         if (row) {
+            // 行の境界をはっきりさせるため、各セルの下部に2pxの白色ボーダーを付与
+            Array.from(row.children).forEach(cell => {
+                cell.style.borderBottom = '1px solid #ffffff';
+            });
+
             if (status === CONFIG.UNTOUCHED_VALUE) {
                 row.style.backgroundColor = CONFIG.LIGHT_PINK_COLOR;
                 row.style.color = CONFIG.TEXT_COLOR;
             } else if (status === CONFIG.CANCEL_VALUE && executorVal === CONFIG.EXECUTOR_SELF && !isStaffConfirmed) {
                 row.style.backgroundColor = CONFIG.PINK_COLOR;
+                row.style.color = CONFIG.TEXT_COLOR;
+            } else if (status === CONFIG.EVALUATION_WAIT_VALUE) {
+                row.style.backgroundColor = CONFIG.BLUE_COLOR;
                 row.style.color = CONFIG.TEXT_COLOR;
             } else if (status === CONFIG.CANCEL_VALUE || status === CONFIG.FINISH_VALUE || status === CONFIG.FORCE_FINISH_VALUE) {
                 row.style.backgroundColor = CONFIG.GRAY_COLOR;
@@ -96,10 +106,10 @@
             const methodEl = methodElements[index];
             let iconHtml = '';
             if (methodVal === 'phone' || methodVal === '電話対応') {
-                const shadowColor = isGrayOut ? '#ffffff' : '#000000';
-                iconHtml = `<div style="font-size:26px; color:transparent; text-shadow:0 0 0 ${shadowColor}; display:flex; justify-content:center; align-items:center; width:100%; height:100%;">📞</div>`;
+                const shadowColor = '#000000';
+                iconHtml = `<div style="font-size:20px; color:transparent; text-shadow:0 0 0 ${shadowColor}; line-height:1;">📞</div>`;
             } else if (methodVal === 'email' || methodVal === 'mail' || methodVal === 'メール対応') {
-                iconHtml = `<div style="font-size:26px; display:flex; justify-content:center; align-items:center; width:100%; height:100%;">📩</div>`;
+                iconHtml = `<div style="font-size:20px; line-height:1;">📩</div>`;
             } else {
                 iconHtml = ''; // staffなどその他の場合は非表示
             }
@@ -133,7 +143,7 @@
                 const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
                     app: kintone.app.getId(),
                     query: `$id in ("${ids.join('","')}")`,
-                    fields: ['$id', CONFIG.EXECUTOR_FIELD, CONFIG.STAFF_CONFIRM_FIELD, CONFIG.RESERVE_LOCK_FIELD, CONFIG.TIMEOUT_FIELD, CONFIG.SEND_DATE_FIELD, '経過情報']
+                    fields: ['$id', CONFIG.EXECUTOR_FIELD, CONFIG.STAFF_CONFIRM_FIELD, CONFIG.RESERVE_LOCK_FIELD, CONFIG.TIMEOUT_FIELD, CONFIG.SEND_DATE_FIELD, '経過情報', '共通評価', 'キャンセル日時']
                 });
                 resp.records.forEach(r => {
                     recordMap[r.$id.value] = r;
@@ -190,16 +200,12 @@
             let needsUpdate = false;
 
             // (A) 自動終了判定
-            if (status !== CONFIG.FINISH_VALUE && resDateStr) {
+            if (status !== CONFIG.FINISH_VALUE && status !== CONFIG.EVALUATION_WAIT_VALUE && resDateStr) {
                 const resDate = new Date(resDateStr);
                 if (resDate < today) {
-                    updatePayload[CONFIG.STATUS_FIELD] = { value: CONFIG.FINISH_VALUE };
-                    // 自動終了時はunlock
-                    if (lockStatus !== 'unlock') {
-                        updatePayload[CONFIG.RESERVE_LOCK_FIELD] = { value: 'unlock' };
-                    }
+                    updatePayload[CONFIG.STATUS_FIELD] = { value: CONFIG.EVALUATION_WAIT_VALUE };
                     
-                    // 経過情報に「診療日時通過」と「終了」の記録を追加
+                    // 経過情報に「診療日時通過」と「評価待ち」の記録を追加
                     let currentHistories = getVal('経過情報');
                     if (!Array.isArray(currentHistories)) currentHistories = [];
                     const nowStr = formatDateTime(new Date());
@@ -208,7 +214,7 @@
                         value: { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: '診療日時通過' } }
                     });
                     currentHistories.push({
-                        value: { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: CONFIG.FINISH_VALUE } }
+                        value: { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: CONFIG.EVALUATION_WAIT_VALUE } }
                     });
                     
                     updatePayload['経過情報'] = { value: currentHistories };
@@ -273,6 +279,39 @@
                     
                     updatePayload['経過情報'] = { value: currentHistories };
                     needsUpdate = true;
+                }
+            }
+
+            // (D) 直前キャンセル判定 (WEB取下 or URL取下時)
+            if (status === 'WEB取下' || status === 'キャンセル') {
+                const currentCommonEvalStr = getVal('共通評価');
+                let currentCommonEval = Array.isArray(currentCommonEvalStr) ? currentCommonEvalStr : [];
+                
+                if (resDateStr && !currentCommonEval.includes('直前に受診キャンセル')) {
+                    const parts = resDateStr.split('-');
+                    const resDate = parts.length === 3 
+                        ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+                        : new Date(resDateStr);
+                    resDate.setHours(0, 0, 0, 0); // 予約日の0時
+                    
+                    // キャンセル日時の取得 (キャンセルフィールドがあればそれ、なければ現在時刻)
+                    let cancelDate = new Date();
+                    const cancelDateVal = record['キャンセル日時']?.value || getVal('キャンセル日時');
+                    if (cancelDateVal) {
+                        cancelDate = new Date(cancelDateVal);
+                    }
+                    cancelDate.setHours(0, 0, 0, 0); // キャンセル日の0時
+
+                    // 差分(ミリ秒)を日数に変換
+                    const diffTime = resDate.getTime() - cancelDate.getTime();
+                    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+                    // 前日(diffDays === 1) または 当日以降(diffDays <= 0)
+                    if (diffDays <= 1) {
+                        currentCommonEval.push('直前に受診キャンセル');
+                        updatePayload['共通評価'] = { value: currentCommonEval };
+                        needsUpdate = true;
+                    }
                 }
             }
 

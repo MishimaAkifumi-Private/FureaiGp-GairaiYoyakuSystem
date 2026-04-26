@@ -24,13 +24,20 @@
 
         // 他のフィルター（担当者絞り込み等）との統合クエリを構築して期待値と比較する
         const staffName = localStorage.getItem('shinryo_staff_filter_selected') || '全担当';
+        const searchText = sessionStorage.getItem('shinryo_ticket_search_chart_no') || '';
+
         const expectedBase = currentMode === ACTIVE ? '管理状況 not in ("終了", "強制終了")' : '管理状況 in ("終了", "強制終了")';
+        let expectedSearch = '';
+        if (searchText) {
+            expectedSearch = ` and (カルテNo like "${searchText}" or 姓漢字 like "${searchText}" or 名漢字 like "${searchText}" or 姓かな like "${searchText}" or 名かな like "${searchText}")`;
+        }
+
         let expectedStaff = '';
         if (staffName !== '全担当') {
             expectedStaff = ` and (担当者 in ("${staffName}") or 管理状況 in ("未着手"))`;
         }
         const expectedOrder = 'order by 管理状況 desc, 更新日時 desc';
-        const expectedQuery = `${expectedBase}${expectedStaff} ${expectedOrder}`;
+        const expectedQuery = `${expectedBase}${expectedSearch}${expectedStaff} ${expectedOrder}`;
 
         // 現在のURLクエリが期待される統合クエリと完全一致しない場合はリダイレクトして適用
         if (queryParam !== expectedQuery) {
@@ -122,7 +129,14 @@
         localStorage.setItem(STORAGE_KEY, mode);
         
         const staffName = localStorage.getItem('shinryo_staff_filter_selected') || '全担当';
+        const searchText = sessionStorage.getItem('shinryo_ticket_search_chart_no') || '';
+
         const baseCondition = mode === ACTIVE ? '管理状況 not in ("終了", "強制終了")' : '管理状況 in ("終了", "強制終了")';
+        let searchCondition = '';
+        if (searchText) {
+            searchCondition = ` and (カルテNo like "${searchText}" or 姓漢字 like "${searchText}" or 名漢字 like "${searchText}" or 姓かな like "${searchText}" or 名かな like "${searchText}")`;
+        }
+
         let staffCondition = '';
         if (staffName !== '全担当') {
             staffCondition = ` and (担当者 in ("${staffName}") or 管理状況 in ("未着手"))`;
@@ -130,7 +144,7 @@
         const orderClause = 'order by 管理状況 desc, 更新日時 desc';
         
         const url = new URL(window.location.href);
-        url.searchParams.set('query', `${baseCondition}${staffCondition} ${orderClause}`);
+        url.searchParams.set('query', `${baseCondition}${searchCondition}${staffCondition} ${orderClause}`);
         window.location.href = url.toString();
     }
 

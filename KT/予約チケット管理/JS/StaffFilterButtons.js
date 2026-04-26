@@ -17,11 +17,17 @@
         // 有効/終了のトグル状態を取得（ListToggleFilter.jsとの互換性）
         const toggleMode = localStorage.getItem('shinryo_ticket_status_filter') || 'active';
         const baseCondition = toggleMode === 'active' ? '管理状況 not in ("終了", "強制終了")' : '管理状況 in ("終了", "強制終了")';
+        
+        const searchText = sessionStorage.getItem('shinryo_ticket_search_chart_no') || '';
+        let searchCondition = '';
+        if (searchText) {
+            searchCondition = ` and (カルテNo like "${searchText}" or 姓漢字 like "${searchText}" or 名漢字 like "${searchText}" or 姓かな like "${searchText}" or 名かな like "${searchText}")`;
+        }
 
         while (true) {
             const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', { 
                 app: appId, 
-                query: `${baseCondition} limit ${limit} offset ${offset}`,
+                query: `${baseCondition}${searchCondition} limit ${limit} offset ${offset}`,
                 fields: ['担当者', '管理状況']
             });
             allRecords = allRecords.concat(resp.records);
@@ -38,6 +44,12 @@
         // 有効/終了のトグル状態を取得（ListToggleFilter.jsとの互換性）
         const toggleMode = localStorage.getItem('shinryo_ticket_status_filter') || 'active';
         const baseCondition = toggleMode === 'active' ? '管理状況 not in ("終了", "強制終了")' : '管理状況 in ("終了", "強制終了")';
+
+        const searchText = sessionStorage.getItem('shinryo_ticket_search_chart_no') || '';
+        let searchCondition = '';
+        if (searchText) {
+            searchCondition = ` and (カルテNo like "${searchText}" or 姓漢字 like "${searchText}" or 名漢字 like "${searchText}" or 姓かな like "${searchText}" or 名かな like "${searchText}")`;
+        }
         
         let staffCondition = '';
         if (staffName !== '全担当') {
@@ -47,7 +59,7 @@
 
         // 未着手を上にするためのソート（文字コード順を利用して暫定的にdesc指定）
         const orderClause = 'order by 管理状況 desc, 更新日時 desc';
-        const newQuery = `${baseCondition}${staffCondition} ${orderClause}`;
+        const newQuery = `${baseCondition}${searchCondition}${staffCondition} ${orderClause}`;
 
         const url = new URL(window.location.href);
         url.searchParams.set('query', newQuery);
@@ -76,14 +88,41 @@
 
         // --- スタッフリストと担当件数の集計 ---
         let staffList = [];
+        
+        // ConfigManagerのロード待機
+        const waitForConfigManager = async () => {
+            if (window.ShinryoApp && window.ShinryoApp.ConfigManager) return true;
+            for (let i = 0; i < 15; i++) {
+                await new Promise(r => setTimeout(r, 200));
+                if (window.ShinryoApp && window.ShinryoApp.ConfigManager) return true;
+            }
+            return false;
+        };
+        await waitForConfigManager();
+
         try {
             if (window.ShinryoApp && window.ShinryoApp.ConfigManager) {
                 const data = await window.ShinryoApp.ConfigManager.fetchPublishedData();
-                if (data && data.commonSettings && data.commonSettings.staffs) {
+                if (data && data.commonSettings && Array.isArray(data.commonSettings.staffs)) {
                     staffList = data.commonSettings.staffs.map(s => s.name);
                 }
             }
-        } catch(e) {}
+        } catch(e) { console.warn(e); }
+
+        // 設定から取得できなかった場合はローカルストレージを確認（フォールバック）
+        if (staffList.length === 0) {
+            try {
+                const localStaffs = JSON.parse(localStorage.getItem('shinryo_common_staffs') || '[]');
+                if (Array.isArray(localStaffs)) {
+                    staffList = localStaffs.map(s => s.name);
+                }
+            } catch(e) {}
+        }
+        
+        // 端末の担当者（自分）も確実にリストに含める
+        if (currentStaff && !staffList.includes(currentStaff)) {
+            staffList.push(currentStaff);
+        }
 
         const targetRecords = await fetchRecordsForCount();
         const counts = {};
@@ -93,6 +132,13 @@
             const status = r['管理状況']?.value;
             if (staff) counts[staff] = (counts[staff] || 0) + 1;
             if (status !== '未着手') totalCount++;
+        });
+
+        // 設定から取得できなかった場合や、レコードには存在する担当者（絵文字付きなど）を補完
+        Object.keys(counts).forEach(staff => {
+            if (!staffList.includes(staff)) {
+                staffList.push(staff);
+            }
         });
 
         // スタッフを件数の多い順にソート

@@ -11,675 +11,47 @@
 (function() {
     'use strict';
   
-    const CONFIG = {
-      SPACE_ID: 'RreservationContorlBoard',
-      RESET_SPACE_ID: 'TicketReset',
-      API_URL: 'https://sendreservationmail-yoslzibmlq-uc.a.run.app/',
-      CONFIRM_BASE_URL: 'https://confirmreservation-yoslzibmlq-uc.a.run.app/',
-      STATUS_SENT_VALUE: 'メール送信済', // 送信後のステータス
-      STATUS_READ_VALUE: 'メール既読', // 既読後のステータス
-      STATUS_TIMEOUT_VALUE: '閲覧期限切れ', // タイムアウト後のステータス
-      STATUS_RE_REQUEST_VALUE: '申込者再依頼', // 再依頼ステータス
-      STATUS_PHONE_VALUE: '電話合意済', // 電話合意後のステータス
-      STATUS_WITHDRAWN_VALUE: 'スタッフ取下', // 取下後のステータス
-      STATUS_WEB_WITHDRAWN_VALUE: 'WEB取下', // WEB取下後のステータス
-      STATUS_REVIVED_VALUE: 'スタッフ取下中止', // 取消中止後のステータス
-      STATUS_REQUIRE_PHONE_VALUE: '要電話対応', // 要電話対応ステータス
-      TIMEOUT_MINUTES: 1, // タイムアウト時間 (分) - テスト用
-      FIELDS: {
-        STATUS: '管理状況',       // 管理状況
-        METHOD: '対応方法',       // 対応方法
-        PURPOSE: '用件',          // 用件
-        RES_DATE: '確定予約日',   // 確定予約日
-        RES_TIME: '確定予約時刻', // 確定予約時刻
-        TIMEOUT: 'タイムアウト',  // タイムアウト時間
-        SEND_DATE: 'メール送信日時',
-        CANCEL_EXECUTOR: 'キャンセル実行者',
-        CANCEL_DATE: 'キャンセル日時',
-        PHONE_CONFIRM: '電話確認日時',
-        NOTE: '備考',
-        READ_DATE: 'メール既読日時', // 既読日時フィールドを追加
-        EMAIL: 'メールアドレス',
-        LAST_NAME: '姓漢字',
-        FIRST_NAME: '名漢字',
-        DEPT: '診療科',
-        STAFF: '担当者',
-        URL_TOKEN: 'URLトークン' // URLトークンフィールド
-      },
-      // 予約時刻の選択肢
-      ALLOWED_TIMES: [
-        '9:00', '9:30', '10:00', '10:30', '11:00', '11:30',
-        '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
-      ]
-    };
-  
-    // スタイル定義
-    const STYLES = `
-      .rcb-container {
-        background-color: #f5f7f9;
-        border: 1px solid #dcdfe6;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 20px;
-        font-family: "Helvetica Neue", Arial, sans-serif;
-        color: #333;
-      }
-      /* ステータス別スタイル */
-      .rcb-container.status-sent {
-        border-left: 5px solid #e67e22;
-        background-color: #fffcf5;
-      }
-      .rcb-container.status-phone {
-        border-left: 5px solid #27ae60;
-        background-color: #f0f9eb;
-      }
-      .rcb-container.status-withdrawn {
-        border-left: 5px solid #7f8c8d;
-        background-color: #f9f9f9;
-      }
-      .rcb-header {
-        display: flex;
-        gap: 15px;
-        margin-bottom: 20px;
-        border-bottom: 2px solid #e0e0e0;
-        padding-bottom: 15px;
-      }
-      .rcb-badge {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: flex-start;
-        background: #fff;
-        padding: 8px 15px;
-        border-radius: 6px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border-left: 5px solid #3498db;
-        min-width: 120px;
-      }
-      .rcb-badge-label {
-        font-size: 10px;
-        color: #888;
-        font-weight: bold;
-        margin-bottom: 2px;
-      }
-      .rcb-badge-value {
-        font-size: 16px;
-        font-weight: bold;
-        color: #2c3e50;
-      }
-      .rcb-content {
-        background: #fff;
-        border-radius: 6px;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-      }
-      .rcb-section {
-        margin-bottom: 20px;
-      }
-      .rcb-section-title {
-        font-size: 14px;
-        font-weight: bold;
-        color: #555;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-      }
-      .rcb-section-title::before {
-        content: '';
-        display: inline-block;
-        width: 4px;
-        height: 16px;
-        background-color: #3498db;
-        margin-right: 8px;
-        border-radius: 2px;
-      }
-      .rcb-radio-group {
-        display: flex;
-        gap: 20px;
-      }
-      .rcb-radio-label {
-        display: flex;
-        align-items: center;
-        cursor: pointer;
-        padding: 10px 15px;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        transition: all 0.2s;
-      }
-      .rcb-radio-label:hover {
-        background-color: #f0f9eb;
-        border-color: #c2e7b0;
-      }
-      .rcb-radio-label input {
-        margin-right: 8px;
-      }
-      .rcb-radio-label.checked {
-        background-color: #f0f9eb;
-        border-color: #67c23a;
-        color: #67c23a;
-        font-weight: bold;
-      }
-      
-      /* Date Editor Styles */
-      .rcb-date-editor {
-        background-color: #fff;
-        border: 1px solid #e0e0e0;
-        padding: 25px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-      }
-      .rcb-input-row {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 15px;
-        flex-wrap: wrap;
-      }
-      .rcb-date-input {
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 14px;
-        transition: all 0.2s;
-      }
-      .rcb-date-input.selected {
-        background-color: #1890ff !important;
-        color: white !important;
-        border-color: #1890ff !important;
-        font-weight: bold;
-        color-scheme: dark;
-      }
-      .rcb-time-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-        gap: 8px;
-        width: 100%;
-      }
-      .rcb-time-btn {
-        padding: 6px 0;
-        border: 1px solid #ddd;
-        background: #fff;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        text-align: center;
-        transition: all 0.2s;
-      }
-      .rcb-time-btn:hover {
-        background-color: #e6f7ff;
-        border-color: #1890ff;
-      }
-      .rcb-time-btn.selected {
-        background-color: #1890ff;
-        color: white;
-        border-color: #1890ff;
-        font-weight: bold;
-      }
-      .rcb-btn-save {
-        background-color: #3498db;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 14px;
-        transition: background-color 0.2s;
-      }
-      .rcb-btn-save:hover {
-        background-color: #2980b9;
-      }
-      .rcb-message {
-        margin-top: 10px;
-        font-size: 12px;
-        color: #67c23a;
-        font-weight: bold;
-        display: none;
-      }
-      
-      /* Modal Styles */
-      .rcb-modal-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        z-index: 10000;
-        display: flex; justify-content: center; align-items: center;
-        opacity: 0; transition: opacity 0.3s ease;
-      }
-      .rcb-modal {
-        background: #fff;
-        width: 400px; max-width: 90%;
-        border-radius: 8px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-        overflow: hidden;
-        transform: translateY(-20px); transition: transform 0.3s ease;
-        font-family: "Helvetica Neue", Arial, sans-serif;
-      }
-      .rcb-modal-header {
-        padding: 15px 20px;
-        font-weight: bold;
-        font-size: 16px;
-        color: #fff;
-        display: flex; align-items: center; gap: 10px;
-      }
-      .rcb-modal-body {
-        padding: 25px 20px;
-        color: #333;
-        line-height: 1.6;
-        font-size: 14px;
-      }
-      .rcb-modal-footer {
-        padding: 0 20px 20px 20px;
-        display: flex; justify-content: flex-end; gap: 10px;
-      }
-      .rcb-modal-btn {
-        padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;
-      }
-      .rcb-modal-btn-cancel {
-        background: #f8f9fa; color: #555; border: 1px solid #ddd;
-      }
-      .rcb-modal-btn-ok {
-        background: #3498db; color: #fff;
-      }
-      .rcb-modal-textarea {
-        width: 100%; height: 80px; padding: 8px; margin-top: 10px;
-        border: 1px solid #ddd; border-radius: 4px;
-        box-sizing: border-box; font-family: inherit; font-size: 14px;
-        resize: vertical;
-      }
-      
-      /* Cancel Form Styles (Improved) */
-      .rcb-cancel-container {
-        background: #fff;
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        padding: 25px;
-        text-align: left;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-      }
-      .rcb-form-group {
-        margin-bottom: 20px;
-      }
-      .rcb-label {
-        display: block;
-        font-weight: bold;
-        margin-bottom: 8px;
-        color: #2c3e50;
-        font-size: 14px;
-      }
-      .rcb-input-text {
-        width: 100%;
-        max-width: 400px;
-        padding: 10px;
-        border: 1px solid #dcdfe6;
-        border-radius: 4px;
-        font-size: 14px;
-        transition: border-color 0.2s;
-      }
-      .rcb-input-text:focus {
-        border-color: #3498db;
-        outline: none;
-      }
-      .rcb-info-block {
-        background-color: #f8f9fa;
-        padding: 12px 15px;
-        border-radius: 4px;
-        font-size: 13px;
-        color: #555;
-        margin-bottom: 15px;
-        border-left: 4px solid #3498db;
-        line-height: 1.5;
-      }
-      
-      /* Modal Confirm Styles (New) */
-      .rcb-confirm-msg {
-        margin-bottom: 20px;
-        font-size: 15px;
-        color: #333;
-        text-align: center;
-        font-weight: bold;
-      }
-      .rcb-confirm-box {
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 6px;
-        padding: 20px;
-        text-align: left;
-      }
-      .rcb-confirm-row {
-        display: flex;
-        margin-bottom: 10px;
-        font-size: 14px;
-        line-height: 1.5;
-      }
-      .rcb-confirm-label {
-        flex: 0 0 80px;
-        font-weight: bold;
-        color: #7f8c8d;
-      }
-      .rcb-confirm-value {
-        flex: 1;
-        color: #2c3e50;
-        font-weight: 500;
-        word-break: break-word;
-      }
-      .rcb-confirm-divider {
-        border: 0;
-        border-top: 1px dashed #ccc;
-        margin: 15px 0;
-      }
-      .rcb-confirm-note {
-        display: block;
-        font-size: 12px;
-        color: #95a5a6;
-      }
-      .rcb-confirm-sub {
-        font-size: 12px;
-        color: #7f8c8d;
-        margin-left: 5px;
-      }
-      
-      /* Hide Standard Kintone Elements */
-      .gaia-argoui-app-menu-add,
-      .gaia-argoui-app-menu-copy,
-      .sidebar-tab-comments-gaia,
-      .sidebar-tab-history-gaia,
-      .gaia-argoui-app-infobar-iconlist,
-      .gaia-argoui-app-subtotalbutton,
-      .gaia-argoui-optionmenubutton,
-      .gaia-argoui-app-viewtoggle,
-      .gaia-argoui-app-filterbutton {
-        display: none !important;
-      }
-      
-      /* Subtable Header Style (経過情報などのサブテーブルヘッダーを濃いグレーに) */
-      thead.subtable-header-gaia th.subtable-label-gaia {
-        background-color: #555555 !important;
-        border-color: #cccccc !important;
-      }
-      thead.subtable-header-gaia th.subtable-label-gaia .subtable-label-inner-gaia {
-        color: #ffffff !important;
-      }
+    if (!window.RcbUI) {
+        console.error('[ReservationControlBoard] ReservationControlBoard_UI.js が読み込まれていません。');
+        return;
+    }
 
-      /* RecordList Header Style (一覧画面ヘッダーを濃いグレーに) */
-      thead th.recordlist-header-cell-gaia {
-        background-color: #555555 !important;
-        border-color: #cccccc !important;
-        text-align: center !important;
-      }
-      thead th.recordlist-header-cell-gaia .recordlist-header-label-gaia {
-        color: #ffffff !important;
-      }
-      thead th.recordlist-header-cell-gaia .recordlist-header-cell-inner-wrapper-gaia {
-        justify-content: center !important;
-      }
+    const {
+        CONFIG,
+        applyStyles,
+        styleGroupLabels,
+        showSpinner,
+        hideSpinner,
+        showDialog,
+        showEvaluationDialog,
+        updateRecord,
+        formatDateISO,
+        formatToJapaneseDate,
+        isPastTime
+    } = window.RcbUI;
 
-      /* 一覧画面のレコードセルを中央揃えに */
-      table.recordlist-gaia td.recordlist-cell-gaia {
-        text-align: center !important;
-        vertical-align: middle !important;
-      }
-      table.recordlist-gaia td.recordlist-cell-gaia > div {
-        text-align: center !important;
-        justify-content: center !important;
-      }
-
-      /* Group Label Style (for "チケット情報") */
-      .custom-ticket-text {
-        background-color: #444444 !important;
-        color: white !important;
-        padding: 5px 12px;
-        border-radius: 4px;
-        font-weight: bold;
-        margin-left: 2px !important;
-        display: inline-block;
-      }
-    `;
-  
-    // スタイル適用
-    const applyStyles = () => {
-      if (document.getElementById('rcb-styles')) return;
-      const style = document.createElement('style');
-      style.id = 'rcb-styles';
-      style.textContent = STYLES;
-      document.head.appendChild(style);
-    };
-  
-    // 特定のグループラベルにスタイルクラスを付与
-    const styleGroupLabels = () => {
-      // Kintoneの描画タイミングを考慮して少し待機
-      setTimeout(() => {
-        const labels = document.querySelectorAll('.group-label-gaia');
-        labels.forEach(label => {
-          if (label.textContent.trim() === 'チケット情報' && !label.querySelector('.custom-ticket-text')) {
-            // Kintone標準のアウトライン（フォーカス時の青枠）を消去
-            label.style.outline = 'none';
-            label.style.border = 'none';
-            
-            // テキスト部分だけを別のspanで囲んで、アイコンと分離させる
-            label.textContent = ''; 
-            const textSpan = document.createElement('span');
-            textSpan.className = 'custom-ticket-text';
-            textSpan.textContent = 'チケット情報';
-            label.appendChild(textSpan);
-          }
-        });
-      }, 100);
-    };
-
-    // 独自モーダル表示関数
-    const showDialog = (message, type = 'alert', title = null, placeholder = '', okLabel = null, cancelLabel = null, checkboxLabel = null) => {
-      return new Promise((resolve) => {
-        const existing = document.getElementById('rcb-modal-overlay');
-        if (existing) existing.remove();
-
-        const overlay = document.createElement('div');
-        overlay.id = 'rcb-modal-overlay';
-        overlay.className = 'rcb-modal-overlay';
+    // 直前キャンセル判定用の共通関数
+    const getUpdatedCommonEvalWithCancel = (baseEvalList, resDateStr, cancelDateVal = null) => {
+        let evals = Array.isArray(baseEvalList) ? [...baseEvalList] : [];
+        if (!resDateStr || evals.includes('直前に受診キャンセル')) return evals;
         
-        const modal = document.createElement('div');
-        modal.className = 'rcb-modal';
-
-        // ★追加: メールプレビューの場合は幅を広げる
-        if (message.includes('rcb-confirm-box')) {
-          modal.style.width = '600px';
-        }
+        const parts = resDateStr.split('-');
+        const resDate = parts.length === 3 
+            ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+            : new Date(resDateStr);
+        resDate.setHours(0, 0, 0, 0);
         
-        let headerTitle = title;
-        let headerIcon = '';
-        if (!headerTitle) {
-            headerTitle = (type === 'confirm' || type === 'prompt') ? '確認' : (type === 'error' ? 'エラー' : '通知');
+        let cancelDate = new Date();
+        if (cancelDateVal) {
+            cancelDate = new Date(cancelDateVal);
         }
-        if (type === 'confirm' || type === 'prompt') headerIcon = '📧';
-        else if (type === 'error') headerIcon = '❌';
-        else headerIcon = 'ℹ️';
+        cancelDate.setHours(0, 0, 0, 0);
 
-        const header = document.createElement('div');
-        header.className = 'rcb-modal-header';
-        header.style.backgroundColor = (type === 'confirm' || type === 'prompt') ? '#3498db' : (type === 'error' ? '#e74c3c' : '#27ae60');
-        header.innerHTML = `<span>${headerIcon}</span> <span>${headerTitle}</span>`;
-        
-        const body = document.createElement('div');
-        body.className = 'rcb-modal-body';
-        // HTMLタグで始まる場合はそのまま、それ以外（テキストのみ）は改行を<br>に変換
-        if (message.trim().startsWith('<')) {
-            body.innerHTML = message;
-        } else {
-            body.innerHTML = message.replace(/\n/g, '<br>');
+        const diffDays = (resDate.getTime() - cancelDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays <= 1) {
+            evals.push('直前に受診キャンセル');
         }
-        
-        let textarea = null;
-        if (type === 'prompt') {
-            textarea = document.createElement('textarea');
-            textarea.className = 'rcb-modal-textarea';
-            textarea.placeholder = placeholder;
-            body.appendChild(textarea);
-        }
-
-        let checkbox = null;
-        if (checkboxLabel) {
-            const checkContainer = document.createElement('div');
-            checkContainer.style.cssText = 'margin-top: 15px; padding: 15px; background: #fff5f5; border: 1px dashed #e74c3c; border-radius: 4px; text-align: left;';
-            
-            const label = document.createElement('label');
-            label.style.cssText = 'font-weight: bold; cursor: pointer; color: #c0392b; font-size: 14px; display: flex; align-items: center; gap: 8px; user-select: none;';
-            
-            checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer; accent-color: #e74c3c; margin: 0;';
-            
-            label.appendChild(checkbox);
-            label.appendChild(document.createTextNode(checkboxLabel));
-            checkContainer.appendChild(label);
-            body.appendChild(checkContainer);
-        }
-
-        const footer = document.createElement('div');
-        footer.className = 'rcb-modal-footer';
-        
-        const createBtn = (text, cls, valResolver) => {
-          const btn = document.createElement('button');
-          btn.className = `rcb-modal-btn ${cls}`;
-          btn.textContent = text;
-          btn.onclick = () => {
-            const val = typeof valResolver === 'function' ? valResolver() : valResolver;
-            document.body.removeChild(overlay);
-            resolve(val);
-          };
-          return btn;
-        };
-
-        let okBtn = null;
-        if (type === 'confirm') {
-          footer.appendChild(createBtn(cancelLabel || 'キャンセル', 'rcb-modal-btn-cancel', false));
-          okBtn = createBtn(okLabel || 'はい', 'rcb-modal-btn-ok', true);
-          footer.appendChild(okBtn);
-        } else if (type === 'prompt') {
-          footer.appendChild(createBtn(cancelLabel || 'キャンセル', 'rcb-modal-btn-cancel', null));
-          okBtn = createBtn('OK', 'rcb-modal-btn-ok', () => textarea.value);
-          footer.appendChild(okBtn);
-        } else {
-          okBtn = createBtn(okLabel || 'OK', 'rcb-modal-btn-ok', true);
-          footer.appendChild(okBtn);
-        }
-
-        if (checkbox && okBtn) {
-            okBtn.disabled = true;
-            okBtn.style.opacity = '0.5';
-            okBtn.style.cursor = 'not-allowed';
-            checkbox.onchange = () => {
-                if (checkbox.checked) {
-                    okBtn.disabled = false;
-                    okBtn.style.opacity = '1';
-                    okBtn.style.cursor = 'pointer';
-                } else {
-                    okBtn.disabled = true;
-                    okBtn.style.opacity = '0.5';
-                    okBtn.style.cursor = 'not-allowed';
-                }
-            };
-        }
-        
-        modal.appendChild(header);
-        modal.appendChild(body);
-        modal.appendChild(footer);
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-        
-        setTimeout(() => { overlay.style.opacity = '1'; modal.style.transform = 'translateY(0)'; }, 10);
-        if (textarea) textarea.focus();
-      });
-    };
-
-    // API更新ヘルパー
-    const updateRecord = async (recordId, payload, extraHistories = [], resetHistory = false, skipStatusHistory = false) => {
-      try {
-        let currentHistories = [];
-        
-        // 既存の履歴を取得 (リセットしない場合)
-        if (!resetHistory) {
-          const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
-            app: kintone.app.getId(),
-            id: recordId
-          });
-          currentHistories = resp.record['経過情報']?.value || [];
-        }
-
-        const now = new Date();
-        const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey') || 'システム';
-        
-        const formatDateTime = (date) => {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            const h = String(date.getHours()).padStart(2, '0');
-            const min = String(date.getMinutes()).padStart(2, '0');
-            const s = String(date.getSeconds()).padStart(2, '0');
-            return `${y}/${m}/${d} ${h}:${min}:${s}`;
-        };
-        
-        // 追加するステータスのリスト
-        let statusesToAdd = [...extraHistories];
-        if (!skipStatusHistory && payload[CONFIG.FIELDS.STATUS] && payload[CONFIG.FIELDS.STATUS].value) {
-            statusesToAdd.push(payload[CONFIG.FIELDS.STATUS].value);
-        }
-
-        if (statusesToAdd.length > 0 || resetHistory) {
-            statusesToAdd.forEach(st => {
-                let recStaff = currentStaff;
-                if (st === '未着手') {
-                    recStaff = '未設定';
-                }
-                currentHistories.push({ value: { "経過情報_日時": { value: formatDateTime(now) }, "経過情報_担当者": { value: recStaff }, "経過情報_管理状態": { value: st } } });
-            });
-            payload['経過情報'] = { value: currentHistories };
-        }
-
-        await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', {
-          app: kintone.app.getId(),
-          id: recordId,
-          record: payload
-        });
-        return true;
-      } catch (e) {
-        console.error('Update failed:', e);
-        showDialog('更新に失敗しました: ' + e.message, 'error');
-        return false;
-      }
-    };
-  
-    // 日付フォーマット (YYYY-MM-DD)
-    const formatDateISO = (date) => {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    };
-
-    // 和暦フォーマット (例: 令和8年4月18日)
-    const formatToJapaneseDate = (dateStr) => {
-      if (!dateStr) return '';
-      const [y, m, d] = dateStr.split('-').map(Number);
-      const date = new Date(y, m - 1, d);
-      return date.toLocaleDateString("ja-JP-u-ca-japanese", {
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-      });
-    };
-
-    // 過去時刻チェック (本日かつ現在時刻以前ならtrue)
-    const isPastTime = (dateStr, timeStr) => {
-      if (!dateStr) return false;
-      const now = new Date();
-      const todayStr = formatDateISO(now);
-      if (dateStr !== todayStr) return false; // 本日以外はチェックしない
-
-      const nowH = now.getHours();
-      const nowM = now.getMinutes();
-      const [tH, tM] = timeStr.split(':').map(Number);
-
-      if (tH < nowH) return true;
-      if (tH === nowH && tM <= nowM) return true;
-      return false;
+        return evals;
     };
 
     // メイン描画処理
@@ -698,12 +70,15 @@
       const sendDateVal = record[CONFIG.FIELDS.SEND_DATE]?.value || '';
       const staffName = record[CONFIG.FIELDS.STAFF]?.value;
       
+      const currentCommonEval = record['共通評価']?.value || [];
+      const currentMemo = record['人物メモ']?.value || '';
+      
       // 診療科入力用変数 (取消時用)
       let currentDeptInput = record[CONFIG.FIELDS.DEPT]?.value || '';
 
       // 担当者判定
       const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey');
-      const urlToken = record[CONFIG.FIELDS.URL_TOKEN]?.value || '';
+      let urlToken = record[CONFIG.FIELDS.URL_TOKEN]?.value || '';
       const readDateVal = record[CONFIG.FIELDS.READ_DATE]?.value || '';
       const phoneDateVal = record[CONFIG.FIELDS.PHONE_CONFIRM]?.value || '';
       const timeoutVal = record[CONFIG.FIELDS.TIMEOUT]?.value || '2時間'; // デフォルト
@@ -839,20 +214,21 @@
               assignBtn.id = 'rcb-assign-staff-btn';
               assignBtn.innerText = currentStaff ? `私（${currentStaff}）がこのチケットを担当する` : '担当者設定が必要です';
               assignBtn.style.cssText = `
-                  padding: 10px 24px;
+                  animation: rcb-btn-blink-anim 1.5s infinite ease-in-out;
+                  padding: 0 20px;
                   background-color: #2c3e50;
                   color: #fff;
                   border: none;
-                  border-radius: 4px;
+                  border-radius: 6px;
                   cursor: pointer;
                   font-weight: bold;
                   font-size: 14px;
                   box-shadow: 0 2px 5px rgba(0,0,0,0.2);
                   transition: background-color 0.2s;
-                  height: 60px;
-                  width: 300px;
-                  display: block;
-                  margin: 20px auto;
+                  height: 45px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
               `;
               
               assignBtn.onmouseover = () => { assignBtn.style.backgroundColor = '#34495e'; };
@@ -888,20 +264,21 @@
                   };
 
                   if (staffName) {
-                      const confirmed = await showDialog(
+                      const isAssignOk = await showDialog(
                           `すでに担当者「${staffName}」が設定されています。\n強制的に担当をあなた（${currentStaff}）に変更しますか？`,
                           'confirm',
                           '担当者変更',
                           '',
                           '強制的に自分が担当する'
                       );
-                      if (confirmed) doAssign();
+                      if (isAssignOk) doAssign();
                   } else {
                       doAssign();
                   }
               };
               
-              container.appendChild(assignBtn);
+              methodIconDiv.style.display = 'none';
+              methodIconDiv.insertAdjacentElement('afterend', assignBtn);
           }
           
           spaceElement.appendChild(container);
@@ -925,8 +302,12 @@
           reviveBtn.onmouseout = () => reviveBtn.style.backgroundColor = '#f39c12';
 
           reviveBtn.onclick = async () => {
-              const confirmed = await showDialog(`チケットを${currentStatus === '強制終了' ? '直前の状態' : '「要電話対応」'}で復活させますか？`, 'confirm', 'チケット復活');
-              if (!confirmed) return;
+              const reason = await showDialog(`チケットを${currentStatus === '強制終了' ? '直前の状態' : '「要電話対応」'}で復活させますか？\n復活する理由を入力してください。`, 'prompt', 'チケット復活', '理由を入力（必須）');
+              if (reason === null) return;
+              if (reason.trim() === '') {
+                  alert('理由が入力されていないため、復活をキャンセルしました。');
+                  return;
+              }
 
               let payload = { 'ReserveLock': { value: 'lock' } }; // 復活のためデフォルトでロックをかけ直す
 
@@ -956,7 +337,7 @@
               }
 
               // 「チケット復活」を瞬間ステータスとして履歴に残す（skipStatusHistoryはfalseなので復活先のステータスも記録される）
-              const success = await updateRecord(recordId, payload, ['チケット復活'], false, false);
+              const success = await updateRecord(recordId, payload, ['チケット復活'], false, false, reason.trim());
               if (success) location.reload();
           };
 
@@ -964,6 +345,105 @@
           finishedMsg.appendChild(reviveBtn);
 
           container.appendChild(finishedMsg);
+          spaceElement.appendChild(container);
+          return;
+      }
+
+      // ★ 評価待ちステータスの処理
+      if (currentStatus === '評価待ち') {
+          const waitMsg = document.createElement('div');
+          waitMsg.style.cssText = 'text-align: center; padding: 40px 20px; background-color: #e3f2fd; border: 1px solid #90caf9; border-radius: 8px; margin-top: 20px;';
+          waitMsg.innerHTML = `<div style="font-size: 48px; margin-bottom: 15px;">📋</div><div style="font-size: 20px; font-weight: bold; color: #1565c0;">受診予定日が経過しました</div><div style="font-size: 14px; color: #1565c0; margin-top: 10px;">ボタンを押して申込者の特徴を入力し、チケットを終了させてください。</div>`;
+          
+          const finishBtn = document.createElement('button');
+          finishBtn.textContent = '受診確認をしてチケットを終了する';
+          finishBtn.className = 'rcb-btn-save';
+          finishBtn.style.cssText = 'margin-top: 25px; background-color: #1565c0; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; padding: 10px 24px; transition: background-color 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);';
+          finishBtn.onmouseover = () => finishBtn.style.backgroundColor = '#0d47a1';
+          finishBtn.onmouseout = () => finishBtn.style.backgroundColor = '#1565c0';
+          finishBtn.onclick = async () => {
+              // ★変更: 専用の受診確認ダイアログを表示
+              const confirmContent = `
+                  <div style="margin-bottom: 15px; font-weight: bold; color: #2c3e50;">予定通り受診しましたか？</div>
+                  <div style="display: flex; gap: 20px; margin-bottom: 20px;" id="visit-radio-group">
+                      <label style="cursor: pointer;"><input type="radio" name="visit-status" value="yes" checked> はい（受診した）</label>
+                      <label style="cursor: pointer;"><input type="radio" name="visit-status" value="no"> いいえ（受診しなかった）</label>
+                  </div>
+                  <div style="font-weight: bold; color: #2c3e50; margin-bottom: 5px;">何かあれば記載してください</div>
+                  <div style="font-size: 11px; color: #7f8c8d; margin-bottom: 8px;">※ここに入力した内容は「人物メモ」に追記されます</div>
+                  <input type="text" id="visit-memo-input" class="rcb-input-text" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 13px;" placeholder="特になければ空欄でOK">
+              `;
+
+              const visitResult = await new Promise((resolve) => {
+                  const { overlay, box, content } = window.RcbUI.createModalBase ? window.RcbUI.createModalBase() : (() => {
+                      // RcbUI.createModalBaseが外部公開されていない場合の簡易フォールバック
+                      const div = document.createElement('div');
+                      return { overlay: div, box: div, content: div };
+                  })();
+                  
+                  // 既存の showDialog をハックしてカスタムコンテンツを表示
+                  showDialog(confirmContent, 'confirm', '受診確認', '', '終了する', 'キャンセル').then(isOk => {
+                      if (!isOk) {
+                          resolve(null);
+                          return;
+                      }
+                      // DOMから値を取得 (showDialog が閉じられる前に取得する必要があるが、
+                      // 今回は簡易的に setTimeout で描画されたDOMから取得するアプローチをとるか、
+                      // 事前にイベントリスナーで値を変数に退避する)
+                  });
+                  
+                  // DOM生成後にイベントリスナーを設定して値を退避
+                  setTimeout(() => {
+                      const radios = document.querySelectorAll('input[name="visit-status"]');
+                      const memoInput = document.getElementById('visit-memo-input');
+                      let selectedVisit = 'yes';
+                      let inputMemo = '';
+                      
+                      radios.forEach(r => {
+                          r.addEventListener('change', (e) => { selectedVisit = e.target.value; });
+                      });
+                      if (memoInput) {
+                          memoInput.addEventListener('input', (e) => { inputMemo = e.target.value; });
+                      }
+                      
+                      // OKボタンの処理をフック
+                      const okBtn = document.querySelector('.rcb-modal-btn-ok');
+                      if (okBtn) {
+                          const originalClick = okBtn.onclick;
+                          okBtn.onclick = (e) => {
+                              resolve({ visited: selectedVisit === 'yes', memo: inputMemo.trim() });
+                              if (originalClick) originalClick(e);
+                          };
+                      }
+                  }, 100);
+              });
+
+              if (!visitResult) return;
+              
+              let newCommonEval = [...currentCommonEval];
+              if (!visitResult.visited && !newCommonEval.includes('無断で受診キャンセル')) {
+                  newCommonEval.push('無断で受診キャンセル');
+              }
+
+              let newMemo = currentMemo;
+              if (visitResult.memo) {
+                  newMemo = newMemo ? `${newMemo}\n[受診確認] ${visitResult.memo}` : `[受診確認] ${visitResult.memo}`;
+              }
+
+              const payload = {
+                  [CONFIG.FIELDS.STATUS]: { value: '終了' },
+                  'ReserveLock': { value: 'unlock' },
+                  '共通評価': { value: newCommonEval },
+                  '人物メモ': { value: newMemo }
+              };
+              const success = await updateRecord(recordId, payload);
+              if (success) location.reload();
+          };
+
+          waitMsg.appendChild(document.createElement('br'));
+          waitMsg.appendChild(finishBtn);
+          
+          container.appendChild(waitMsg);
           spaceElement.appendChild(container);
           return;
       }
@@ -1019,8 +499,12 @@
             </div>
           `;
 
-          const confirmed = await showDialog(confirmMsg, 'confirm', '送信確認');
-          if (!confirmed) return;
+          const isSendOk = await showDialog(confirmMsg, 'confirm', '送信確認', '', '送信する', 'キャンセル');
+          if (!isSendOk) return;
+
+          const updatedCommonEval = getUpdatedCommonEvalWithCancel(currentCommonEval, targetDate);
+
+          showSpinner('取消完了メールを送信しています...');
 
           try {
             const payload = {
@@ -1045,7 +529,9 @@
                 ,'WEB取下メッセージ': { value: message || '' },
                 'WEB取下診療科': { value: dept || '' },
                 'WEB取下修正予約日時': { value: `${targetDate} ${targetTime}` },
-                'ReserveLock': { value: 'unlock' } // ★追加: WEB取下時はunlock
+                'ReserveLock': { value: 'unlock' }, // ★追加: WEB取下時はunlock
+                '共通評価': { value: updatedCommonEval },
+                '人物メモ': { value: currentMemo }
             };
             // 診療科が入力されていれば更新
             if (dept) {
@@ -1054,11 +540,13 @@
             const success = await updateRecord(recordId, updateData);
 
             if (success) {
+                hideSpinner();
                 await showDialog('取消完了メールを送信しました。', 'success');
                 location.reload();
             }
           } catch (e) {
             console.error(e);
+            hideSpinner();
             await showDialog('送信に失敗しました: ' + e.message, 'error');
           }
       };
@@ -1084,6 +572,12 @@
           let token = urlToken;
           if (!token) {
               token = Math.random().toString(36).substring(2, 10);
+              // 【重要】プレビューのリンクを機能させるため、ダイアログ表示前にトークンを保存する
+              const tokenSaved = await updateRecord(recordId, { 
+                  [CONFIG.FIELDS.URL_TOKEN]: { value: token } 
+              });
+              if (!tokenSaved) return; // 保存に失敗した場合は中断
+              urlToken = token;
           }
 
           // 送信内容のプレビュー作成
@@ -1098,12 +592,74 @@
           let bodyContent = '';
           const targetUrlPreview = `${CONFIG.CONFIRM_BASE_URL}?token=${token}`;
 
+          // ★変更: プレビュー用のダミーHTMLを生成（Cloud Runにアクセスするとステータスチェックで無効になるため）
+          const previewHtml = `
+            <!DOCTYPE html>
+            <html lang="ja">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>ご予約情報（プレビュー）</title>
+              <style>
+                body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; margin: 0; }
+                .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+                h1 { color: #005a9e; font-size: 22px; margin-top: 0; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; }
+                .message { margin-bottom: 25px; line-height: 1.6; }
+                .info-box { background: #f9f9f9; border-radius: 6px; padding: 20px; }
+                .info-row { display: flex; border-bottom: 1px solid #eee; padding: 12px 0; }
+                .info-row:last-child { border-bottom: none; }
+                .label { width: 100px; font-weight: bold; color: #777; font-size: 14px; }
+                .value { flex: 1; font-weight: bold; font-size: 15px; color: #333; }
+                .footer { margin-top: 30px; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+                .footer-signature { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; }
+                .badge { background: #e74c3c; color: #fff; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; display: inline-block; margin-bottom: 20px; }
+                .btn-close { display: inline-block; padding: 10px 30px; background-color: #95a5a6; color: #fff; border-radius: 4px; font-weight: bold; border: none; cursor: pointer; transition: background-color 0.2s; font-size: 14px; }
+                .btn-close:hover { background-color: #7f8c8d; }
+              </style>
+            </head>
+            <body>
+              <div style="text-align: center;">
+                <div class="badge">※これは確認用のサンプル画面です</div>
+              </div>
+              <div class="container">
+                <h1>予約が確定しました</h1>
+                <div class="message">
+                  <strong>${fullName} 様</strong><br>
+                  以下の内容で予約が確定しております。<br>
+                  当日はお気をつけてお越しください。
+                </div>
+                
+                <div class="info-box">
+                  <div class="info-row">
+                    <div class="label">予約日時</div>
+                    <div class="value">${formatToJapaneseDate(targetDate)} ${targetTime}</div>
+                  </div>
+                  <div class="info-row">
+                    <div class="label">診療科</div>
+                    <div class="value">${dept}</div>
+                  </div>
+                </div>
+
+                <div class="footer">
+                  <div class="footer-signature">ふれあいグループ 湘南東部病院予約センター</div>
+                </div>
+              </div>
+              <div style="text-align: center; margin-top: 25px;">
+                <button class="btn-close" onclick="window.close()">閉じる</button>
+              </div>
+            </body>
+            </html>
+          `;
+          
+          const encodedPreviewHtml = encodeURIComponent(previewHtml).replace(/'/g, "\\'");
+          const previewWindowScript = `const win = window.open('', 'previewWindow', 'width=550,height=600,scrollbars=yes'); win.document.open(); win.document.write(decodeURIComponent('${encodedPreviewHtml}')); win.document.close(); const okBtn = document.querySelector('.rcb-modal-btn-ok'); if (okBtn) { okBtn.disabled = true; okBtn.style.opacity = '0.5'; okBtn.style.cursor = 'not-allowed'; const originalText = okBtn.textContent; okBtn.textContent = 'プレビュー確認中...'; const timer = setInterval(function() { if (win.closed) { clearInterval(timer); okBtn.disabled = false; okBtn.style.opacity = '1'; okBtn.style.cursor = 'pointer'; okBtn.textContent = originalText; } }, 500); } return false;`;
+
           // ボタン表示用HTML (プレビュー用)
           const btnHtml = `
             <div style="margin: 20px 0;">
-              <a href="javascript:void(0);" style="display: inline-block; padding: 12px 24px; background-color: #005a9e; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold; pointer-events: none; cursor: default;">ご予約情報</a>
+              <a href="javascript:void(0);" onclick="${previewWindowScript}" style="display: inline-block; padding: 12px 24px; background-color: #005a9e; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold; cursor: pointer;">ご予約情報</a>
             </div>
-            <p style="font-size: 12px; color: #777;">※上記ボタンがクリックできない場合は、以下のURLをご確認ください。<br><a href="javascript:void(0);" style="color:#005a9e; pointer-events: none; cursor: default;">${targetUrlPreview}</a></p>
+            <p style="font-size: 12px; color: #777;">※上記ボタンがクリックできない場合は、以下のURLをご確認ください。<br><a href="javascript:void(0);" onclick="${previewWindowScript}" style="color:#005a9e; cursor: pointer;">${targetUrlPreview}</a></p>
           `;
           if (purpose === '初診') {
               subject = '【予約確定】診療のご予約（初診）について';
@@ -1157,15 +713,10 @@
             </div>
           `;
 
-          const confirmed = await showDialog(confirmMsg, 'confirm', '送信確認');
-          if (!confirmed) return;
+          const isSendOk = await showDialog(confirmMsg, 'confirm', '送信確認');
+          if (!isSendOk) return;
 
-          // 【重要】メール送信前にトークンをKintoneに保存する
-          // これを行わないと、メール受信時にサーバー側で「トークンなし」と判定されてしまう
-          const tokenSaved = await updateRecord(recordId, { 
-              [CONFIG.FIELDS.URL_TOKEN]: { value: token } 
-          });
-          if (!tokenSaved) return; // 保存に失敗した場合はメール送信を中止
+          showSpinner('メールを送信しています...');
 
           try {
             // URL生成
@@ -1208,11 +759,29 @@
             const success = await updateRecord(recordId, updatePayload);
 
             if (success) {
-                await showDialog('メールを送信しました。', 'success');
+                hideSpinner();
+                const successMsg = (effectiveMethod === 'phone') ? '電話にて調整した予約日時についてメールを送信しました' : 'メールを送信しました。';
+                await showDialog(successMsg, 'success');
+                
+                // 電話対応の場合は送信完了後に特徴ダイアログを表示
+                if (effectiveMethod === 'phone') {
+                    const initialData = { common: currentCommonEval, memo: currentMemo };
+                    const evalData = await showEvaluationDialog('電話対応お疲れ様でした。<br>申込者の特徴を入力してください。', '申込者の特徴', 'phone_after_call', initialData, null, 'OK', null);
+                    
+                    if (evalData) {
+                        const evalPayload = {
+                            '共通評価': { value: evalData.common },
+                            '人物メモ': { value: evalData.memo }
+                        };
+                        await updateRecord(recordId, evalPayload, [], false, true); // ステータス履歴には残さない
+                    }
+                }
+
                 location.reload();
             }
           } catch (e) {
             console.error(e);
+            hideSpinner();
             await showDialog('送信に失敗しました: ' + e.message, 'error');
           }
       };
@@ -1416,8 +985,17 @@
             return;
           }
           
-          const confirmed = await showDialog('', 'confirm', '予約日時の決定', '', '決定', 'キャンセル', '事前に電子カルテ側の予約を確保済');
-          if (!confirmed) return;
+          // 値が変更されていない場合は、保存処理を行わずに元の表示に戻る
+          if (newDate === currentDate && selectedTime === currentTime) {
+              renderBoard(spaceElement, record);
+              return;
+          }
+
+          // すでに日時が設定されていた（再設定の）場合は文言を変更
+          const isUpdate = currentDate && currentTime;
+          const checkboxMsg = isUpdate ? '事前に電子カルテ側の予約を変更済' : '事前に電子カルテ側の予約を確保済';
+          const isSaveOk = await showDialog('', 'confirm', '予約日時の決定', '', '決定', 'キャンセル', checkboxMsg);
+          if (!isSaveOk) return;
     
           saveBtn.disabled = true;
           saveBtn.textContent = '保存中...';
@@ -1493,6 +1071,16 @@
             document.querySelectorAll('.rcb-radio-label').forEach(el => el.classList.remove('checked'));
             labelEl.classList.add('checked');
             
+            // 現在の入力日時を退避
+            const dateInput = document.querySelector('.rcb-date-input[type="date"]');
+            if (dateInput && dateInput.value) {
+                sessionStorage.setItem('rcb_temp_date_' + recordId, dateInput.value);
+            }
+            const selectedTimeBtn = document.querySelector('.rcb-time-btn.selected');
+            if (selectedTimeBtn) {
+                sessionStorage.setItem('rcb_temp_time_' + recordId, selectedTimeBtn.textContent);
+            }
+
             // API更新
             const success = await updateRecord(recordId, {
               [CONFIG.FIELDS.METHOD]: { value: updateValue }
@@ -1500,6 +1088,12 @@
             
             if (success) {
               currentMethod = updateValue; // 内部変数を更新
+              // 決定ボタン押下時の再描画で元に戻らないよう、レコードデータ自体も更新しておく
+              if (record[CONFIG.FIELDS.METHOD]) {
+                  record[CONFIG.FIELDS.METHOD].value = updateValue;
+              } else {
+                  record[CONFIG.FIELDS.METHOD] = { value: updateValue };
+              }
               // アイコン更新
               methodIconDiv.innerHTML = getMethodIconHtml(updateValue);
               renderEditorView(); // 日時設定エリアを更新（表示）
@@ -1546,33 +1140,39 @@
         const handleWithdrawal = async () => {
             const isRead = !!readDateVal;
             let shouldSendCancelMail = false;
+            let msg = '';
 
             // 1. 確認フロー
             if (currentMethod === 'phone') {
-                const confirmed = await showDialog('予約依頼者と取消しについて調整済みですか？\n予約を取り下げますか？', 'confirm');
-                if (!confirmed) return;
+                msg = '予約依頼者と取消しについて調整済みですか？\n予約を取り下げますか？';
             } else if (currentMethod === 'email') {
                 if (!isRead) {
-                    // 既読前
-                    const confirmed = await showDialog('予約を取り下げますか？', 'confirm');
-                    if (!confirmed) return;
+                    msg = '予約を取り下げますか？';
                 } else {
-                    // 既読後
-                    const confirmed = await showDialog('予約依頼者と取消しについて調整済みですか？\nメールが既読になっているので依頼者の予約日時の認識について混乱させないようにする必要があります。\n予約を取下げますか？', 'confirm');
-                    if (!confirmed) return;
+                    msg = '予約依頼者と取消しについて調整済みですか？\nメールが既読になっているので依頼者の予約日時の認識について混乱させないようにする必要があります。\n予約を取下げますか？';
                 }
             } else {
-                // 未設定などの場合
-                const confirmed = await showDialog('予約を取り下げますか？', 'confirm');
-                if (!confirmed) return;
+                msg = '予約を取り下げますか？';
             }
+
+            const actionReason = await showDialog(msg + '\n\n取下げの理由を入力してください。', 'prompt', '予約の取下げ', '取下げの理由（必須）', '取下げる', 'キャンセル');
+            if (actionReason === null) return;
+            if (actionReason.trim() === '') {
+                alert('取下げの理由を入力してください。');
+                return;
+            }
+
+            // スタッフ取下時はアンケート入力をスキップし、自動判定のみ行う
+            const updatedCommonEval = getUpdatedCommonEvalWithCancel(currentCommonEval, currentDate);
 
             // 2. 実行処理
             try {
                 const payload = {
                     [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_WITHDRAWN_VALUE },
                     [CONFIG.FIELDS.NOTE]: { value: '' },
-                    'ReserveLock': { value: 'unlock' } // ★追加: スタッフ取下(手動取下)時はunlock
+                    'ReserveLock': { value: 'unlock' }, // ★追加: スタッフ取下(手動取下)時はunlock
+                    '共通評価': { value: updatedCommonEval },
+                    '人物メモ': { value: currentMemo }
                 };
 
                 // メール送信 (メール対応 & 既読後の場合)
@@ -1599,7 +1199,7 @@
                 }
 
                 // レコード更新
-                await updateRecord(recordId, payload);
+                await updateRecord(recordId, payload, [], false, false, actionReason.trim());
 
                 await showDialog('予約を取り下げました。', 'success');
                 location.reload();
@@ -1747,11 +1347,17 @@
             };
             
             endBtn.onclick = async () => {
-                const confirmed = await showDialog('このチケットを終了します。よろしいですか？', 'confirm');
-                if (!confirmed) return;
+                const isEndOk = await showDialog('このチケットを終了します。よろしいですか？', 'confirm', 'チケットの終了', '', '終了する', 'キャンセル');
+                if (!isEndOk) return;
+
+                const cancelDateVal = record[CONFIG.FIELDS.CANCEL_DATE]?.value || '';
+                const updatedCommonEval = getUpdatedCommonEvalWithCancel(currentCommonEval, displayDateVal, cancelDateVal);
+                
                 const payload = { 
                     'ReserveLock': { value: 'unlock' },
-                    [CONFIG.FIELDS.STATUS]: { value: '終了' } 
+                    [CONFIG.FIELDS.STATUS]: { value: '終了' },
+                    '共通評価': { value: updatedCommonEval },
+                    '人物メモ': { value: currentMemo }
                 };
                 const success = await updateRecord(recordId, payload);
                 if (success) location.reload();
@@ -2149,18 +1755,25 @@
 
                 const switchPhoneBtn = document.createElement('button');
                 switchPhoneBtn.className = 'rcb-btn-save';
-                switchPhoneBtn.textContent = '今すぐに電話対応に切替えて対応しますか？';
+                switchPhoneBtn.textContent = '今すぐに電話対応に切替えますか？';
                 switchPhoneBtn.style.backgroundColor = '#17a2b8';
                 switchPhoneBtn.onclick = async () => {
-                    const confirmed = await showDialog('電話対応に切り替えますか？\n（現在の日時を引き継いで「要電話対応」ステータスへ移行します）', 'confirm');
-                    if (!confirmed) return;
+                    const isSwitchOk = await showDialog('電話対応に切り替えますか？\n（現在の日時を引き継いで「要電話対応」ステータスへ移行します）', 'confirm');
+                    if (!isSwitchOk) return;
+
+                    // 手動で電話対応に切り替えた場合も「既読にならない」を自動チェック
+                    const commonEval = record['共通評価']?.value || [];
+                    if (!commonEval.includes('メールが既読にならない')) {
+                        commonEval.push('メールが既読にならない');
+                    }
 
                     const payload = {
                         [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_REQUIRE_PHONE_VALUE },
                         [CONFIG.FIELDS.METHOD]: { value: 'phone' },
                         [CONFIG.FIELDS.SEND_DATE]: { value: null },
                         [CONFIG.FIELDS.READ_DATE]: { value: null },
-                        [CONFIG.FIELDS.TIMEOUT]: { value: null }
+                        [CONFIG.FIELDS.TIMEOUT]: { value: null },
+                        '共通評価': { value: commonEval }
                     };
                     const success = await updateRecord(recordId, payload);
                     if (success) location.reload();
@@ -2233,7 +1846,7 @@
             sendMailBtn.disabled = true;
         } else if (isTimeoutStatus) {
             sendMailBtn.style.display = 'none'; // ボタンを非表示にする
-        } else if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE) {
+        } else if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || (currentMethod === 'phone' && purpose !== '取消')) {
             sendMailBtn.textContent = '電話対応を完了する';
             sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
             sendMailBtn.onclick = () => processSendMail(currentDate, currentTime);
@@ -2338,8 +1951,8 @@
                 reviveBtn.style.lineHeight = '1.2';
                 
                 reviveBtn.onclick = async () => {
-                    const confirmed = await showDialog('取下げを中止して、取下げる前の状態に戻しますか？', 'confirm');
-                    if (!confirmed) return;
+                    const isReviveOk = await showDialog('取下げを中止して、取下げる前の状態に戻しますか？', 'confirm');
+                    if (!isReviveOk) return;
 
                     // 最新の既読状態をチェック
                     try {
@@ -2379,8 +1992,8 @@
             reconfigBtn.style.maxWidth = '200px';
 
             reconfigBtn.onclick = async () => {
-                const confirmed = await showDialog('予約を最初から再設定しますか？\n現在の履歴はすべて消去されます。', 'confirm');
-                if (!confirmed) return;
+                const isReconfigOk = await showDialog('仮予約情報を最初から再設定しますか？\n申込者へ送付済みのメールのリンクは無効表示になります。', 'confirm', '再設定の確認', '', '再設定する', 'キャンセル', '電カル側の予約枠を解除しました。');
+                if (!isReconfigOk) return;
 
                 const payload = {
                     [CONFIG.FIELDS.STATUS]: { value: '担当設定' },
@@ -2413,14 +2026,26 @@
             noReconfigBtn.style.lineHeight = '1.2';
 
             noReconfigBtn.onclick = async () => {
-                const confirmed = await showDialog('この操作により、この予約チケットは破棄され、申込者はすぐに新たな予約ができるようになります。', 'confirm', 'チケットの破棄', '', '破棄する', 'キャンセル', '電カル側の予約枠を解除しました。');
-                if (!confirmed) return;
+                const actionReason = await showDialog('この操作により、この予約チケットは破棄され、申込者はすぐに新たな予約ができるようになります。\n\n破棄の理由を入力してください。', 'prompt', 'チケットの破棄', '破棄の理由（必須）', '破棄する', 'キャンセル', '電カル側の予約枠を解除しました。');
+                if (actionReason === null) return;
+                if (actionReason.trim() === '') {
+                    alert('破棄の理由を入力してください。');
+                    return;
+                }
 
+                const initialData = { common: currentCommonEval, memo: currentMemo };
+                const evalData = await showEvaluationDialog('', '申込者の特徴', currentMethod, initialData, null, 'OK', null);
+                
                 const payload = { 
                     'ReserveLock': { value: 'unlock' },
-                    [CONFIG.FIELDS.STATUS]: { value: '終了' } 
+                    [CONFIG.FIELDS.STATUS]: { value: '終了' }
                 };
-                const success = await updateRecord(recordId, payload);
+
+                if (evalData) {
+                    payload['共通評価'] = { value: evalData.common };
+                    payload['人物メモ'] = { value: evalData.memo };
+                }
+                const success = await updateRecord(recordId, payload, [], false, false, '');
                 if (success) location.reload();
             };
             actionGroup.appendChild(noReconfigBtn);
@@ -2445,6 +2070,10 @@
 
         const staffName = record[CONFIG.FIELDS.STAFF]?.value;
         const isAssigned = !!staffName; // 担当者が設定されているか
+        
+        const currentCommonEval = record['共通評価']?.value || [];
+        const currentMemo = record['人物メモ']?.value || '';
+        const currentMethod = record[CONFIG.FIELDS.METHOD]?.value || '未設定';
 
         // ボタンコンテナ
         const btnContainer = document.createElement('div');
@@ -2463,8 +2092,8 @@
             changeBtn.onmouseout = () => changeBtn.style.backgroundColor = '#f39c12';
             
             changeBtn.onclick = async () => {
-                const confirmed = await showDialog('担当者を未設定にします', 'confirm');
-                if (!confirmed) return;
+                const isChangeOk = await showDialog('担当者を未設定にします', 'confirm');
+                if (!isChangeOk) return;
 
                 const newToken = Math.random().toString(36).substring(2, 10);
                 const payload = {
@@ -2500,15 +2129,28 @@
         forceEndBtn.onmouseout = () => forceEndBtn.style.backgroundColor = '#e74c3c';
         
         forceEndBtn.onclick = async () => {
-            const confirmed = await showDialog('このチケットを強制終了します。\n本当によろしいですか？', 'confirm', '強制終了の確認');
-            if (!confirmed) return;
+            const actionReason = await showDialog('このチケットを強制終了します。\n本当によろしいですか？\n強制終了の理由を入力してください。', 'prompt', '強制終了の確認', '強制終了の理由（必須）', '強制終了する', 'キャンセル');
+            if (actionReason === null) return;
+            if (actionReason.trim() === '') {
+                alert('強制終了の理由を入力してください。');
+                return;
+            }
+
+            const initialData = { common: currentCommonEval, memo: currentMemo };
+            const evalData = await showEvaluationDialog('', '申込者の特徴', currentMethod, initialData, null, 'OK', null);
             
             const payload = {
                 [CONFIG.FIELDS.STATUS]: { value: '強制終了' },
-                'ReserveLock': { value: 'unlock' }
+                'ReserveLock': { value: 'unlock' },
             };
+
+            // 特徴が入力されて「保存」が押された場合のみ値をセット
+            if (evalData) {
+                payload['共通評価'] = { value: evalData.common };
+                payload['人物メモ'] = { value: evalData.memo };
+            }
             
-            const success = await updateRecord(recordId, payload);
+            const success = await updateRecord(recordId, payload, [], false, false, actionReason.trim());
             if (success) location.reload();
         };
         btnContainer.appendChild(forceEndBtn);
@@ -2527,8 +2169,8 @@
             resetBtn.onmouseout = () => resetBtn.style.backgroundColor = '#95a5a6';
             
             resetBtn.onclick = async () => {
-                const confirmed = await showDialog('このレコードを初期状態にリセットしますか？\n入力された予約日時などのデータや経過情報もすべて消去されます。', 'confirm', 'リセット確認');
-                if (!confirmed) return;
+                const isResetOk = await showDialog('このレコードを初期状態にリセットしますか？\n入力された予約日時などのデータや経過情報もすべて消去されます。', 'confirm', 'リセット確認');
+                if (!isResetOk) return;
                 
                 const newToken = Math.random().toString(36).substring(2, 10);
                 const payload = {
@@ -2545,7 +2187,9 @@
                     [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
                     [CONFIG.FIELDS.TIMEOUT]: { value: null },
                     [CONFIG.FIELDS.NOTE]: { value: null },
-                    'ReserveLock': { value: 'lock' }
+                    'ReserveLock': { value: 'lock' },
+                    '共通評価': { value: [] },
+                    '人物メモ': { value: null }
                 };
                 
                 // 履歴も初期化する (resetHistory=true)
@@ -2572,7 +2216,7 @@
 
         pollingTimer = setInterval(async () => {
             // モーダル表示中はポーリングをスキップ（ユーザー操作の邪魔をしない）
-            if (document.getElementById('rcb-modal-overlay')) return;
+            if (document.getElementById('rcb-modal-overlay') || document.getElementById('rcb-eval-modal-overlay')) return;
 
             try {
                 const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
@@ -2664,8 +2308,8 @@
                         clearInterval(pollingTimer);
                         pollingTimer = null;
 
-                        const confirmed = await showDialog(msg, 'confirm', title, '', 'リロードする');
-                        if (confirmed) {
+                        const isReloadOk = await showDialog(msg, 'confirm', title, '', 'リロードする');
+                        if (isReloadOk) {
                             location.reload();
                         } else {
                             // リロードしない場合、ユーザーが保存作業を行えるようにポーリングは停止したままにする
