@@ -646,7 +646,7 @@
   }
 
   const renderStaffBadge = () => {
-    // スタッフ名取得 (APP156と共有のキーを優先)
+    // スタッフ名取得 (設定アプリと共有のキーを優先)
     let staffName = localStorage.getItem('shinryo_ticket_staff_name');
     if (!staffName) {
         staffName = localStorage.getItem('customKey'); // 旧キー(互換性)

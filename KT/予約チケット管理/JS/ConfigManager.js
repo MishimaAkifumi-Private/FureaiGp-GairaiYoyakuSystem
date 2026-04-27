@@ -3,7 +3,7 @@
  * 共通設定および公開データの管理マネージャー
  * 
  * [機能]
- * - Kintoneアプリ(ID:156等)の「PublishedConfig」フィールドにJSONデータを保存・読込します。
+ * - Kintoneアプリ(ID:200等)の「PublishedConfig」フィールドにJSONデータを保存・読込します。
  * - スタッフリストや施設設定をアプリ間で共有するために使用します。
  */
 (function() {
@@ -13,17 +13,12 @@
     window.ShinryoApp = window.ShinryoApp || {};
 
     // 設定
-    const FIELD_CODE = 'PublishedConfig'; // Kintone側のフィールドコード
-    const DEFAULT_APP_ID = 156; // デフォルトの保存先アプリID (診療シフト管理アプリ)
+    const FIELD_CODE = '設定情報'; // Kintone側のフィールドコード
+    const DEFAULT_APP_ID = 200; // デフォルトの保存先アプリID (診療シフト管理アプリ)
 
-    // 保存先アプリIDを取得 (localStorageの設定を優先)
+    // 保存先アプリIDを取得 (常にデフォルトアプリIDを使用)
     const getTargetAppId = () => {
-        try {
-            const config = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
-            return config.appId ? parseInt(config.appId, 10) : DEFAULT_APP_ID;
-        } catch(e) {
-            return DEFAULT_APP_ID;
-        }
+        return DEFAULT_APP_ID;
     };
 
     // 内部キャッシュ
@@ -39,7 +34,7 @@
                 // レコードを1件取得 (通常はレコードID=1、または最新のレコードを使用)
                 const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
                     app: appId,
-                    query: 'limit 1',
+                    query: 'order by $id desc limit 1',
                     fields: ['$id', FIELD_CODE]
                 });
 

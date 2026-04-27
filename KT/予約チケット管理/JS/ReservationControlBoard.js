@@ -239,41 +239,26 @@
                       await showDialog('この端末には担当者が設定されていません。\nダッシュボード等で担当者を設定してください。', 'error');
                       return;
                   }
-
-                  const doAssign = async () => {
-                      assignBtn.disabled = true;
-                      assignBtn.textContent = '処理中...';
-                      
-                      const updatePayload = {
-                          [CONFIG.FIELDS.STAFF]: { value: currentStaff }
-                      };
-
-                      // 初めて担当が設定される場合のみステータスを更新
-                      if (!staffName) {
-                          updatePayload[CONFIG.FIELDS.STATUS] = { value: '担当設定' };
-                      }
-
-                      const success = await updateRecord(recordId, updatePayload);
-                      if (success) {
-                          await showDialog(`担当者を「${currentStaff}」に設定しました。`, 'success');
-                          location.reload();
-                      } else {
-                          assignBtn.disabled = false;
-                          assignBtn.textContent = '担当する';
-                      }
+                  
+                  assignBtn.disabled = true;
+                  assignBtn.textContent = '処理中...';
+                  
+                  const updatePayload = {
+                      [CONFIG.FIELDS.STAFF]: { value: currentStaff }
                   };
 
-                  if (staffName) {
-                      const isAssignOk = await showDialog(
-                          `すでに担当者「${staffName}」が設定されています。\n強制的に担当をあなた（${currentStaff}）に変更しますか？`,
-                          'confirm',
-                          '担当者変更',
-                          '',
-                          '強制的に自分が担当する'
-                      );
-                      if (isAssignOk) doAssign();
+                  // 未着手から担当が設定された場合のみステータスを更新
+                  if (currentStatus === '未着手') {
+                      updatePayload[CONFIG.FIELDS.STATUS] = { value: '担当設定' };
+                  }
+
+                  const success = await updateRecord(recordId, updatePayload);
+                  if (success) {
+                      await showDialog(`担当者を「${currentStaff}」に設定しました。`, 'success');
+                      location.reload();
                   } else {
-                      doAssign();
+                      assignBtn.disabled = false;
+                      assignBtn.textContent = '担当する';
                   }
               };
               
@@ -364,7 +349,7 @@
           finishBtn.onclick = async () => {
               // ★変更: 専用の受診確認ダイアログを表示
               const confirmContent = `
-                  <div style="margin-bottom: 15px; font-weight: bold; color: #2c3e50;">予定通り受診しましたか？</div>
+                  <div style="margin-bottom: 15px; font-weight: bold; color: #2c3e50;">この患者は予定通り受診しましたか？</div>
                   <div style="display: flex; gap: 20px; margin-bottom: 20px;" id="visit-radio-group">
                       <label style="cursor: pointer;"><input type="radio" name="visit-status" value="yes" checked> はい（受診した）</label>
                       <label style="cursor: pointer;"><input type="radio" name="visit-status" value="no"> いいえ（受診しなかった）</label>
@@ -2074,6 +2059,8 @@
         const currentCommonEval = record['共通評価']?.value || [];
         const currentMemo = record['人物メモ']?.value || '';
         const currentMethod = record[CONFIG.FIELDS.METHOD]?.value || '未設定';
+        const currentStatus = record[CONFIG.FIELDS.STATUS]?.value || '未設定';
+        const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey');
 
         // ボタンコンテナ
         const btnContainer = document.createElement('div');
@@ -2081,79 +2068,80 @@
         btnContainer.style.display = 'flex';
         btnContainer.style.gap = '10px';
         btnContainer.style.marginTop = '10px';
-
-        // --- 担当変更ボタン ---
-        if (isAssigned) {
-            const changeBtn = document.createElement('button');
-            changeBtn.id = 'rcb-change-staff-btn';
-            changeBtn.textContent = '担当変更';
-            changeBtn.style.cssText = 'padding: 8px 16px; background-color: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;';
-            changeBtn.onmouseover = () => changeBtn.style.backgroundColor = '#e67e22';
-            changeBtn.onmouseout = () => changeBtn.style.backgroundColor = '#f39c12';
+        
+        // --- 担当を引継ぐボタン ---
+        const isFinished = (currentStatus === '終了' || currentStatus === '強制終了');
+        if (isAssigned && staffName !== currentStaff && !isFinished) {
+            const takeoverBtn = document.createElement('button');
+            takeoverBtn.id = 'rcb-takeover-staff-btn';
+            takeoverBtn.textContent = '担当を引継ぐ';
+            takeoverBtn.style.cssText = 'padding: 8px 16px; background-color: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;';
+            takeoverBtn.onmouseover = () => takeoverBtn.style.backgroundColor = '#e67e22';
+            takeoverBtn.onmouseout = () => takeoverBtn.style.backgroundColor = '#f39c12';
             
-            changeBtn.onclick = async () => {
-                const isChangeOk = await showDialog('担当者を未設定にします', 'confirm');
-                if (!isChangeOk) return;
+            takeoverBtn.onclick = async () => {
+                if (!currentStaff) {
+                    await showDialog('この端末には担当者が設定されていません。\nダッシュボード等で担当者を設定してください。', 'error');
+                    return;
+                }
 
-                const newToken = Math.random().toString(36).substring(2, 10);
+                const isTakeoverOk = await showDialog(
+                    `現担当の${staffName}さんと担当交代について調整済みですか？`,
+                    'confirm',
+                    '担当者引き継ぎ',
+                    '',
+                    `${currentStaff}が引継ぐ`
+                );
+                if (!isTakeoverOk) return;
+
                 const payload = {
-                    [CONFIG.FIELDS.STATUS]: { value: '未着手' },
-                    [CONFIG.FIELDS.URL_TOKEN]: { value: newToken },
-                    [CONFIG.FIELDS.METHOD]: { value: 'staff' },
-                    [CONFIG.FIELDS.STAFF]: { value: null },
-                    [CONFIG.FIELDS.RES_DATE]: { value: null },
-                    [CONFIG.FIELDS.RES_TIME]: { value: null },
-                    [CONFIG.FIELDS.SEND_DATE]: { value: null },
-                    [CONFIG.FIELDS.READ_DATE]: { value: null },
-                    [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
-                    [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
-                    [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
-                    [CONFIG.FIELDS.TIMEOUT]: { value: null },
-                    [CONFIG.FIELDS.NOTE]: { value: null },
-                    'ReserveLock': { value: 'lock' }
+                    [CONFIG.FIELDS.STAFF]: { value: currentStaff }
                 };
                 
-                // 履歴は初期化しない (resetHistory=false)、未着手ステータスは記録する
-                const success = await updateRecord(recordId, payload, [], false, false);
+                const success = await updateRecord(recordId, payload, ['担当引き継ぎ']);
                 if (success) location.reload();
             };
-            btnContainer.appendChild(changeBtn);
+            btnContainer.appendChild(takeoverBtn);
         }
 
+        const isAssignedToMe = staffName && staffName === currentStaff;
+
         // --- 強制終了ボタン ---
-        const forceEndBtn = document.createElement('button');
-        forceEndBtn.id = 'rcb-force-end-btn';
-        forceEndBtn.textContent = '強制終了';
-        forceEndBtn.style.cssText = 'padding: 8px 16px; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;';
-        forceEndBtn.onmouseover = () => forceEndBtn.style.backgroundColor = '#c0392b';
-        forceEndBtn.onmouseout = () => forceEndBtn.style.backgroundColor = '#e74c3c';
-        
-        forceEndBtn.onclick = async () => {
-            const actionReason = await showDialog('このチケットを強制終了します。\n本当によろしいですか？\n強制終了の理由を入力してください。', 'prompt', '強制終了の確認', '強制終了の理由（必須）', '強制終了する', 'キャンセル');
-            if (actionReason === null) return;
-            if (actionReason.trim() === '') {
-                alert('強制終了の理由を入力してください。');
-                return;
-            }
-
-            const initialData = { common: currentCommonEval, memo: currentMemo };
-            const evalData = await showEvaluationDialog('', '申込者の特徴', currentMethod, initialData, null, 'OK', null);
+        if (isAssignedToMe) {
+            const forceEndBtn = document.createElement('button');
+            forceEndBtn.id = 'rcb-force-end-btn';
+            forceEndBtn.textContent = '強制終了';
+            forceEndBtn.style.cssText = 'padding: 8px 16px; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;';
+            forceEndBtn.onmouseover = () => forceEndBtn.style.backgroundColor = '#c0392b';
+            forceEndBtn.onmouseout = () => forceEndBtn.style.backgroundColor = '#e74c3c';
             
-            const payload = {
-                [CONFIG.FIELDS.STATUS]: { value: '強制終了' },
-                'ReserveLock': { value: 'unlock' },
+            forceEndBtn.onclick = async () => {
+                const actionReason = await showDialog('このチケットを強制終了します。\n本当によろしいですか？\n強制終了の理由を入力してください。', 'prompt', '強制終了の確認', '強制終了の理由（必須）', '強制終了する', 'キャンセル');
+                if (actionReason === null) return;
+                if (actionReason.trim() === '') {
+                    alert('強制終了の理由を入力してください。');
+                    return;
+                }
+    
+                const initialData = { common: currentCommonEval, memo: currentMemo };
+                const evalData = await showEvaluationDialog('', '申込者の特徴', currentMethod, initialData, null, 'OK', null);
+                
+                const payload = {
+                    [CONFIG.FIELDS.STATUS]: { value: '強制終了' },
+                    'ReserveLock': { value: 'unlock' },
+                };
+    
+                // 特徴が入力されて「保存」が押された場合のみ値をセット
+                if (evalData) {
+                    payload['共通評価'] = { value: evalData.common };
+                    payload['人物メモ'] = { value: evalData.memo };
+                }
+                
+                const success = await updateRecord(recordId, payload, [], false, false, actionReason.trim());
+                if (success) location.reload();
             };
-
-            // 特徴が入力されて「保存」が押された場合のみ値をセット
-            if (evalData) {
-                payload['共通評価'] = { value: evalData.common };
-                payload['人物メモ'] = { value: evalData.memo };
-            }
-            
-            const success = await updateRecord(recordId, payload, [], false, false, actionReason.trim());
-            if (success) location.reload();
-        };
-        btnContainer.appendChild(forceEndBtn);
+            btnContainer.appendChild(forceEndBtn);
+        }
 
         // --- リセットボタン (管理者のみ) ---
         // 管理者チェック (Kintoneのアプリ設定ボタン「歯車マーク」がDOMに存在するかで同期的に判定)
