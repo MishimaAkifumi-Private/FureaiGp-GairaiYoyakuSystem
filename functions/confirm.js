@@ -70,6 +70,7 @@ exports.sendTestMail = functions.https.onRequest(async (req, res) => {
 
   const mailOptions = {
     from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
+    replyTo: "no-reply@fureai-g.or.jp",
     to: to,
     subject: "【疎通テスト】Firebase Functions -> Kagoya SMTP",
     text: `このメールは、共通基盤/Mailerモジュールを使用して送信されています。\n送信時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
@@ -124,7 +125,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
     let htmlBody = "";
     
     const headerHtml = `<p>${recipientName} 様</p><p>当病院をご利用いただきありがとうございます。</p>`;
-    const footerHtml = `<br><hr><p>湘南東部病院 予約センター</p>`;
+    const footerHtml = `<br><p style="font-size: 12px; color: #777;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p><hr><p>湘南東部病院 予約センター</p>`;
 
     switch (data.type) {
       case "初診":
@@ -366,6 +367,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         if (email) {
             const mailOptions = {
                 from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
+                replyTo: "no-reply@fureai-g.or.jp",
                 to: email,
                 subject: "【予約キャンセル完了】診療予約のキャンセルについて",
                 html: `
@@ -380,6 +382,8 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
                     </ul>
                     <br>
                     <p>またのご利用をお待ちしております。</p>
+                    <br>
+                    <p style="font-size: 12px; color: #777;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p>
                     <br><hr><p>湘南東部病院 予約センター</p>
                 `
             };

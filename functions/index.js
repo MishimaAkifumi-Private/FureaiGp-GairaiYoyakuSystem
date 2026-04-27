@@ -70,6 +70,7 @@ exports.sendTestMail = functions.https.onRequest(async (req, res) => {
 
   const mailOptions = {
     from: `"ふれあいグループ 湘南東部病院予約センター" <${config.user}@fureai-g.or.jp>`,
+    replyTo: "no-reply@fureai-g.or.jp",
     to: to,
     subject: "【疎通テスト】Firebase Functions -> Kagoya SMTP",
     text: `このメールは、共通基盤/Mailerモジュールを使用して送信されています。\n送信時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
@@ -125,7 +126,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
     let textBody = ""; // テキストメール用変数を追加
     
     const headerHtml = `<p>${recipientName} 様</p><p>当病院をご利用いただきありがとうございます。</p>`;
-    const footerHtml = `<br><hr><p>ふれあいグループ 湘南東部病院予約センター</p>`;
+    const footerHtml = `<br><p style="font-size: 12px; color: #777;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p><hr><p>ふれあいグループ 湘南東部病院予約センター</p>`;
 
     // ボタン表示用HTML (インラインスタイル)
     const btnHtml = `
@@ -137,7 +138,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
 
     // テキストメール用ヘッダー・フッター
     const headerText = `${recipientName} 様\n\n当病院をご利用いただきありがとうございます。\n`;
-    const footerText = `\n\n--------------------------------------------------\nふれあいグループ 湘南東部病院予約センター`;
+    const footerText = `\n\n※本メールは送信専用アドレスから配信されています。\nご返信いただいてもお答えできませんのでご了承ください。\n--------------------------------------------------\nふれあいグループ 湘南東部病院予約センター`;
 
     switch (data.type) {
       case "初診":
@@ -203,6 +204,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
 
     const mailOptions = {
       from: `"ふれあいグループ 湘南東部病院予約センター" <${config.user}@fureai-g.or.jp>`,
+      replyTo: "no-reply@fureai-g.or.jp",
       to: data.to,
       subject: subject,
       html: htmlBody,

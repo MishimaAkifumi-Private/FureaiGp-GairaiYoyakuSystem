@@ -30,6 +30,14 @@
         isPastTime
     } = window.RcbUI;
 
+    // ★追加: no-replyフッターの共通HTML
+    // ★修正: 実際のメール送信（Functions側）とタグ構成・余白を合わせた共通フッターHTML
+    const NO_REPLY_FOOTER_HTML = `
+        <p style="font-size: 12px; color: #777; margin-bottom: 10px;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p>
+        <hr style="border:0; border-top:1px solid #ccc; margin: 10px 0;">
+        <p style="margin-top: 10px; margin-bottom: 0;">ふれあいグループ 湘南東部病院予約センター</p>
+    `;
+
     // 直前キャンセル判定用の共通関数
     const getUpdatedCommonEvalWithCancel = (baseEvalList, resDateStr, cancelDateVal = null) => {
         let evals = Array.isArray(baseEvalList) ? [...baseEvalList] : [];
@@ -466,6 +474,7 @@
             ${message ? `<br>${message.replace(/\n/g, '<br>')}<br>` : ''}
             <br>
             本メールは手続き完了の通知のみとなります。別途お手続きは不要です。 お大事になさってください。
+            ${NO_REPLY_FOOTER_HTML}
           `;
 
           const confirmMsg = `
@@ -473,6 +482,7 @@
             <div class="rcb-confirm-box" style="padding: 0; overflow: hidden; border: 1px solid #ccc;">
               <div style="background: #f5f5f5; padding: 10px; border-bottom: 1px solid #ddd; font-size: 12px; text-align: left;">
                 <div style="margin-bottom: 4px;"><strong>To:</strong> ${fullName} 様 (${email})</div>
+                <div style="margin-bottom: 4px;"><strong>Reply-To:</strong> no-reply@fureai-g.or.jp</div>
                 <div><strong>Subject:</strong> 【予約取消】診療予約の取消しについて</div>
               </div>
               <div style="padding: 15px; background: #fff; font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #333; text-align: left; max-height: 300px; overflow-y: auto;">
@@ -673,10 +683,8 @@
             <br>
             当病院をご利用いただきありがとうございます。<br>
             <br>
-            ${bodyContent}<br>
-            <br>
-            <hr style="border:0; border-top:1px solid #ccc;">
-            ふれあいグループ 湘南東部病院予約センター
+            ${bodyContent}
+            ${NO_REPLY_FOOTER_HTML}
           `;
 
           const targetStatus = (effectiveMethod === 'phone') ? CONFIG.STATUS_PHONE_VALUE : CONFIG.STATUS_SENT_VALUE;
@@ -686,6 +694,7 @@
             <div class="rcb-confirm-box" style="padding: 0; overflow: hidden; border: 1px solid #ccc;">
               <div style="background: #f5f5f5; padding: 10px; border-bottom: 1px solid #ddd; font-size: 12px; text-align: left;">
                 <div style="margin-bottom: 4px;"><strong>To:</strong> ${fullName} 様 (${email})</div>
+                <div style="margin-bottom: 4px;"><strong>Reply-To:</strong> no-reply@fureai-g.or.jp</div>
                 <div><strong>Subject:</strong> ${subject}</div>
               </div>
               <div style="padding: 15px; background: #fff; font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #333; text-align: left; max-height: 300px; overflow-y: auto;">
