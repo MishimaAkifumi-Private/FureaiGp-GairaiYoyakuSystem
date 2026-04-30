@@ -400,6 +400,10 @@
                     const fullRecord = allRecordsCache.find(r => r.$id.value === record.$id.value);
                     if (fullRecord) {
                         row.onclick = (e) => {
+                            // 詳細画面（編集画面）へのリンク列がクリックされた場合はポップアップを表示しない
+                            if (e.target.closest('.recordlist-action-gaia')) {
+                                return;
+                            }
                             // ツールチップ表示用に _scheduleInfo を構築
                             fullRecord._scheduleInfo = buildScheduleInfo(fullRecord, commonSettings ? commonSettings.facilities : []);
                             const tip = getTooltipElement();

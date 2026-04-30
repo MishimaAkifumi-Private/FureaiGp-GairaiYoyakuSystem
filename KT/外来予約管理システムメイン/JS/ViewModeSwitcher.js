@@ -6,7 +6,7 @@
   'use strict';
   console.log('ViewModeSwitcher.js: Loading...');
 
-  const APP_VERSION = '0.91'; // システムのバージョン番号
+  const APP_VERSION = '0.92'; // システムのバージョン番号
 
   function getUrlParam(name) {
     const url = window.location.href;
@@ -286,13 +286,15 @@
              if (hideStyle) hideStyle.remove();
 
              // 既存の絞り込み・集計ボタンを非表示にする
+             // 既存の絞り込み・集計ボタン、および一覧選択を非表示にする
              const INPUT_HIDE_STYLE_ID = 'kintone-input-hide-style';
              if (!document.getElementById(INPUT_HIDE_STYLE_ID)) {
                  const inputHideStyle = document.createElement('style');
                  inputHideStyle.id = INPUT_HIDE_STYLE_ID;
                  inputHideStyle.textContent = `
-                     .gaia-argoui-app-filterbutton,
-                     .gaia-argoui-app-subtotalbutton {
+                     .gaia-argoui-app-toolbar > .gaia-argoui-app-viewtoggle,
+                     .gaia-argoui-app-toolbar > .gaia-argoui-app-filterbutton,
+                     .gaia-argoui-app-toolbar > .gaia-argoui-app-subtotalbutton {
                          display: none !important;
                      }
                  `;
@@ -319,23 +321,36 @@
              // ★ 追加: ページャー部分へのボタン配置 (Dashboard, 予約待ち受け状況)
              const pager = document.querySelector('.gaia-argoui-app-index-pager');
              if (pager) {
+                 pager.style.display = 'flex';
+                 pager.style.justifyContent = 'flex-start';
+                 pager.style.alignItems = 'center';
+                 pager.style.width = '100%';
+                 pager.style.float = 'none';
+                 pager.style.gap = '15px';
+
+                 const pagerContent = document.querySelector('.gaia-argoui-app-index-pager-content');
+                 if (pagerContent) {
+                     pagerContent.style.marginLeft = 'auto';
+                     pagerContent.style.float = 'none';
+                 }
+
                  const btnContainer = document.createElement('div');
-                 btnContainer.style.float = 'left';
-                 btnContainer.style.display = 'flex';
+                 btnContainer.id = 'custom-dashboard-icons';
+                 btnContainer.style.display = 'inline-flex';
                  btnContainer.style.gap = '10px';
-                 btnContainer.style.marginLeft = '10px';
                  btnContainer.style.alignItems = 'center';
+                 btnContainer.style.flexShrink = '0';
                  
                  // Dashboard Button
                  const btnDashboard = document.createElement('i');
                  btnDashboard.className = 'fa-solid fa-hospital';
                  btnDashboard.title = 'Dashboard';
-                 btnDashboard.style.fontSize = '35px';
+                 btnDashboard.style.fontSize = '28px';
                  btnDashboard.style.color = 'rgb(60, 147, 225)'; // ★変更: 指定色
                  btnDashboard.style.cursor = 'pointer';
                  btnDashboard.style.marginRight = '0px';
                  btnDashboard.style.marginLeft = '0px';
-                 btnDashboard.style.marginBottom = '5px';
+                 btnDashboard.style.marginBottom = '2px';
                  btnDashboard.onclick = () => location.href = '?view_mode=dashboard';
                  
                  // Overview Button
@@ -343,21 +358,16 @@
                  btnOverview.className = 'material-symbols-outlined';
                  btnOverview.textContent = '📅';
                  btnOverview.title = '予約待ち受け管理';
-                 btnOverview.style.fontSize = '35px';
+                 btnOverview.style.fontSize = '28px';
                  btnOverview.style.color = 'rgb(102, 102, 102)';
                  btnOverview.style.cursor = 'pointer';
-                 btnOverview.style.marginBottom = '12px';
+                 btnOverview.style.marginBottom = '6px';
                  btnOverview.onclick = () => location.href = '?view_mode=overview';
 
                  btnContainer.appendChild(btnDashboard);
                  btnContainer.appendChild(btnOverview);
 
-                 const resetBtn = document.getElementById('reset_order_button');
-                 if (resetBtn && resetBtn.parentNode === pager) {
-                     pager.insertBefore(btnContainer, resetBtn.nextSibling);
-                 } else {
-                     pager.insertBefore(btnContainer, pager.firstChild);
-                 }
+                 if (!document.getElementById('custom-dashboard-icons')) pager.insertBefore(btnContainer, pager.firstChild);
              }
 
         } else if (viewMode === 'overview') {
@@ -678,6 +688,7 @@
       const cards = [
           { title: '予約チケット管理', icon: '📬', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約変更/取消/初診の着信を管理、予約枠を確保して患者に返信します' },
           { title: '予約待ち受け管理', icon: '📅', url: '?view_mode=overview', target: '_self', desc: '個別医師の予定状況等から予約が受け付けられる選択肢を組み立てます' },
+          { title: '共通マスタ管理', icon: '🏢', action: () => showCenterRegistrationMenu(), desc: '予約センター基本設定や管轄施設などの管理を行います' },
           { title: '各種システム設定', icon: '🔐', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
       ];
 
@@ -1122,13 +1133,13 @@
       const { overlay, box, content } = createModalBase();
       
       const title = document.createElement('h2');
-      title.textContent = '予約センター登録';
+      title.textContent = '共通マスタ管理';
       title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
       content.appendChild(title);
 
       const menuList = [
-          { label: '予約センター名設定', icon: '🏷️', desc: 'ダッシュボードに表示するセンター名を設定します', action: () => { document.body.removeChild(overlay); showCenterNameInputDialog(); } },
-          { label: '管轄施設', icon: '🏥', desc: 'このセンターが管理する施設(最大5件)を登録します', action: () => { document.body.removeChild(overlay); showFacilitySettingDialog(); } },
+          { label: '予約センター基本設定', icon: '🏢', desc: 'センター名と電話番号を設定します', action: () => { document.body.removeChild(overlay); showCenterBasicSettingDialog(); } },
+          { label: '管轄施設', icon: '🏥', desc: '管轄する施設とデフォルトの診療科を登録します', action: () => { document.body.removeChild(overlay); showFacilitySettingDialog(); } },
       ];
 
       menuList.forEach(item => {
@@ -1248,33 +1259,65 @@
       document.body.appendChild(overlay);
   }
 
-  function showCenterNameInputDialog() {
-      const initialVal = localStorage.getItem('shinryo_center_name') || '湘南東部外来予約センター';
-      let inputEl;
+  async function showCenterBasicSettingDialog() {
+      let initialName = '湘南東部外来予約センター';
+      let initialPhone = '';
+      
+      if (window.ShinryoApp && window.ShinryoApp.ConfigManager) {
+          try {
+              const pubData = await window.ShinryoApp.ConfigManager.fetchPublishedData();
+              if (pubData && pubData.commonSettings) {
+                  if (pubData.commonSettings.centerName) initialName = pubData.commonSettings.centerName;
+                  if (pubData.commonSettings.phoneNumber) initialPhone = pubData.commonSettings.phoneNumber;
+              }
+          } catch(e) { console.warn(e); }
+      }
+      
+      // 旧ローカルストレージの値をフォールバックとして使用
+      if (initialName === '湘南東部外来予約センター' && localStorage.getItem('shinryo_center_name')) {
+          initialName = localStorage.getItem('shinryo_center_name');
+      }
+
+      let nameInputEl, phoneInputEl;
 
       const checkDirty = (action) => {
-          const currentVal = inputEl ? inputEl.value : initialVal;
-          const isDirty = currentVal !== initialVal;
+          const currentName = nameInputEl ? nameInputEl.value : initialName;
+          const currentPhone = phoneInputEl ? phoneInputEl.value : initialPhone;
+          const isDirty = currentName !== initialName || currentPhone !== initialPhone;
           checkDirtyAndConfirm(isDirty, action);
       };
 
       const { overlay, box, content } = createModalBase((doClose) => checkDirty(doClose));
       
       const title = document.createElement('h2');
-      title.textContent = '予約センター名の登録';
+      title.textContent = '予約センター基本設定';
       title.style.cssText = 'margin-top: 0; margin-bottom: 25px; font-size: 22px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; color: #2c3e50; font-weight: 700;';
       content.appendChild(title);
 
-      const desc = document.createElement('p');
-      desc.textContent = 'ダッシュボードに表示する予約センター名を入力してください。';
-      desc.style.cssText = 'text-align: left; font-size: 14px; color: #666; margin-bottom: 10px;';
-      content.appendChild(desc);
+      // センター名
+      const nameLabel = document.createElement('div');
+      nameLabel.textContent = '予約センター名 (必須)';
+      nameLabel.style.cssText = 'text-align: left; font-size: 14px; color: #555; font-weight: bold; margin-bottom: 5px;';
+      content.appendChild(nameLabel);
 
       const input = document.createElement('input');
-      inputEl = input;
+      nameInputEl = input;
       input.className = 'custom-modal-input';
-      input.value = initialVal;
+      input.value = initialName;
       content.appendChild(input);
+
+      // 電話番号
+      const phoneLabel = document.createElement('div');
+      phoneLabel.textContent = '電話番号 (メールに記載されます)';
+      phoneLabel.style.cssText = 'text-align: left; font-size: 14px; color: #555; font-weight: bold; margin-bottom: 5px;';
+      content.appendChild(phoneLabel);
+
+      const phoneInput = document.createElement('input');
+      phoneInputEl = phoneInput;
+      phoneInput.className = 'custom-modal-input';
+      phoneInput.value = initialPhone;
+      phoneInput.placeholder = '例: 0467-xx-xxxx';
+      content.appendChild(phoneInput);
 
       const btnGroup = document.createElement('div');
       btnGroup.className = 'custom-modal-btn-group';
@@ -1287,14 +1330,25 @@
       const saveBtn = document.createElement('button');
       saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
       saveBtn.textContent = '保存';
-      saveBtn.onclick = () => {
-          const val = input.value.trim();
-          if (val) {
-              localStorage.setItem('shinryo_center_name', val);
-              document.body.removeChild(overlay);
-              location.reload(); // 反映のためリロード
+      saveBtn.onclick = async () => {
+          const nameVal = input.value.trim();
+          const phoneVal = phoneInput.value.trim();
+          
+          if (nameVal) {
+              if (window.ShinryoApp && window.ShinryoApp.ConfigManager) {
+                  try {
+                      await window.ShinryoApp.ConfigManager.updateCommonCenterInfo(nameVal, phoneVal);
+                      localStorage.setItem('shinryo_center_name', nameVal); // 互換性維持
+                      await showCustomDialog('基本設定を保存しました。', 'alert');
+                      document.body.removeChild(overlay);
+                      location.reload();
+                  } catch(e) {
+                      await showCustomDialog('保存に失敗しました。\n' + e.message, 'alert');
+                  }
+              } else {
+                  await showCustomDialog('システム共通設定が見つかりません。', 'alert');
+              }
           } else {
-              // 簡易バリデーション（空の場合は保存しない）
               input.style.borderColor = 'red';
           }
       };
@@ -2701,37 +2755,99 @@
       }
   }
 
-  // ★追加: 詳細・編集画面へのナビゲーションボタン追加
-  kintone.events.on(['app.record.detail.show', 'app.record.edit.show'], function(event) {
-      const headerSpace = kintone.app.record.getHeaderMenuSpaceElement();
-      if (headerSpace && !document.getElementById('custom-nav-buttons')) {
-          const container = document.createElement('div');
-          container.id = 'custom-nav-buttons';
-          // ★修正: z-indexを追加してクリック可能にする (ヘッダー領域外へのはみ出し対策)
-          container.style.cssText = "float: left; display: flex; gap: 10px; margin-left: 10px; align-items: center; margin-top: 15px; margin-right: 40px; position: relative; z-index: 1000;";
+  // ★追加: 保存成功時に一覧画面(inputモード)へ戻る
+  kintone.events.on(['app.record.edit.submit.success', 'app.record.create.submit.success'], function(event) {
+      const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+      event.url = appRoot + '?view_mode=input';
+      return event;
+  });
+
+  // ★追加: 詳細画面は表示せず、一覧画面(inputモード)へ強制リダイレクトする
+  kintone.events.on('app.record.detail.show', function(event) {
+      const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+      // KintoneのSPA遷移による上書きを防ぐため、少し遅延させて確実に戻す
+      setTimeout(() => {
+          window.location.replace(appRoot + '?view_mode=input');
+      }, 100);
+      return event;
+  });
+
+  // ★追加: 編集画面のカスタマイズ (ボタン追加とキャンセル制御)
+  kintone.events.on(['app.record.edit.show', 'app.record.create.show'], function(event) {
+      // スクロール時に追従する固定メニュー（ツールバー）にボタンを挿入する
+      const insertButtons = () => {
+          if (document.getElementById('custom-nav-buttons')) return;
+
+          const editButtons = document.querySelector('.gaia-argoui-app-edit-buttons');
           
-          // ★修正: アプリルートURLを動的に生成 (絶対パス化して確実に遷移させる)
-          const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+          let targetSpace = null;
+          let insertBeforeNode = null;
 
-          const btnDashboard = document.createElement('i');
-          btnDashboard.className = 'fa-solid fa-hospital';
-          btnDashboard.title = 'Dashboard';
-          btnDashboard.style.cssText = "font-size: 35px; color: rgb(60, 147, 225); cursor: pointer; margin-right:0px; margin-left: 0px; margin-bottom: 5px;"; // ★変更: 指定色
-          // 詳細・編集画面(show/edit)からは階層を一つ上がって一覧へ遷移
-          btnDashboard.onclick = () => window.location.href = appRoot + '?view_mode=dashboard';
+          if (editButtons) {
+              // 編集画面: 保存・キャンセルボタンと同じ領域の先頭に配置
+              targetSpace = editButtons;
+              insertBeforeNode = editButtons.firstChild;
+              
+              // ★追加: キャンセルボタンの挙動を上書きし、強制的に一覧へ戻す
+              const cancelBtn = editButtons.querySelector('.gaia-ui-actionmenu-cancel');
+              if (cancelBtn && !cancelBtn.dataset.hijacked) {
+                  cancelBtn.dataset.hijacked = 'true';
+                  cancelBtn.addEventListener('click', function(e) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+                      window.location.replace(appRoot + '?view_mode=input');
+                  }, true);
+              }
+          } else {
+              // フォールバック
+              targetSpace = kintone.app.record.getHeaderMenuSpaceElement();
+          }
 
-          const btnOverview = document.createElement('span');
-          btnOverview.className = 'material-symbols-outlined';
-          btnOverview.textContent = '📅';
-          btnOverview.title = '予約待ち受け管理';
-          btnOverview.style.cssText = "font-size: 35px; color: rgb(102, 102, 102); cursor: pointer; margin-bottom: 12px;";
-          btnOverview.onclick = () => window.location.href = appRoot + '?view_mode=overview';
-
-          container.appendChild(btnDashboard);
-          container.appendChild(btnOverview);
+          if (targetSpace) {
+              const container = document.createElement('div');
+              container.id = 'custom-nav-buttons';
+              
+              if (editButtons) {
+                  // ツールバー内に配置する際のスタイル（追従メニューに馴染むように調整）
+                  container.style.cssText = "display: inline-flex; vertical-align: top; gap: 15px; margin-left: 15px; margin-right: 20px; align-items: center; position: relative; z-index: 1000;";
+              } else {
+                  // フォールバック時のスタイル
+                  container.style.cssText = "float: left; display: flex; gap: 10px; margin-left: 10px; align-items: center; margin-top: 15px; margin-right: 40px; position: relative; z-index: 1000;";
+              }
           
-          headerSpace.appendChild(container);
-      }
+              // ★修正: アプリルートURLを動的に生成 (絶対パス化して確実に遷移させる)
+              const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+
+              const btnDashboard = document.createElement('i');
+              btnDashboard.className = 'fa-solid fa-hospital';
+              btnDashboard.title = 'Dashboard';
+              btnDashboard.style.cssText = "font-size: 45px; color: rgb(60, 147, 225); cursor: pointer; margin: 0; line-height: 1;";
+              // 詳細・編集画面(show/edit)からは階層を一つ上がって一覧へ遷移
+              btnDashboard.onclick = () => window.location.href = appRoot + '?view_mode=dashboard';
+
+              const btnOverview = document.createElement('span');
+              btnOverview.className = 'material-symbols-outlined';
+              btnOverview.textContent = '📅';
+              btnOverview.title = '予約待ち受け管理';
+              btnOverview.style.cssText = "font-size: 45px; color: rgb(102, 102, 102); cursor: pointer; margin: 0; line-height: 1; position: relative; top: -5px;";
+              btnOverview.onclick = () => window.location.href = appRoot + '?view_mode=overview';
+
+              container.appendChild(btnDashboard);
+              container.appendChild(btnOverview);
+          
+              if (insertBeforeNode) {
+                  targetSpace.insertBefore(container, insertBeforeNode);
+              } else {
+                  targetSpace.appendChild(container);
+              }
+          }
+      };
+
+      // DOM構築タイミングのズレに対応するため、直後と少し遅延させて実行する
+      insertButtons();
+      setTimeout(insertButtons, 200);
+
       return event;
   });
 

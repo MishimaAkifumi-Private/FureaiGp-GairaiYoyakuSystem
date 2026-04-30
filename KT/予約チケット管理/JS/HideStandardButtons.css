@@ -1,0 +1,12 @@
+/* Kintone標準のボタン類を完全に非表示にするCSS */
+.gaia-argoui-app-menu-add,
+.gaia-argoui-app-menu-copy,
+.sidebar-tab-comments-gaia,
+.sidebar-tab-history-gaia,
+.gaia-argoui-app-infobar-iconlist,
+.gaia-argoui-app-subtotalbutton,
+.gaia-argoui-optionmenubutton,
+.gaia-argoui-app-viewtoggle,
+.gaia-argoui-app-filterbutton {
+  display: none !important;
+}

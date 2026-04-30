@@ -71,6 +71,19 @@
         },
 
         /**
+         * 共通設定（予約センター情報）を更新する
+         * @param {string} centerName センター名
+         * @param {string} phoneNumber 電話番号
+         */
+        updateCommonCenterInfo: async function(centerName, phoneNumber) {
+            const data = await this.fetchPublishedData();
+            data.commonSettings = data.commonSettings || {};
+            data.commonSettings.centerName = centerName;
+            data.commonSettings.phoneNumber = phoneNumber;
+            await this._saveToKintone(data);
+        },
+
+        /**
          * 共通設定（施設リスト等）を更新する
          * @param {Array} newFacilities 施設オブジェクトの配列
          */

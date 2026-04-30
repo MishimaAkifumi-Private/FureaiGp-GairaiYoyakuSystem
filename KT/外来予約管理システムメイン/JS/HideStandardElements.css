@@ -1,0 +1,6 @@
+/* ちらつき防止のため、Kintone標準の不要な要素をCSSで優先的に非表示にします */
+.gaia-argoui-app-toolbar > .gaia-argoui-app-viewtoggle,
+.gaia-argoui-app-toolbar > .gaia-argoui-app-filterbutton,
+.gaia-argoui-app-toolbar > .gaia-argoui-app-subtotalbutton {
+    display: none !important;
+}
