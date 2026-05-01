@@ -2030,25 +2030,25 @@
             noReconfigBtn.style.lineHeight = '1.2';
 
             noReconfigBtn.onclick = async () => {
-                const actionReason = await showDialog('この操作により、この予約チケットは破棄され、申込者はすぐに新たな予約ができるようになります。\n\n破棄の理由を入力してください。', 'prompt', 'チケットの破棄', '破棄の理由（必須）', '破棄する', 'キャンセル', '電カル側の予約枠を解除しました。');
-                if (actionReason === null) return;
-                if (actionReason.trim() === '') {
-                    alert('破棄の理由を入力してください。');
-                    return;
-                }
+                const isDiscardOk = await showDialog('この操作により、この予約チケットは破棄され、申込者はすぐに新たな予約ができるようになります。\n本当によろしいですか？', 'confirm', 'チケットの破棄', '', '破棄する', 'キャンセル', '電カル側の予約枠を解除しました。');
+                if (!isDiscardOk) return;
 
-                const initialData = { common: currentCommonEval, memo: currentMemo };
-                const evalData = await showEvaluationDialog('', '申込者の特徴', currentMethod, initialData, null, 'OK', null);
-                
                 const payload = { 
                     'ReserveLock': { value: 'unlock' },
                     [CONFIG.FIELDS.STATUS]: { value: '終了' }
                 };
 
-                if (evalData) {
-                    payload['共通評価'] = { value: evalData.common };
-                    payload['人物メモ'] = { value: evalData.memo };
+                const hasPhoneContact = !!phoneDateVal || currentMethod === 'phone';
+                if (hasPhoneContact) {
+                    const initialData = { common: currentCommonEval, memo: currentMemo };
+                    const evalMessage = '次回に同じ方が申し込まれたときの対応方法の参考情報として役立てられます。';
+                    const evalData = await showEvaluationDialog(evalMessage, '申込者（患者等）', currentMethod, initialData, null, 'OK', null);
+                    if (evalData) {
+                        payload['共通評価'] = { value: evalData.common };
+                        payload['人物メモ'] = { value: evalData.memo };
+                    }
                 }
+
                 const success = await updateRecord(recordId, payload, [], false, false, '');
                 if (success) location.reload();
             };
