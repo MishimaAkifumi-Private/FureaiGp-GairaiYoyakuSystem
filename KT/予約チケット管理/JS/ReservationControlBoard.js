@@ -30,13 +30,18 @@
         isPastTime
     } = window.RcbUI;
 
-    // ★追加: no-replyフッターの共通HTML
-    // ★修正: 実際のメール送信（Functions側）とタグ構成・余白を合わせた共通フッターHTML
-    const NO_REPLY_FOOTER_HTML = `
-        <p style="font-size: 12px; color: #777; margin-bottom: 10px;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p>
-        <hr style="border:0; border-top:1px solid #ccc; margin: 10px 0;">
-        <p style="margin-top: 10px; margin-bottom: 0;">ふれあいグループ 湘南東部病院予約センター</p>
-    `;
+    // 予約センター情報を動的に反映するためのオブジェクト
+    let centerInfo = { centerName: 'ふれあいグループ 湘南東部病院予約センター', phoneNumber: '' };
+
+    // no-replyフッターの共通HTML生成関数
+    const getNoReplyFooterHtml = () => {
+        const phoneHtml = centerInfo.phoneNumber ? `<br>TEL: ${centerInfo.phoneNumber}` : '';
+        return `
+            <p style="font-size: 12px; color: #777; margin-bottom: 10px;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p>
+            <hr style="border:0; border-top:1px solid #ccc; margin: 10px 0;">
+            <p style="margin-top: 10px; margin-bottom: 0;">${centerInfo.centerName}${phoneHtml}</p>
+        `;
+    };
 
     // 直前キャンセル判定用の共通関数
     const getUpdatedCommonEvalWithCancel = (baseEvalList, resDateStr, cancelDateVal = null) => {
@@ -474,7 +479,7 @@
             ${message ? `<br>${message.replace(/\n/g, '<br>')}<br>` : ''}
             <br>
             本メールは手続き完了の通知のみとなります。別途お手続きは不要です。 お大事になさってください。
-            ${NO_REPLY_FOOTER_HTML}
+            ${getNoReplyFooterHtml()}
           `;
 
           const confirmMsg = `
@@ -509,8 +514,10 @@
               reservationDate: formatToJapaneseDate(targetDate),
               reservationTime: targetTime,
               department: dept,
-              url: '', // URLなし
-              message: message // 追加メッセージ
+              url: '',
+              message: message,
+              centerName: centerInfo.centerName,
+              phoneNumber: centerInfo.phoneNumber
             };
 
             const [respBody, respStatus] = await kintone.proxy(CONFIG.API_URL, 'POST', { 'Content-Type': 'application/json' }, JSON.stringify(payload));
@@ -636,7 +643,8 @@
                 </div>
 
                 <div class="footer">
-                  <div class="footer-signature">ふれあいグループ 湘南東部病院予約センター</div>
+                  <div class="footer-signature">${centerInfo.centerName}</div>
+                  ${centerInfo.phoneNumber ? `<div style="font-size: 13px; color: #555; margin-bottom: 8px;">TEL: ${centerInfo.phoneNumber}</div>` : ''}
                 </div>
               </div>
               <div style="text-align: center; margin-top: 25px;">
@@ -684,7 +692,7 @@
             当病院をご利用いただきありがとうございます。<br>
             <br>
             ${bodyContent}
-            ${NO_REPLY_FOOTER_HTML}
+            ${getNoReplyFooterHtml()}
           `;
 
           const targetStatus = (effectiveMethod === 'phone') ? CONFIG.STATUS_PHONE_VALUE : CONFIG.STATUS_SENT_VALUE;
@@ -728,7 +736,9 @@
               reservationDate: targetDate,
               reservationTime: targetTime,
               department: dept,
-              url: targetUrl
+              url: targetUrl,
+              centerName: centerInfo.centerName,
+              phoneNumber: centerInfo.phoneNumber
             };
 
             const [respBody, respStatus] = await kintone.proxy(CONFIG.API_URL, 'POST', { 'Content-Type': 'application/json' }, JSON.stringify(payload));
@@ -2340,14 +2350,48 @@
       }
 
       const spaceElement = kintone.app.record.getSpaceElement(CONFIG.SPACE_ID);
-      
-      // 担当者判定: レコードの担当者と、端末の利用者が一致する場合のみ表示
       const recordStaff = event.record[CONFIG.FIELDS.STAFF]?.value;
       const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey');
 
+      // ★追加: 予約センター基本設定の取得 (ConfigManagerに依存せず直接取得)
+      const fetchCenterInfo = async () => {
+          const STORAGE_APP_ID = 200;
+          const STORAGE_API_TOKEN = 'qGQAy2d3TcicQ8t73Oknv5BZU7gGO9aBvhAD9aY8';
+          const myMainAppId = '156'; // 設定が保存されているメインアプリのID
+
+          const query = `AppID = "${myMainAppId}" limit 1`;
+          const apiPath = kintone.api.url('/k/v1/records', true);
+          const baseUrl = /^https?:\/\//.test(apiPath) ? apiPath : window.location.origin + apiPath;
+          const url = baseUrl + `?app=${STORAGE_APP_ID}&query=${encodeURIComponent(query)}&_t=${new Date().getTime()}`;
+          const headers = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN };
+
+          try {
+              const [body, status] = await kintone.proxy(url, 'GET', headers, {});
+              if (status === 200) {
+                  const resp = JSON.parse(body);
+                  if (resp.records.length > 0) {
+                      // 設定情報2（プレビュー）ではなく本番設定（設定情報）を優先して取得する
+                      const jsonStr = resp.records[0]['設定情報']?.value || resp.records[0]['設定情報2']?.value;
+                      if (jsonStr) {
+                          const data = JSON.parse(jsonStr);
+                          if (data.commonSettings) {
+                              if (data.commonSettings.centerName) centerInfo.centerName = data.commonSettings.centerName;
+                              if (data.commonSettings.phoneNumber) centerInfo.phoneNumber = data.commonSettings.phoneNumber;
+                          }
+                      }
+                  }
+              }
+          } catch (e) {
+              console.warn("Failed to fetch center info", e);
+          }
+      };
+      
       if (spaceElement) {
-        // 常にボードを描画 (内部で担当者判定してコンテンツを出し分け)
-        renderBoard(spaceElement, event.record);
+        // ★修正: 取得完了を待ってから描画する
+        spaceElement.innerHTML = '<div style="text-align:center; padding: 20px;">読込中...</div>';
+        fetchCenterInfo().then(() => {
+            renderBoard(spaceElement, event.record);
+        });
       }
       
       // アクションボタン (TicketResetスペースに設置)

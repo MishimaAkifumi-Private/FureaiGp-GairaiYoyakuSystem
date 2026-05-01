@@ -207,7 +207,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
 exports.confirmReservation = functions.https.onRequest(async (req, res) => {
   console.log("--- [confirmReservation] Execution Started ---");
 
-  // CORS設定 (POSTリクエストを受け付けるため)
+  // CORS設定
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type');
@@ -233,7 +233,9 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
   // クエリパラメータの取得 (?id=xxx)
   let recordId = req.query.id || req.body.id;
   const token = req.query.token; // トークン取得
-  
+  let mode = req.query.mode; // URLパラメータがあれば優先
+  let centerName = req.query.cn || req.body.cn || "ふれあいグループ 湘南東部病院予約センター";
+  let phoneNumber = req.query.tel || req.body.tel || "";
 
   // --- Kintone API 設定 ---
   // 環境変数から設定を取得 (デフォルト値は既存環境に合わせています)
@@ -242,6 +244,56 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
   const API_TOKEN = process.env.KINTONE_API_TOKEN || "lzGrrquqznrH0cpPIzmzvLKdn4PhyebSRyYKMxSE";
   const SUBDOMAIN = process.env.KINTONE_SUBDOMAIN || "w60013hke2ct";
   const BASE_URI = `https://${SUBDOMAIN}.cybozu.com/k/guest/${GUEST_SPACE_ID}/v1`;
+
+  // --- 設定アプリ(App200)からセンター情報を取得 ---
+  try {
+    const SETTING_APP_ID = "200";
+    const MAIN_APP_ID = "156";
+    const SETTING_API_TOKEN = "qGQAy2d3TcicQ8t73Oknv5BZU7gGO9aBvhAD9aY8";
+    const settingUri = `${BASE_URI}/records.json?app=${SETTING_APP_ID}&query=${encodeURIComponent(`AppID="${MAIN_APP_ID}" limit 1`)}`;
+    
+    console.log(`[LOG] Fetching center info from App 200...`);
+    const settingResp = await fetch(settingUri, {
+        method: "GET",
+        headers: { "X-Cybozu-API-Token": SETTING_API_TOKEN }
+    });
+    console.log(`[LOG] App 200 Fetch Status: ${settingResp.status}`);
+
+    if (settingResp.ok) {
+        const settingData = await settingResp.json();
+        console.log(`[LOG] App 200 Records: ${settingData.records?.length}`);
+        if (settingData.records && settingData.records.length > 0) {
+            const prodJson = settingData.records[0]['設定情報']?.value;
+            const prevJson = settingData.records[0]['設定情報2']?.value;
+            
+            console.log(`[LOG] 設定情報(Prod) length: ${prodJson?.length || 0}`);
+            console.log(`[LOG] 設定情報2(Prev) length: ${prevJson?.length || 0}`);
+            
+            let jsonStr = prodJson;
+            if (!jsonStr || jsonStr.length < 10) {
+                jsonStr = prevJson;
+                console.log(`[LOG] Using 設定情報2 (preview)`);
+            } else {
+                console.log(`[LOG] Using 設定情報 (production)`);
+            }
+
+            if (jsonStr) {
+                const parsed = JSON.parse(jsonStr);
+                if (parsed.commonSettings) {
+                    if (parsed.commonSettings.centerName) centerName = parsed.commonSettings.centerName;
+                    if (parsed.commonSettings.phoneNumber) phoneNumber = parsed.commonSettings.phoneNumber;
+                    console.log(`[LOG] Extracted -> centerName: ${centerName}, phoneNumber: ${phoneNumber}`);
+                } else {
+                    console.log(`[LOG] commonSettings is missing in JSON.`);
+                }
+            }
+        }
+    } else {
+        console.error(`[ERROR] App 200 Fetch Error: ${await settingResp.text()}`);
+    }
+  } catch (e) {
+      console.warn("[WARN] Failed to fetch common settings from App 200", e);
+  }
 
   // IDがなくトークンがある場合、トークンからレコードIDを検索・特定する
   if (!recordId && token) {
@@ -309,7 +361,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             value: {
                 "経過情報_日時": { value: getJSTFormattedDate() },
                 "経過情報_担当者": { value: currentStaff },
-                "経過情報_管理状態": { value: "キャンセル" }
+                "経過情報_管理状態": { value: "URL取下" }
             }
         });
 
@@ -318,10 +370,10 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             app: APP_ID,
             id: recordId,
             record: {
-                "管理状況": { value: "キャンセル" },
+                "管理状況": { value: "URL取下" },
                 "キャンセル日時": { value: nowISO },
                 "キャンセル実行者": { value: "本人" },
-                "ReserveLock": { value: "unlock" },
+                "ReserveLock": { value: "unlock" }, // ★追加: URL取下(キャンセル)時はunlock
                 "経過情報": { value: currentHistories }
             }
         };
@@ -340,54 +392,17 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             throw new Error(`Kintone Update Failed (Cancel): ${errText}`);
         }
 
-        // キャンセル完了メール送信
-        const email = (record["メールアドレス"] && record["メールアドレス"].value) || "";
-        const lastName = (record["姓漢字"] && record["姓漢字"].value) || "";
-        const firstName = (record["名漢字"] && record["名漢字"].value) || "";
-        const name = lastName + " " + firstName;
-
-        // 予約情報のフォーマット（メール本文用）
-        const resTime = (record["確定予約時刻"] && record["確定予約時刻"].value) || "";
-        let dept = (record["診療科"] && record["診療科"].value) || "-";
-        if (dept.includes('/')) {
-            const parts = dept.split('/');
-            dept = parts[parts.length - 1].trim();
+        // URL取下完了画面へ (メール送信はしない)
+        if (action === 'cancel') {
+            res.status(200).send(getWithdrawnHtml());
+            return;
         }
-        let formattedDate = (record["確定予約日"] && record["確定予約日"].value) || "未定";
-        if (record["確定予約日"] && record["確定予約日"].value) {
-            try {
-                const d = new Date(record["確定予約日"].value);
-                formattedDate = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', {
-                    era: 'long', year: 'numeric', month: 'long', day: 'numeric'
-                }).format(d);
-            } catch (e) { /* ignore */ }
-        }
-        const dateTimeStr = `${formattedDate} ${resTime}`;
 
-        if (email) {
-            const mailOptions = {
-                from: `"予約センター" <${config.user}@fureai-g.or.jp>`,
-                replyTo: "no-reply@fureai-g.or.jp",
-                to: email,
-                subject: "【予約キャンセル完了】診療予約のキャンセルについて",
-                html: `
-                    <p>${name} 様</p>
-                    <p>いつもご利用ありがとうございます。</p>
-                    <p>ご依頼いただきました以下の診療予約のキャンセル手続きが完了いたしました。</p>
-                    <br>
-                    <p><strong>【キャンセルされた予約】</strong></p>
-                    <ul>
-                        <li>日時: ${dateTimeStr}</li>
-                        <li>診療科: ${dept}</li>
-                    </ul>
-                    <br>
-                    <p>またのご利用をお待ちしております。</p>
-                    <br>
-                    <p style="font-size: 12px; color: #777;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p>
-                    <br><hr><p>湘南東部病院 予約センター</p>
-                `
-            };
-            await sendMailCore(mailOptions);
+        // タイムアウトキャンセルならWEBフォームへリダイレクト
+        if (action === 'cancel_timeout') {
+            const formUrl = "https://93ac276f.form.kintoneapp.com/waiting/?_formCode=34f65f5aac95cf65e480602f89cf3846c2dfd4345bc2b4cb05d97a20dea6c46d";
+            res.redirect(formUrl);
+            return;
         }
 
         res.status(200).send(getCancellationCompletedHtml());
@@ -430,7 +445,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             throw new Error(`Kintone Update Failed (ReRequest): ${errText}`);
         }
 
-        res.status(200).send(getReRequestCompletedHtml());
+        res.status(200).send(getReRequestCompletedHtml(centerName, phoneNumber));
         return;
       }
     }
@@ -440,10 +455,9 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     // ---------------------------------------------------------
     
     // 0.5 トークン検証 (URL再利用防止)
-    // レコードにトークンが設定されている場合、クエリのトークンと一致しなければ無効とする
-    if (recordUrlToken !== (token || "")) {
+    if (recordUrlToken && recordUrlToken !== token) {
         console.warn(`[WARN] Token Mismatch: Record='${recordUrlToken}', Query='${token}'`);
-        res.status(200).send(getAlreadyCancelledHtml());
+        res.status(200).send(getExpiredHtml());
         return;
     }
 
@@ -451,6 +465,131 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     if (currentStatus === "キャンセル" || currentStatus === "URL取下" || currentStatus === "スタッフ取下" || currentStatus === "終了" || currentStatus === "担当設定") {
         res.status(200).send(getAlreadyCancelledHtml());
         return;
+    }
+
+    // 2. 既読日時の更新
+    // 有効なURLで、かつ未読の場合のみアクセスがあった時点で既読日時を記録する
+    if (!mailReadDate) {
+        const nowISO = new Date().toISOString();
+        const currentHistories = record["経過情報"]?.value || [];
+        const updateBody = {
+            app: APP_ID,
+            id: recordId,
+            record: {
+                "メール既読日時": { value: nowISO }
+            }
+        };
+        
+        // ステータス更新判定
+        // 以下のステータスの場合は、ステータス自体は変更せず既読日時のみ記録する
+        const keepStatusList = ["閲覧期限切れ", "電話合意済", "完了", "メール既読", "メール合意済"];
+        
+        // ステータスが上記以外（主に「メール送信済」）の場合のみ「メール既読」に変更
+        if (!keepStatusList.includes(currentStatus)) {
+            updateBody.record["管理状況"] = { value: "メール既読" };
+            currentHistories.push({
+                value: {
+                    "経過情報_日時": { value: getJSTFormattedDate() },
+                    "経過情報_担当者": { value: currentStaff },
+                    "経過情報_管理状態": { value: "メール既読" }
+                }
+            });
+            updateBody.record["経過情報"] = { value: currentHistories };
+        }
+
+        try {
+            const updateResponse = await fetch(`${BASE_URI}/record.json`, {
+                method: "PUT",
+                headers: { "X-Cybozu-API-Token": API_TOKEN, "Content-Type": "application/json" },
+                body: JSON.stringify(updateBody)
+            });
+            if (!updateResponse.ok) console.error(`[ERROR] 既読更新失敗: ${await updateResponse.text()}`);
+        } catch (e) { console.error(`[ERROR] 既読更新エラー:`, e); }
+    }
+
+    // 1.2 再依頼済みの場合
+    if (currentStatus === "申込者再依頼") {
+        res.status(200).send(getReRequestProcessingHtml());
+        return;
+    }
+
+    // 1.5 タイムアウト判定
+    // ステータスが「閲覧期限切れ」の場合、または期限切れの場合
+    if (currentStatus === "閲覧期限切れ") {
+        // 日付判定 (日本時間で当日中かどうか)
+        const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric' });
+        const sendDateStr = sendDateVal ? fmt.format(new Date(sendDateVal)) : "";
+        const nowDateStr = fmt.format(new Date());
+
+        if (sendDateStr === nowDateStr) {
+            // 当日中なら再依頼ボタンを表示
+            res.status(200).send(getTimeoutRetryHtml(recordId));
+        } else {
+            // 翌日以降ならフォーム誘導
+            res.status(200).send(getTimeoutHtml());
+        }
+        return;
+    }
+
+    if (sendDateVal && !mailReadDate) {
+        let isTimedOut = false;
+        const sentTime = new Date(sendDateVal);
+        const now = new Date();
+
+        if (timeoutVal === '今日中') {
+            const endOfToday = new Date(sentTime);
+            endOfToday.setHours(23, 59, 59, 999);
+            if (now > endOfToday) isTimedOut = true;
+        } else if (timeoutVal === '明日中') {
+            const endOfTomorrow = new Date(sentTime);
+            endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
+            endOfTomorrow.setHours(23, 59, 59, 999);
+            if (now > endOfTomorrow) isTimedOut = true;
+        } else {
+            let timeoutHours = 2; // デフォルト
+            const match = timeoutVal.match(/(\d+)/);
+            if (match) {
+                const num = parseInt(match[1], 10);
+                if (timeoutVal.includes('分')) {
+                    timeoutHours = num / 60;
+                } else { // 時間と仮定
+                    timeoutHours = num;
+                }
+            }
+            const diffHours = (now.getTime() - sentTime.getTime()) / (1000 * 60 * 60);
+            if (diffHours >= timeoutHours) isTimedOut = true;
+        }
+
+        if (isTimedOut) {
+            const currentHistories = record["経過情報"]?.value || [];
+            currentHistories.push({
+                value: {
+                    "経過情報_日時": { value: getJSTFormattedDate() },
+                    "経過情報_担当者": { value: currentStaff },
+                    "経過情報_管理状態": { value: "閲覧期限切れ" }
+                }
+            });
+
+            // タイムアウト発生: ステータスを更新してエラー画面へ
+            const updateBody = {
+                app: APP_ID,
+                id: recordId,
+                record: {
+                    "管理状況": { value: "閲覧期限切れ" },
+                    "経過情報": { value: currentHistories }
+                }
+            };
+            await fetch(`${BASE_URI}/record.json`, {
+                method: "PUT",
+                headers: {
+                    "X-Cybozu-API-Token": API_TOKEN,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(updateBody)
+            });
+            res.status(200).send(getTimeoutHtml());
+            return;
+        }
     }
 
     // 2. 既読日時の更新 (未読の場合、または電話調整済みだがメールリンクを初めて踏んだ場合)
@@ -501,12 +640,12 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     const isPhoneConfirmed = !!phoneConfirmDate;
     const showCancel = isAlreadyRead || isPhoneConfirmed;
 
-    const html = getConfirmedHtml(record, recordId, showCancel);
+    const html = getConfirmedHtml(record, recordId, showCancel, null, centerName, phoneNumber);
     res.status(200).send(html);
 
   } catch (error) {
     console.error(`[CRITICAL ERROR] confirmReservation failed:`, error);
-    res.status(500).send(getErrorHtml(error.message));
+    res.status(500).send(getErrorHtml(error.message, centerName, phoneNumber));
   }
 });
 
@@ -518,7 +657,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
  * @param {string} recordId レコードID
  * @param {boolean} showCancel キャンセルボタンを表示するかどうか
  */
-function getConfirmedHtml(record, recordId, showCancel) {
+function getConfirmedHtml(record, recordId, showCancel, mode) {
     const lastName = (record["姓漢字"] && record["姓漢字"].value) || "";
     const firstName = (record["名漢字"] && record["名漢字"].value) || "";
     const name = lastName + " " + firstName;
@@ -541,12 +680,17 @@ function getConfirmedHtml(record, recordId, showCancel) {
     }
     const dateTimeStr = `${formattedDate} ${resTime}`;
 
+    // フッター注釈の出し分け
+    const footerNote = showCancel ? '※キャンセルは上記ボタン、またはお電話にてご連絡ください。' : '';
+
     // キャンセルボタンのHTML (POSTフォーム)
     const cancelBtnHtml = showCancel ? `
-        <form method="POST" action="?id=${recordId}" onsubmit="return confirm('本当に予約をキャンセルしますか？');">
-            <input type="hidden" name="action" value="cancel">
-            <button type="submit" class="btn-cancel">予約をキャンセルする</button>
-        </form>
+        <div class="btn-area">
+            <form method="POST" action="?id=${recordId}" onsubmit="return confirm('本当に予約を取り下げますか？');">
+                <input type="hidden" name="action" value="cancel">
+                <button type="submit" class="btn-cancel">予約をキャンセルする</button>
+            </form>
+        </div>
     ` : '';
 
     return `
@@ -566,9 +710,12 @@ function getConfirmedHtml(record, recordId, showCancel) {
           .info-row:last-child { border-bottom: none; }
           .label { width: 100px; font-weight: bold; color: #777; font-size: 14px; }
           .value { flex: 1; font-weight: bold; font-size: 15px; color: #333; }
-          .btn-cancel { display: inline-block; margin-top: 20px; padding: 12px 24px; background-color: #e74c3c; color: white; text-decoration: none; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; transition: background-color 0.3s; }
+          .btn-area { text-align: center; margin-top: 20px; }
+          .btn-cancel { display: inline-block; padding: 12px 24px; background-color: #e74c3c; color: white; text-decoration: none; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; transition: background-color 0.3s; }
           .btn-cancel:hover { background-color: #c0392b; }
-          .footer { margin-top: 30px; font-size: 12px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+          .footer { margin-top: 30px; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+          .footer-signature { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; }
+          .footer-note { font-size: 12px; color: #aaa; }
         </style>
       </head>
       <body>
@@ -594,8 +741,9 @@ function getConfirmedHtml(record, recordId, showCancel) {
           ${cancelBtnHtml}
 
           <div class="footer">
-            湘南東部病院 予約センター<br>
-            ※キャンセルは上記ボタン、またはお電話にてご連絡ください。
+            <div class="footer-signature">${centerName}</div>
+            ${phoneNumber ? `<div style="font-size: 13px; color: #555; margin-bottom: 8px;">TEL: ${phoneNumber}</div>` : ''}
+            <div class="footer-note">${footerNote}</div>
           </div>
         </div>
       </body>
@@ -606,7 +754,7 @@ function getConfirmedHtml(record, recordId, showCancel) {
 /**
  * 既にキャンセル済みの場合のHTML
  */
-function getAlreadyCancelledHtml() {
+function getAlreadyCancelledHtml(centerName, phoneNumber) {
     return `
       <!DOCTYPE html>
       <html lang="ja">
@@ -624,7 +772,189 @@ function getAlreadyCancelledHtml() {
       <body>
         <div class="container">
           <h1>この予約は無効になりました</h1>
-          <p>この予約は無効となったか、既に取り消し手続きが完了しています。<br>ご不明な点がございましたら、予約センターまでお問い合わせください。</p>
+          <p>この予約は無効となったか、既に取り消し手続きが完了しています。<br>ご不明な点がございましたら、${centerName}までお問い合わせください。</p>
+          ${phoneNumber ? `<p style="font-size: 14px; font-weight: bold;">TEL: ${phoneNumber}</p>` : ''}
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
+ * URL取下完了時のHTML (新規追加)
+ */
+function getWithdrawnHtml() {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>キャンセル完了</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #7f8c8d; font-size: 20px; }
+          p { color: #555; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>予約を取り下げました</h1>
+          <p>ご予約の取り下げを受け付けました。<br>またのご利用をお待ちしております。</p>
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
+ * タイムアウト時の再依頼可能画面 (当日用)
+ */
+function getTimeoutRetryHtml(recordId) {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>予約確認期限切れ</title>
+        <style>
+          body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; color: #333; }
+          .container { max-width: 600px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #e74c3c; font-size: 20px; margin-bottom: 20px; }
+          p { line-height: 1.8; margin-bottom: 20px; text-align: left; }
+          .btn-retry { display: inline-block; padding: 15px 40px; background-color: #3498db; color: #fff; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
+          .btn-retry:hover { background-color: #2980b9; }
+          .btn-cancel { display: inline-block; padding: 15px 40px; background-color: #95a5a6; color: #fff; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
+          .btn-cancel:hover { background-color: #7f8c8d; }
+          .btn-group { display: flex; justify-content: center; gap: 15px; margin-top: 30px; flex-wrap: wrap; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>予約確認の期限が切れました</h1>
+          <p>所定の時間内にご確認いただけなかったため、予約枠の確保を解除いたしました。</p>
+          <p>本日中であれば以下のボタンから<strong>再依頼</strong>を行うことが可能です。<br>再依頼を行うと、すでに頂ている希望内容をもとに再調整してご連絡いたします。</p>
+          <p>再依頼を行わない場合は「再依頼しない」を選択してください。<br>この予約はキャンセル扱いとなりますが、明日まで待つことなくWEBフォームから新たな予約を行うことができます。</p>
+          <div class="btn-group">
+            <form method="POST" action="?id=${recordId}">
+              <input type="hidden" name="action" value="re_request">
+              <button type="submit" class="btn-retry">再依頼する</button>
+            </form>
+            <form method="POST" action="?id=${recordId}" onsubmit="return confirm('再依頼を行わずに終了しますか？\\nこの予約はキャンセル扱いとなります。');">
+              <input type="hidden" name="action" value="cancel_timeout">
+              <button type="submit" class="btn-cancel">再依頼しない</button>
+            </form>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
+ * 再依頼完了画面
+ */
+function getReRequestCompletedHtml() {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>再依頼完了</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #27ae60; font-size: 20px; }
+          p { color: #555; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>再依頼を受け付けました</h1>
+          <p>担当者が内容を確認し、改めてご連絡いたします。<br>しばらくお待ちください。</p>
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
+ * 再依頼手続き中画面
+ */
+function getReRequestProcessingHtml() {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>再依頼手続き中</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #27ae60; font-size: 20px; }
+          p { color: #555; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>現在再依頼手続き中です</h1>
+          <p>担当者が内容を確認し、改めてご連絡いたします。<br>しばらくお待ちください。</p>
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
+ * タイムアウト（閲覧期限切れ）時のHTML
+ */
+function getTimeoutHtml(centerName, phoneNumber) {
+    const formUrl = "https://93ac276f.form.kintoneapp.com/waiting/?_formCode=34f65f5aac95cf65e480602f89cf3846c2dfd4345bc2b4cb05d97a20dea6c46d";
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>予約取り消しのお知らせ</title>
+        <style>
+          body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; color: #333; }
+          .container { max-width: 600px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #e74c3c; font-size: 20px; margin-bottom: 20px; }
+          p { line-height: 1.8; margin-bottom: 20px; text-align: left; }
+          a { color: #3498db; text-decoration: underline; }
+          /* ボタン用スタイル */
+          .btn-retry {
+            display: inline-block;
+            padding: 15px 40px;
+            background-color: #3498db;
+            color: #fff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            transition: background-color 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          .btn-retry:hover { background-color: #2980b9; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>予約取り消しのお知らせ</h1>
+          <p>診療のご予約をいただき、誠にありがとうございました。</p>
+          <p>予約センターよりご提示させていただいた予約枠について、ご本人様による閲覧確認が期限内に行われなかったため、誠に恐縮ながら、お申し込みは一度取り消しの扱いとさせていただきました。<br>他の患者様との予約調整の兼ね合いもあり、ご本人様の閲覧確認が取れない状態での長時間の予約枠の維持が難しく、このような対応となりましたことを何卒ご容赦ください。</p>
+          <p>つきましては、再度受診をご希望される場合、お手数ではございますが、<br>以下のボタンより改めてお申し込みをいただけますでしょうか。</p>
+          <div style="text-align: center;">
+            <a href="${formUrl}" class="btn-retry">再依頼</a>
+          </div>
+          <p>再度のご予約を心よりお待ちしております。</p>
         </div>
       </body>
       </html>
@@ -634,7 +964,7 @@ function getAlreadyCancelledHtml() {
 /**
  * キャンセル完了時のHTML
  */
-function getCancellationCompletedHtml() {
+function getCancellationCompletedHtml(centerName, phoneNumber) {
     return `
       <!DOCTYPE html>
       <html lang="ja">
@@ -662,7 +992,7 @@ function getCancellationCompletedHtml() {
 /**
  * エラー画面のHTML
  */
-function getErrorHtml(message) {
+function getErrorHtml(message, centerName, phoneNumber) {
     return `
       <!DOCTYPE html>
       <html lang="ja">
@@ -691,7 +1021,7 @@ function getErrorHtml(message) {
 /**
  * 有効期限切れ画面のHTMLを生成するヘルパー関数
  */
-function getExpiredHtml() {
+function getExpiredHtml(centerName, phoneNumber) {
   return `
     <!DOCTYPE html>
     <html lang="ja">
@@ -712,7 +1042,8 @@ function getExpiredHtml() {
         <div class="icon">⚠️</div>
         <h1>このリンクは無効です</h1>
         <p>予約日時を過ぎているため、詳細を表示できません。<br>
-        ご不明な点がございましたら、予約センターまでお問い合わせください。</p>
+        ご不明な点がございましたら、${centerName}までお問い合わせください。</p>
+        ${phoneNumber ? `<p style="font-size: 14px; font-weight: bold;">TEL: ${phoneNumber}</p>` : ''}
       </div>
     </body>
     </html>

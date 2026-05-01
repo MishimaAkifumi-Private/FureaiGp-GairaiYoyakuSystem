@@ -38,6 +38,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     updateDepartmentStatus: updateDepartmentStatus,
     updateDepartmentTerm: updateDepartmentTerm, // ★追加
     updateDepartmentDescription: updateDepartmentDescription, // ★追加
+    updateCommonCenterInfo: updateCommonCenterInfo, // ★追加
     updateCommonTerm: updateCommonTerm, // ★追加
     updateCommonCalendarSettings: updateCommonCalendarSettings, // ★変更: 休診日・例外日・土曜設定をまとめて更新
     updateCommonFacilities: updateCommonFacilities, // ★追加
@@ -810,16 +811,85 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
 
   /**
+   * ★追加: 本番環境(設定情報)とプレビュー環境(設定情報2)の両方の共通設定を直接更新するヘルパー
+   */
+  async function _updateCommonSettingField(updaterFn) {
+    const myAppId = kintone.app.getId();
+    const query = `${STORAGE_KEY_FIELD} = "${myAppId}" limit 1`;
+    const apiPath = kintone.api.url('/k/v1/records', true);
+    const baseUrl = /^https?:\/\//.test(apiPath) ? apiPath : window.location.origin + apiPath;
+    const url = baseUrl + `?app=${STORAGE_APP_ID}&query=${encodeURIComponent(query)}&_t=${new Date().getTime()}`;
+    const headers = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN };
+
+    const [body, status] = await kintone.proxy(url, 'GET', headers, {});
+    if (status !== 200) throw new Error(`Fetch failed. Status: ${status}`);
+    const resp = JSON.parse(body);
+    if (resp.records.length === 0) {
+        throw new Error('Target record not found in App 200. Please save config at least once.');
+    }
+
+    const rec = resp.records[0];
+    const recId = rec.$id.value;
+    
+    const prodJsonStr = rec['設定情報']?.value;
+    const previewJsonStr = rec['設定情報2']?.value;
+
+    let prodData = {};
+    if (prodJsonStr) { try { prodData = JSON.parse(prodJsonStr); } catch(e) {} }
+    
+    let previewData = {};
+    if (previewJsonStr) { try { previewData = JSON.parse(previewJsonStr); } catch(e) {} }
+
+    prodData.commonSettings = prodData.commonSettings || {};
+    updaterFn(prodData.commonSettings);
+
+    previewData.commonSettings = previewData.commonSettings || {};
+    updaterFn(previewData.commonSettings);
+
+    const updateUrl = kintone.api.url('/k/v1/record', true);
+    const apiUrl = /^https?:\/\//.test(updateUrl) ? updateUrl : window.location.origin + updateUrl;
+    const updateBody = {
+        app: STORAGE_APP_ID,
+        id: recId,
+        record: {
+            '設定情報': { value: JSON.stringify(prodData) },
+            '設定情報2': { value: JSON.stringify(previewData) }
+        }
+    };
+    const updateHeaders = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN, 'Content-Type': 'application/json' };
+    const [putBody, putStatus] = await kintone.proxy(apiUrl, 'PUT', updateHeaders, JSON.stringify(updateBody));
+    if (putStatus !== 200) throw new Error(`Update failed. Status: ${putStatus} Body: ${putBody}`);
+    
+    // 内部キャッシュの更新
+    updaterFn(publishedCommonSettings);
+  }
+
+  /**
+   * ★追加: 病院共通の予約センター基本設定を更新し、公開データに保存する
+   */
+  async function updateCommonCenterInfo(centerName, phoneNumber) {
+    try {
+      await _updateCommonSettingField((common) => {
+        common.centerName = centerName;
+        common.phoneNumber = phoneNumber;
+      });
+      console.log(`ConfigManager: Common center info updated directly to production.`);
+    } catch (e) {
+      console.error('ConfigManager: Failed to update common center info.', e);
+      throw e;
+    }
+  }
+
+  /**
    * ★追加: 病院共通の予約開始・期間設定を更新し、公開データに保存する
    */
   async function updateCommonTerm(start, duration) {
     try {
-      const currentPublished = await fetchPublishedData();
-      if (currentPublished) {
-        const common = { start: start, duration: duration };
-        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
-        console.log(`ConfigManager: Common term updated to start:${start}, duration:${duration}`);
-      }
+      await _updateCommonSettingField((common) => {
+        common.start = start;
+        common.duration = duration;
+      });
+      console.log(`ConfigManager: Common term updated directly to production.`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common term.', e);
       throw e;
@@ -831,17 +901,14 @@ window.ShinryoApp = window.ShinryoApp || {};
    */
   async function updateCommonCalendarSettings(holidays, exceptionalDays, closeSaturdays, start, duration) {
     try {
-      const currentPublished = await fetchPublishedData();
-      if (currentPublished) {
-        const common = currentPublished.commonSettings || {};
+      await _updateCommonSettingField((common) => {
         common.holidays = holidays;
-        common.exceptionalDays = exceptionalDays; // ★追加
-        common.closeSaturdays = closeSaturdays;   // ★追加
-        common.start = start;                     // ★追加: 予約開始
-        common.duration = duration;               // ★追加: 予約期間
-        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
-        console.log(`ConfigManager: Common calendar settings updated.`);
-      }
+        common.exceptionalDays = exceptionalDays;
+        common.closeSaturdays = closeSaturdays;
+        common.start = start;
+        common.duration = duration;
+      });
+      console.log(`ConfigManager: Common calendar settings updated directly to production.`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common calendar settings.', e);
       throw e;
@@ -853,13 +920,10 @@ window.ShinryoApp = window.ShinryoApp || {};
    */
   async function updateCommonFacilities(facilities) {
     try {
-      const currentPublished = await fetchPublishedData();
-      if (currentPublished) {
-        const common = currentPublished.commonSettings || {};
+      await _updateCommonSettingField((common) => {
         common.facilities = facilities;
-        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
-        console.log(`ConfigManager: Common facilities updated. Count: ${facilities ? facilities.length : 0}`);
-      }
+      });
+      console.log(`ConfigManager: Common facilities updated directly to production. Count: ${facilities ? facilities.length : 0}`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common facilities.', e);
       throw e;
@@ -871,13 +935,10 @@ window.ShinryoApp = window.ShinryoApp || {};
    */
   async function updateCommonStaffs(staffs) {
     try {
-      const currentPublished = await fetchPublishedData();
-      if (currentPublished) {
-        const common = currentPublished.commonSettings || {};
+      await _updateCommonSettingField((common) => {
         common.staffs = staffs;
-        await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, common, currentPublished.labelSettings);
-        console.log(`ConfigManager: Common staffs updated. Count: ${staffs ? staffs.length : 0}`);
-      }
+      });
+      console.log(`ConfigManager: Common staffs updated directly to production. Count: ${staffs ? staffs.length : 0}`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common staffs.', e);
       throw e;
