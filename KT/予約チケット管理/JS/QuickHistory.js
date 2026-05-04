@@ -148,7 +148,7 @@
       const body = {
         app: appId,
         query: query,
-        fields: ['$id', '作成日時', '申込者', '申込者補足', '共通評価', '人物メモ']
+        fields: ['$id', '作成日時', '申込者', '申込者補足', '共通評価', '人物メモ', '管理状況']
       };
 
       const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', body);
@@ -209,10 +209,29 @@
         const id = r.$id.value;
         const url = window.location.pathname + '?record=' + id;
         
-        // 現在開いているレコードかどうかの判定
-        const isCurrent = (id === String(currentId));
-        const ticketDisplay = isCurrent ? '<span class="qh-current-ticket">このチケット</span>' : `<a href="${url}" target="_blank" class="qh-ticket-link" title="レコード詳細を開く">🎫</a>`;
+        const memoStr = r['人物メモ']?.value || '';
+        const hasConfirmedDup = memoStr.includes('[複数の予約を短期間に依頼:');
 
+        const isCurrent = (id === String(currentId));
+        const status = r['管理状況']?.value;
+        const isActive = !['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下'].includes(status);
+        
+        let activeLabel = '';
+        let rowStyle = '';
+        if (isCurrent) {
+            rowStyle = ' style="background-color: #e3f2fd;"';
+        } else if (isActive) {
+            if (!hasConfirmedDup) {
+                activeLabel = '<br><span style="background-color: #e74c3c; color: white; font-size: 9px; padding: 2px 4px; border-radius: 3px; white-space: nowrap; margin-top: 2px; display: inline-block;">同時進行中</span>';
+                rowStyle = ' style="background-color: #fff5f5;"';
+            } else {
+                activeLabel = '<br><span style="background-color: #27ae60; color: white; font-size: 9px; padding: 2px 4px; border-radius: 3px; white-space: nowrap; margin-top: 2px; display: inline-block;">別件進行中</span>';
+                rowStyle = ' style="background-color: #e8f8f5;"';
+            }
+        }
+        
+        const ticketDisplay = isCurrent ? '<span class="qh-current-ticket">このチケット</span>' : `<a href="${url}" target="_blank" class="qh-ticket-link" title="レコード詳細を開く">🎫</a>${activeLabel}`;
+        
         const createdDate = new Date(r['作成日時'].value);
         const y = createdDate.getFullYear();
         const m = String(createdDate.getMonth() + 1).padStart(2, '0');
@@ -232,7 +251,7 @@
         const memo = escapeHtml(r['人物メモ']?.value).replace(/\n/g, '<br>');
 
         htmlParts.push(`
-          <tr${isCurrent ? ' style="background-color: #e3f2fd;"' : ''}>
+          <tr${rowStyle}>
             <td class="qh-col-ticket">${ticketDisplay}</td>
             <td class="qh-col-date">${dateStr}</td>
             <td>${applicant}</td>

@@ -67,8 +67,36 @@
         return evals;
     };
 
+    // ヘルパー: 全多重チケットの担当一括更新
+    const updateAllDuplicateTicketsStaff = async (chartNo, newStaffName, excludeRecordId) => {
+        if (!chartNo) return;
+        const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+        const query = `カルテNo = "${chartNo}" and 管理状況 not in ${activeStatuses}`;
+        try {
+            const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+                app: kintone.app.getId(),
+                query: query,
+                fields: ['$id', '担当者', '管理状況']
+            });
+            for (const r of resp.records) {
+                if (r.$id.value !== String(excludeRecordId) && r['担当者']?.value !== newStaffName) {
+                    const payload = { '担当者': { value: newStaffName } };
+                    let actionNames = [];
+                    if (r['管理状況']?.value === '未着手') {
+                        payload['管理状況'] = { value: '担当設定' };
+                    } else {
+                        actionNames = ['担当引き継ぎ'];
+                    }
+                    await updateRecord(r.$id.value, payload, actionNames, false, false, '多重チケットの担当一括変更');
+                }
+            }
+        } catch (e) {
+            console.error('Duplicate staff update failed', e);
+        }
+    };
+
     // メイン描画処理
-    const renderBoard = (spaceElement, record) => {
+    const renderBoard = async (spaceElement, record) => {
       spaceElement.innerHTML = ''; // クリア
   
       const recordId = kintone.app.record.getId();
@@ -95,6 +123,28 @@
       const readDateVal = record[CONFIG.FIELDS.READ_DATE]?.value || '';
       const phoneDateVal = record[CONFIG.FIELDS.PHONE_CONFIRM]?.value || '';
       const timeoutVal = record[CONFIG.FIELDS.TIMEOUT]?.value || '2時間'; // デフォルト
+      const cancelExecutor = record[CONFIG.FIELDS.CANCEL_EXECUTOR]?.value || '';
+
+      // ★追加: 確実な重複終了の判定（キャンセル実行者フィールドが無い・書き込めない場合への備え）
+      let isMergedEnd = (cancelExecutor === '重複統合');
+      if (!isMergedEnd && currentStatus === '強制終了') {
+          const histories = record['経過情報']?.value || [];
+          for (let i = histories.length - 1; i >= 0; i--) {
+              const reason = histories[i].value['経過情報_理由']?.value || '';
+              if (reason.includes('重複依頼のため')) {
+                  isMergedEnd = true;
+                  break;
+              }
+          }
+      }
+
+      // URL生成ヘルパー (無効後の理由欄記録用)
+      const getConfirmUrlString = (prefix = 'URL: ') => {
+          if (!urlToken) return '';
+          let url = `${CONFIG.CONFIRM_BASE_URL}?token=${urlToken}`;
+          if (currentMethod === 'phone') url += '&mode=phone';
+          return `${prefix}${url}`;
+      };
 
       // 確定済みフラグ
       const isConfirmed = !!(currentDate && currentTime);
@@ -134,7 +184,7 @@
       const createBadge = (label, value, color) => {
         const badge = document.createElement('div');
         badge.className = 'rcb-badge';
-        badge.style.backgroundColor = 'rgb(245, 245, 225)';
+        badge.style.backgroundColor = '#fdfdfd';
         if (color) badge.style.borderLeftColor = color;
         
         const lbl = document.createElement('div');
@@ -178,6 +228,7 @@
 
       const methodIconDiv = document.createElement('div');
       methodIconDiv.style.marginRight = '0px';
+
       methodIconDiv.style.lineHeight = '1';
       methodIconDiv.innerHTML = getMethodIconHtml(currentMethod);
       header.appendChild(methodIconDiv);
@@ -210,7 +261,7 @@
       if (purposeLabel) {
           const purposeBadge = document.createElement('div');
           purposeBadge.textContent = purposeLabel;
-          purposeBadge.style.cssText = `margin-left: auto; background-color: ${purposeBg}; color: #fff; padding: 8px 20px; border-radius: 6px; font-size: 18px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.15);`;
+          purposeBadge.style.cssText = `margin-left: auto; background-color: ${purposeBg}; color: #fff; padding: 6px 16px; border-radius: 4px; font-size: 16px; font-weight: bold; box-shadow: none; border: 1px solid rgba(0,0,0,0.1); cursor: default;`;
           header.appendChild(purposeBadge);
       }
 
@@ -223,29 +274,42 @@
           // === 担当者以外の場合 ===
           // 未着手ならアサインボタンを表示
           if (currentStatus === '未着手') {
+              // ★追加: 多重チケット自動担当設定チェック
+              const chartNo = record['カルテNo']?.value;
+              if (chartNo) {
+                  const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+                  const query = `カルテNo = "${chartNo}" and 管理状況 not in ${activeStatuses} and $id != "${recordId}" and 管理状況 not in ("未着手") order by 作成日時 desc limit 1`;
+                  try {
+                      const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+                          app: kintone.app.getId(),
+                          query: query,
+                          fields: ['担当者']
+                      });
+                      if (resp.records.length > 0 && resp.records[0]['担当者']?.value) {
+                          const autoStaff = resp.records[0]['担当者'].value;
+                          const payload = {
+                              [CONFIG.FIELDS.STAFF]: { value: autoStaff },
+                              [CONFIG.FIELDS.STATUS]: { value: '担当設定' }
+                          };
+                          await updateRecord(recordId, payload, [], false, false, '多重チケットのため担当者を自動設定');
+                          location.reload();
+                          return;
+                      }
+                  } catch (e) {
+                      console.error('Auto assign check failed', e);
+                  }
+              }
+
               const assignBtn = document.createElement('button');
               assignBtn.id = 'rcb-assign-staff-btn';
+              assignBtn.className = 'rcb-btn-save';
               assignBtn.innerText = currentStaff ? `私（${currentStaff}）がこのチケットを担当する` : '担当者設定が必要です';
-              assignBtn.style.cssText = `
-                  animation: rcb-btn-blink-anim 1.5s infinite ease-in-out;
-                  padding: 0 20px;
-                  background-color: #2c3e50;
-                  color: #fff;
-                  border: none;
-                  border-radius: 6px;
-                  cursor: pointer;
-                  font-weight: bold;
-                  font-size: 14px;
-                  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                  transition: background-color 0.2s;
-                  height: 45px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-              `;
-              
-              assignBtn.onmouseover = () => { assignBtn.style.backgroundColor = '#34495e'; };
-              assignBtn.onmouseout = () => { assignBtn.style.backgroundColor = '#2c3e50'; };
+              assignBtn.style.animation = 'rcb-btn-blink-anim 1.5s infinite ease-in-out';
+              assignBtn.style.backgroundColor = '#2c3e50';
+              assignBtn.style.height = '45px';
+              assignBtn.style.display = 'flex';
+              assignBtn.style.alignItems = 'center';
+              assignBtn.style.justifyContent = 'center';
 
               assignBtn.onclick = async () => {
                   if (!currentStaff) {
@@ -267,6 +331,7 @@
 
                   const success = await updateRecord(recordId, updatePayload);
                   if (success) {
+                      await updateAllDuplicateTicketsStaff(record['カルテNo']?.value, currentStaff, recordId);
                       await showDialog(`担当者を「${currentStaff}」に設定しました。`, 'success');
                       location.reload();
                   } else {
@@ -283,7 +348,171 @@
           return; // ここで終了（メイン機能は表示しない）
       }
 
+      // === 担当者本人の場合 ===
+
+      // ---------------------------------------------------------
+      // 多重チケット（重複）の警告バナー表示
+      // ---------------------------------------------------------
+      const checkDuplication = async () => {
+          const chartNo = record['カルテNo']?.value;
+          if (!chartNo) return false;
+          
+          const currentMemoStr = record['人物メモ']?.value || '';
+
+          // 自分がすでに無効なステータスなら重複警告は出さない
+          const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下'];
+          if (inactiveStatuses.includes(currentStatus)) return false;
+
+          const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+          const query = `カルテNo = "${chartNo}" and 管理状況 not in ${activeStatuses} and $id != "${recordId}" order by 作成日時 desc`;
+          try {
+              const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+                  app: kintone.app.getId(),
+                  query: query,
+                  fields: ['$id', '担当者']
+              });
+              
+              if (resp.records.length > 0) {
+                  const dupIds = resp.records.map(r => r.$id.value);
+                  const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+                  
+                  // 既に全ての重複チケットが別件として確認済みの場合は警告を出さない
+                  const allConfirmed = dupIds.every(id => currentMemoStr.includes(`[複数の予約を短期間に依頼:${id}]`));
+                  if (allConfirmed) return false;
+
+                  const banner = document.createElement('div');
+                  banner.style.cssText = 'background-color: #fff3f3; border: 2px solid #e74c3c; border-radius: 6px; padding: 15px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: flex-start; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); gap: 15px;';
+                  
+                  const msgDiv = document.createElement('div');
+                  const dupUrlsHtml = dupIds.map(id => `<a href="${appRoot}show#record=${id}" target="_blank" style="color: #3498db; text-decoration: underline; font-weight: bold;">${id}</a>`).join(', ');
+                  
+                  msgDiv.innerHTML = `<span style="font-size:20px; margin-right:10px; vertical-align:middle;">⚠️</span><strong style="color: #c0392b; font-size: 15px;">注意：この患者は現在、他に進行中の予約チケットがあります！</strong><br><span style="font-size:13px; color:#555; margin-left:35px;">チケット番号: ${dupUrlsHtml}</span>`;
+                  banner.appendChild(msgDiv);
+                  
+                  const btnArea = document.createElement('div');
+                  btnArea.style.display = 'flex';
+                  btnArea.style.gap = '8px';
+                  btnArea.style.flexWrap = 'wrap';
+                  btnArea.style.alignItems = 'center';
+                  btnArea.style.marginLeft = '35px';
+
+                  const okBtn = document.createElement('button');
+                  okBtn.textContent = 'このチケットは有効として扱う';
+                  okBtn.style.cssText = 'background-color: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; transition: background-color 0.2s;';
+                  okBtn.onmouseover = () => okBtn.style.backgroundColor = '#2ecc71';
+                  okBtn.onmouseout = () => okBtn.style.backgroundColor = '#27ae60';
+                  okBtn.onclick = async () => {
+                      // 3件以上（自分を含めると3件以上＝他のチケットが2件以上）の場合はブロック
+                      if (dupIds.length >= 2) {
+                          await showDialog('多重チケットが3件以上存在します。\n先に不要なチケットを統合（取下げ）して、進行中のチケットを2件のみに絞ってから有効化してください。', 'error');
+                          return;
+                      }
+
+                      const dupId = dupIds[0];
+                      const isOk = await showDialog(`このチケットと、もう一方の進行中チケット（番号: ${dupId}）の両方を有効扱いにしますか？`, 'confirm');
+                      if (isOk) {
+                          let newMemo = currentMemoStr;
+                          if (!newMemo.includes(`[複数の予約を短期間に依頼:${dupId}]`)) {
+                              newMemo = newMemo ? newMemo + `\n[複数の予約を短期間に依頼:${dupId}]` : `[複数の予約を短期間に依頼:${dupId}]`;
+                          }
+                          
+                          // もう一方のチケットも自動的に有効化（相互に確認済マークをつける）
+                          try {
+                              const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', { app: kintone.app.getId(), id: dupId });
+                              let otherMemo = resp.record['人物メモ']?.value || '';
+                              if (!otherMemo.includes(`[複数の予約を短期間に依頼:${recordId}]`)) {
+                                  otherMemo = otherMemo ? otherMemo + `\n[複数の予約を短期間に依頼:${recordId}]` : `[複数の予約を短期間に依頼:${recordId}]`;
+                                  await updateRecord(dupId, { '人物メモ': { value: otherMemo } }, ['多重チケット解消'], false, true, `別件の予約として有効化\nID:${recordId} ${appRoot}show#record=${recordId}`);
+                              }
+                          } catch (e) {
+                              console.error('Failed to update the other duplicate ticket', e);
+                          }
+
+                          const success = await updateRecord(recordId, { '人物メモ': { value: newMemo } }, ['多重チケット解消'], false, true, `別件の予約として有効化\nID:${dupId} ${appRoot}show#record=${dupId}`);
+                          if (success) location.reload();
+                      }
+                  };
+                  btnArea.appendChild(okBtn);
+
+                  const mergeBtn = document.createElement('button');
+                  mergeBtn.textContent = 'このチケットは取下げて強制終了とする';
+                  mergeBtn.style.cssText = 'background-color: #e67e22; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; transition: background-color 0.2s;';
+                  
+                  if (isRead || isPhoneConfirmed) {
+                      mergeBtn.style.opacity = '0.5';
+                      mergeBtn.style.cursor = 'not-allowed';
+                      mergeBtn.title = '既に患者様が確認済みのため、このチケットは統合取下できません。';
+                      mergeBtn.onclick = async () => {
+                          await showDialog('このチケットは既に患者様へ案内済み（または既読）のため、不用意に取り下げると患者様が混乱する恐れがあります。\n別の新しいチケットをこちらに統合するか、別途お電話でご案内ください。', 'error');
+                      };
+                  } else {
+                      mergeBtn.onmouseover = () => mergeBtn.style.backgroundColor = '#d35400';
+                      mergeBtn.onmouseout = () => mergeBtn.style.backgroundColor = '#e67e22';
+                      mergeBtn.onclick = async () => {
+                          const isOk = await showDialog(`このチケットを他の進行中チケット（番号: ${dupIds.join(', ')}）に統合し、取下げて強制終了としますか？\n※この操作は元に戻せません。`, 'confirm');
+                          if (isOk) {
+                              const dupUrlsText = dupIds.map(id => `ID:${id} ${appRoot}show#record=${id}`).join('\n');
+                              const reason = `重複依頼のため、以下のチケットに統合して取下げ\n${dupUrlsText}`;
+                              const memoAdd = `多重チケットによる取下げ\n${dupUrlsText}`;
+                              const newMemo = currentMemoStr ? currentMemoStr + '\n' + memoAdd : memoAdd;
+                              
+                              const payload = {
+                                  [CONFIG.FIELDS.STATUS]: { value: '強制終了' },
+                                  [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: '重複統合' },
+                                  'ReserveLock': { value: 'unlock' },
+                                  '人物メモ': { value: newMemo }
+                              };
+                              
+                              // 統合先（残された側）のチケットにも「解消」の履歴を記録する
+                              try {
+                                  for (const dId of dupIds) {
+                                      await updateRecord(dId, {}, ['多重チケット解消'], false, true, `重複していたチケットが統合・取下げられたため有効化\nID:${recordId} ${appRoot}show#record=${recordId}`);
+                                  }
+                              } catch (e) {
+                                  console.error('Failed to update merged target tickets', e);
+                              }
+
+                              const success = await updateRecord(recordId, payload, [CONFIG.STATUS_WITHDRAWN_VALUE], false, false, reason);
+                              if (success) location.reload();
+                          }
+                      };
+                  }
+                  btnArea.appendChild(mergeBtn);
+                  
+                  banner.appendChild(btnArea);
+                  container.insertBefore(banner, container.firstChild);
+                  
+                  return true; // 重複未解決
+              }
+          } catch(e) {
+              console.error('Duplication check failed:', e);
+          }
+          return false;
+      };
+      
+      const isDuplicateBlocked = await checkDuplication();
+
+      // ★ 重複チケット未解決の場合は操作をロックする
+      if (isDuplicateBlocked) {
+          const blockMsg = document.createElement('div');
+          blockMsg.style.cssText = 'text-align: center; padding: 30px 20px; background-color: #fff5f5; border: 1px dashed #e74c3c; border-radius: 8px; margin-top: 20px; color: #c0392b; font-weight: bold; line-height: 1.6;';
+          blockMsg.innerHTML = '⚠️ 上記の重複警告について、「別件の予約として有効にする」または<br>「このチケットは多重を理由に取下げる」のいずれかを選択して<br>解決するまで、このチケットの操作はロックされています。';
+          container.appendChild(blockMsg);
+          spaceElement.appendChild(container);
+          return;
+      }
+
       // === 担当者本人の場合 (以下、既存のメインロジック) ===
+
+      // ★ 重複統合による強制終了ステータスの場合は専用のメッセージを表示して処理を終了する
+      if (currentStatus === '強制終了' && isMergedEnd) {
+          const mergedMsg = document.createElement('div');
+          mergedMsg.style.cssText = 'text-align: center; padding: 50px 20px; background-color: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; margin-top: 20px;';
+          mergedMsg.innerHTML = `<div style="font-size: 48px; margin-bottom: 15px;">🔗</div><div style="font-size: 20px; font-weight: bold; color: #7f8c8d;">この予約チケットは統合のため取り下げられました</div><div style="font-size: 14px; color: #95a5a6; margin-top: 10px;">他の重複する予約チケットへ統合されたため、<br>このチケットでの操作は終了しています。</div>`;
+          container.appendChild(mergedMsg);
+          spaceElement.appendChild(container);
+          return;
+      }
 
       // ★ 終了ステータスの場合は専用のメッセージを表示して処理を終了する
       if (currentStatus === '終了' || currentStatus === '強制終了') {
@@ -295,9 +524,8 @@
           const reviveBtn = document.createElement('button');
           reviveBtn.textContent = 'チケットを復活する';
           reviveBtn.className = 'rcb-btn-save';
-          reviveBtn.style.cssText = 'margin-top: 25px; background-color: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; padding: 10px 24px; transition: background-color 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);';
-          reviveBtn.onmouseover = () => reviveBtn.style.backgroundColor = '#e67e22';
-          reviveBtn.onmouseout = () => reviveBtn.style.backgroundColor = '#f39c12';
+          reviveBtn.style.marginTop = '25px';
+          reviveBtn.style.backgroundColor = '#f39c12';
 
           reviveBtn.onclick = async () => {
               const reason = await showDialog(`チケットを${currentStatus === '強制終了' ? '直前の状態' : '「要電話対応」'}で復活させますか？\n復活する理由を入力してください。`, 'prompt', 'チケット復活', '理由を入力（必須）');
@@ -356,9 +584,8 @@
           const finishBtn = document.createElement('button');
           finishBtn.textContent = '受診確認をしてチケットを終了する';
           finishBtn.className = 'rcb-btn-save';
-          finishBtn.style.cssText = 'margin-top: 25px; background-color: #1565c0; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; padding: 10px 24px; transition: background-color 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);';
-          finishBtn.onmouseover = () => finishBtn.style.backgroundColor = '#0d47a1';
-          finishBtn.onmouseout = () => finishBtn.style.backgroundColor = '#1565c0';
+          finishBtn.style.marginTop = '25px';
+          finishBtn.style.backgroundColor = '#1565c0';
           finishBtn.onclick = async () => {
               // ★変更: 専用の受診確認ダイアログを表示
               const confirmContent = `
@@ -434,7 +661,7 @@
                   '共通評価': { value: newCommonEval },
                   '人物メモ': { value: newMemo }
               };
-              const success = await updateRecord(recordId, payload);
+              const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
               if (success) location.reload();
           };
 
@@ -539,7 +766,10 @@
             if (dept) {
                 updateData[CONFIG.FIELDS.DEPT] = { value: dept };
             }
-            const success = await updateRecord(recordId, updateData);
+            
+            // メール送信先と確認用URLを理由欄に記録
+            const reasonText = email ? `${email}\n${getConfirmUrlString()}` : getConfirmUrlString();
+            const success = await updateRecord(recordId, updateData, [], false, false, reasonText);
 
             if (success) {
                 hideSpinner();
@@ -759,8 +989,8 @@
                 updatePayload[CONFIG.FIELDS.PHONE_CONFIRM] = { value: new Date().toISOString() };
             }
 
-            // 送信成功後、ステータス等を更新
-            const success = await updateRecord(recordId, updatePayload);
+            // 送信成功後、ステータス等を更新 (メール送信先を理由欄に記録)
+            const success = await updateRecord(recordId, updatePayload, [], false, false, email);
 
             if (success) {
                 hideSpinner();
@@ -1039,8 +1269,8 @@
         const methodSection = document.createElement('div');
         methodSection.className = 'rcb-section rcb-method-section'; // クラス追加
         
-        // 確定済み、または「要電話対応」の場合は初期非表示（電話対応固定のため）
-        if (isConfirmed || currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE) {
+        // 確定済み、または「要電話対応」、各種取下・キャンセル済みの場合は初期非表示（電話対応固定のため）
+        if (isConfirmed || currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || isWithdrawn || isWebWithdrawn || isUrlWithdrawn) {
             methodSection.style.display = 'none';
         }
         
@@ -1117,9 +1347,9 @@
         container.appendChild(methodSection);
       }
   
-      // ★ 分岐: 予約日時が確定しているかどうか、または用件が「取消」の場合
+      // ★ 分岐: 予約日時が確定しているかどうか、または用件が「取消」の場合、あるいは既に取下・キャンセル済みの場合
       // 用件が「取消」の場合は、日時設定（エディタ）をスキップして、チケット情報を引用した確認画面を即座に表示する
-      if (isConfirmed || purpose === '取消') {
+      if (isConfirmed || purpose === '取消' || isWithdrawn || isWebWithdrawn || isUrlWithdrawn) {
         // --- 確定済み表示モード ---
         dateSection.innerHTML = ''; // 初期化
 
@@ -1202,8 +1432,9 @@
                     if (respStatus !== 200 && respStatus !== 204) throw new Error(`Email API Error: ${respStatus} ${respBody}`);
                 }
 
-                // レコード更新
-                await updateRecord(recordId, payload, [], false, false, actionReason.trim());
+                // レコード更新 (取下げ理由とURLを記録)
+                const reasonText = actionReason.trim() + (getConfirmUrlString() ? '\n' + getConfirmUrlString() : '');
+                await updateRecord(recordId, payload, [], false, false, reasonText);
 
                 await showDialog('予約を取り下げました。', 'success');
                 location.reload();
@@ -1335,17 +1566,18 @@
             const endBtn = document.createElement('button');
             endBtn.textContent = 'このチケットを終了する';
             endBtn.className = 'rcb-btn-save';
-            endBtn.style.cssText = 'margin-top: 20px; background-color: #bdc3c7; color: #fff; width: 100%; max-width: 300px; padding: 15px; font-size: 16px; cursor: not-allowed; transition: background-color 0.3s;';
+            endBtn.style.marginTop = '20px';
+            endBtn.style.backgroundColor = '#bdc3c7';
+            endBtn.style.width = '100%';
+            endBtn.style.maxWidth = '300px';
             endBtn.disabled = true;
             
             checkbox.onchange = () => {
                 if (checkbox.checked) {
                     endBtn.style.backgroundColor = '#e74c3c';
-                    endBtn.style.cursor = 'pointer';
                     endBtn.disabled = false;
                 } else {
                     endBtn.style.backgroundColor = '#bdc3c7';
-                    endBtn.style.cursor = 'not-allowed';
                     endBtn.disabled = true;
                 }
             };
@@ -1363,7 +1595,7 @@
                     '共通評価': { value: updatedCommonEval },
                     '人物メモ': { value: currentMemo }
                 };
-                const success = await updateRecord(recordId, payload);
+                const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
                 if (success) location.reload();
             };
             
@@ -1626,7 +1858,7 @@
             const timeStr = displayTimeVal || '（時刻未定）';
             
             // デザイン改善: ラベルと値を分離して見やすく
-            const statusBadge = `<span style="background-color: ${reservationStatusColor}; color: #fff; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight:bold; vertical-align: middle;">${reservationStatusLabel}</span>`;
+            const statusBadge = `<span style="background-color: transparent; color: ${reservationStatusColor}; border: 1px solid ${reservationStatusColor}; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight:bold; vertical-align: middle;">${reservationStatusLabel}</span>`;
             
             const dateRow = document.createElement('div');
             dateRow.style.cssText = 'display: flex; align-items: center; gap: 10px;';
@@ -1645,15 +1877,15 @@
             dateTimeDisplay.style.cssText = 'background-color: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 25px; display: flex; flex-direction: column; align-items: center; gap: 10px;';
             
             // メール送信済みでない場合、または申込者再依頼の場合に再設定ボタンを表示
-            if (!sendDateVal || isReRequest) {
-                const editBtn = document.createElement('button');
-                editBtn.innerHTML = '<span style="font-size:14px;">⚙️</span> 再設定する';
-                editBtn.style.cssText = 'margin-top: 5px; background-color: #fff; border: 1px solid #ccc; color: #555; padding: 6px 15px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 5px; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
-                
-                editBtn.onmouseover = () => { editBtn.style.backgroundColor = '#f8f9fa'; editBtn.style.borderColor = '#bbb'; editBtn.style.color = '#333'; };
-                editBtn.onmouseout = () => { editBtn.style.backgroundColor = '#fff'; editBtn.style.borderColor = '#ccc'; editBtn.style.color = '#555'; };
-                editBtn.onclick = () => renderEditorView();
-                dateTimeDisplay.appendChild(editBtn);
+            if (!isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn) {
+                if (!sendDateVal || isReRequest) {
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'rcb-btn-secondary';
+                    editBtn.innerHTML = '<span style="font-size:14px;">⚙️</span> 再設定する';
+                    editBtn.style.marginTop = '5px';
+                    editBtn.onclick = () => renderEditorView();
+                    dateTimeDisplay.appendChild(editBtn);
+                }
             }
             confirmedContainer.appendChild(dateTimeDisplay);
         }
@@ -1666,8 +1898,11 @@
             if (sendDateVal && timeoutVal) {
                 const sentTime = new Date(sendDateVal);
                 timeoutDateObj = new Date(sentTime);
-                if (timeoutVal === '今日中') {
+                if (timeoutVal === '今日中' || timeoutVal === '本日中') {
                     timeoutDateObj.setHours(23, 59, 59, 999);
+                } else if (timeoutVal === '明日午前中') {
+                    timeoutDateObj.setDate(timeoutDateObj.getDate() + 1);
+                    timeoutDateObj.setHours(11, 59, 59, 999);
                 } else if (timeoutVal === '明日中') {
                     timeoutDateObj.setDate(timeoutDateObj.getDate() + 1);
                     timeoutDateObj.setHours(23, 59, 59, 999);
@@ -1724,10 +1959,11 @@
                 // 閲覧期限切れバッジ
                 const timeoutBadge = document.createElement('div');
                 timeoutBadge.style.display = 'inline-block';
-                timeoutBadge.style.backgroundColor = '#e67e22'; // オレンジ
-                timeoutBadge.style.color = '#fff';
+                timeoutBadge.style.backgroundColor = '#fcf3e8';
+                timeoutBadge.style.color = '#e67e22';
                 timeoutBadge.style.padding = '4px 12px';
-                timeoutBadge.style.borderRadius = '15px';
+                timeoutBadge.style.borderRadius = '4px';
+                timeoutBadge.style.border = '1px solid #f0cdab';
                 timeoutBadge.style.fontWeight = 'bold';
                 timeoutBadge.style.fontSize = '14px';
                 timeoutBadge.style.margin = '5px 0 10px 0';
@@ -1779,7 +2015,7 @@
                         [CONFIG.FIELDS.TIMEOUT]: { value: null },
                         '共通評価': { value: commonEval }
                     };
-                    const success = await updateRecord(recordId, payload);
+                    const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
                     if (success) location.reload();
                 };
 
@@ -1831,17 +2067,14 @@
             sendMailBtn.textContent = 'メール送信済み';
             sendMailBtn.style.backgroundColor = '#95a5a6'; // グレー
             sendMailBtn.disabled = true;
-            sendMailBtn.style.cursor = 'not-allowed';
         } else if (isPhoneConfirmed) {
             sendMailBtn.textContent = '電話合意済み';
             sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
             sendMailBtn.disabled = true;
-            sendMailBtn.style.cursor = 'not-allowed';
         } else if (isWithdrawn) {
             sendMailBtn.textContent = '取下済み';
             sendMailBtn.style.backgroundColor = '#7f8c8d';
             sendMailBtn.disabled = true;
-            sendMailBtn.style.cursor = 'not-allowed';
         } else if (isWebWithdrawn || isUrlWithdrawn) {
             sendMailBtn.style.display = 'none'; // 取下後のボタンはコンテナ内に集約したため非表示
         } else if (isRead) {
@@ -1898,15 +2131,120 @@
             timeoutSelect.style.backgroundColor = 'rgb(245, 245, 225)';
             timeoutSelect.style.borderRadius = '4px';
             timeoutSelect.style.border = '1px solid rgb(204, 204, 204)';
+            timeoutSelect.style.width = '115px';
+            timeoutSelect.style.textAlign = 'center';
+            timeoutSelect.style.cursor = 'pointer';
             
-            const options = ['1分間','15分間', '30分間', '45分間','60分間', '90分間', '2時間', '4時間', '6時間', '12時間', '24時間', '48時間', '本日中', '明日中'];
-            options.forEach(optVal => {
-                const opt = document.createElement('option');
-                opt.value = optVal;
-                opt.textContent = optVal;
-                if (optVal === '2時間') opt.selected = true;
-                timeoutSelect.appendChild(opt);
-            });
+            let lastUpdatedTime = 0;
+            let isDropdownOpen = false;
+
+            const buildTimeoutOptions = () => {
+                const now = new Date();
+                // 10秒以内の連続更新はスキップ（展開中の再描画による不具合を防止）
+                if (now.getTime() - lastUpdatedTime < 10000) return;
+                lastUpdatedTime = now.getTime();
+
+                const currentValue = timeoutSelect.value || null;
+                timeoutSelect.innerHTML = '';
+                
+                const allTimeOptions = [
+                    { label: '1分間', min: 1 },
+                    { label: '15分間', min: 15 },
+                    { label: '30分間', min: 30 },
+                    { label: '45分間', min: 45 },
+                    { label: '60分間', min: 60 },
+                    { label: '90分間', min: 90 },
+                    { label: '2時間', min: 120 },
+                    { label: '4時間', min: 240 },
+                    { label: '6時間', min: 360 },
+                    { label: '12時間', min: 720 },
+                    { label: '24時間', min: 1440 },
+                    { label: '48時間', min: 2880 }
+                ];
+                
+                const endOfBusiness = new Date(now);
+                endOfBusiness.setHours(17, 0, 0, 0); // 17:00
+                
+                let remainingMinutes = (endOfBusiness.getTime() - now.getTime()) / (1000 * 60);
+                if (remainingMinutes < 0) remainingMinutes = 0; // 17時以降は時間指定を出さない
+                
+                const filteredOptions = allTimeOptions.filter(opt => opt.min <= remainingMinutes);
+                const fixedOptions = [
+                    { label: '今日中', min: null },
+                    { label: '明日午前中', min: null },
+                    { label: '明日中', min: null }
+                ];
+                const options = [...filteredOptions, ...fixedOptions];
+
+                const hasTwoHours = options.some(opt => opt.label === '2時間');
+
+                let defaultSelected = false;
+                options.forEach(optObj => {
+                    const optVal = optObj.label;
+                    let displayText = optVal;
+                    
+                    if (optObj.min !== null) {
+                        const targetTime = new Date(now.getTime() + optObj.min * 60 * 1000);
+                        const targetH = String(targetTime.getHours()).padStart(2, '0');
+                        const targetM = String(targetTime.getMinutes()).padStart(2, '0');
+                        displayText = `${optVal} (${targetH}:${targetM})`;
+                    }
+
+                    const opt = document.createElement('option');
+                    opt.value = optVal;
+                    opt.dataset.timeLabel = displayText;
+                    opt.textContent = isDropdownOpen ? displayText : optVal;
+                    
+                    if (currentValue) {
+                        if (optVal === currentValue) {
+                            opt.selected = true;
+                            defaultSelected = true;
+                        }
+                    } else {
+                        if (optVal === '2時間') {
+                            opt.selected = true;
+                            defaultSelected = true;
+                        } else if (!defaultSelected && optVal === '今日中' && !hasTwoHours) {
+                            opt.selected = true;
+                            defaultSelected = true;
+                        }
+                    }
+                    timeoutSelect.appendChild(opt);
+                });
+                
+                // 選択していた項目が17時を過ぎてリストから消えた場合のフォールバック
+                if (currentValue && !defaultSelected) {
+                    if (hasTwoHours) {
+                        timeoutSelect.value = '2時間';
+                    } else {
+                        timeoutSelect.value = '今日中';
+                    }
+                }
+            };
+            
+            const showTimeLabels = () => {
+                isDropdownOpen = true;
+                buildTimeoutOptions();
+                Array.from(timeoutSelect.options).forEach(opt => {
+                    if (opt.dataset.timeLabel) opt.textContent = opt.dataset.timeLabel;
+                });
+            };
+
+            const hideTimeLabels = () => {
+                isDropdownOpen = false;
+                Array.from(timeoutSelect.options).forEach(opt => {
+                    opt.textContent = opt.value;
+                });
+            };
+
+            // 初回生成
+            buildTimeoutOptions();
+            
+            timeoutSelect.addEventListener('mouseenter', buildTimeoutOptions);
+            timeoutSelect.addEventListener('mousedown', showTimeLabels);
+            timeoutSelect.addEventListener('focus', showTimeLabels);
+            timeoutSelect.addEventListener('change', hideTimeLabels);
+            timeoutSelect.addEventListener('blur', hideTimeLabels);
 
             inputRow.appendChild(iconDiv);
             inputRow.appendChild(timeoutSelect);
@@ -2049,7 +2387,7 @@
                     }
                 }
 
-                const success = await updateRecord(recordId, payload, [], false, false, '');
+                const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
                 if (success) location.reload();
             };
             actionGroup.appendChild(noReconfigBtn);
@@ -2079,6 +2417,7 @@
         const currentMemo = record['人物メモ']?.value || '';
         const currentMethod = record[CONFIG.FIELDS.METHOD]?.value || '未設定';
         const currentStatus = record[CONFIG.FIELDS.STATUS]?.value || '未設定';
+        const urlToken = record[CONFIG.FIELDS.URL_TOKEN]?.value || '';
         const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey');
 
         // ボタンコンテナ
@@ -2094,9 +2433,10 @@
             const takeoverBtn = document.createElement('button');
             takeoverBtn.id = 'rcb-takeover-staff-btn';
             takeoverBtn.textContent = '担当を引継ぐ';
-            takeoverBtn.style.cssText = 'padding: 8px 16px; background-color: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;';
-            takeoverBtn.onmouseover = () => takeoverBtn.style.backgroundColor = '#e67e22';
-            takeoverBtn.onmouseout = () => takeoverBtn.style.backgroundColor = '#f39c12';
+            takeoverBtn.className = 'rcb-btn-save';
+            takeoverBtn.style.padding = '8px 16px';
+            takeoverBtn.style.fontSize = '12px';
+            takeoverBtn.style.backgroundColor = '#f39c12';
             
             takeoverBtn.onclick = async () => {
                 if (!currentStaff) {
@@ -2119,6 +2459,10 @@
                 
                 const success = await updateRecord(recordId, payload, ['担当引き継ぎ']);
                 if (success) location.reload();
+                if (success) {
+                    await updateAllDuplicateTicketsStaff(record['カルテNo']?.value, currentStaff, recordId);
+                    location.reload();
+                }
             };
             btnContainer.appendChild(takeoverBtn);
         }
@@ -2130,9 +2474,10 @@
             const forceEndBtn = document.createElement('button');
             forceEndBtn.id = 'rcb-force-end-btn';
             forceEndBtn.textContent = '強制終了';
-            forceEndBtn.style.cssText = 'padding: 8px 16px; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;';
-            forceEndBtn.onmouseover = () => forceEndBtn.style.backgroundColor = '#c0392b';
-            forceEndBtn.onmouseout = () => forceEndBtn.style.backgroundColor = '#e74c3c';
+            forceEndBtn.className = 'rcb-btn-save';
+            forceEndBtn.style.padding = '8px 16px';
+            forceEndBtn.style.fontSize = '12px';
+            forceEndBtn.style.backgroundColor = '#e74c3c';
             
             forceEndBtn.onclick = async () => {
                 const actionReason = await showDialog('このチケットを強制終了します。\n本当によろしいですか？\n強制終了の理由を入力してください。', 'prompt', '強制終了の確認', '強制終了の理由（必須）', '強制終了する', 'キャンセル');
@@ -2156,7 +2501,9 @@
                     payload['人物メモ'] = { value: evalData.memo };
                 }
                 
-                const success = await updateRecord(recordId, payload, [], false, false, actionReason.trim());
+                const confirmUrlStr = urlToken ? `\nURL: ${CONFIG.CONFIRM_BASE_URL}?token=${urlToken}${currentMethod === 'phone' ? '&mode=phone' : ''}` : '';
+                const reasonText = actionReason.trim() + confirmUrlStr;
+                const success = await updateRecord(recordId, payload, [], false, false, reasonText);
                 if (success) location.reload();
             };
             btnContainer.appendChild(forceEndBtn);
@@ -2171,9 +2518,10 @@
             const resetBtn = document.createElement('button');
             resetBtn.id = 'rcb-reset-btn';
             resetBtn.textContent = 'リセット';
-            resetBtn.style.cssText = 'padding: 8px 16px; background-color: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;';
-            resetBtn.onmouseover = () => resetBtn.style.backgroundColor = '#7f8c8d';
-            resetBtn.onmouseout = () => resetBtn.style.backgroundColor = '#95a5a6';
+            resetBtn.className = 'rcb-btn-save';
+            resetBtn.style.padding = '8px 16px';
+            resetBtn.style.fontSize = '12px';
+            resetBtn.style.backgroundColor = '#95a5a6';
             
             resetBtn.onclick = async () => {
                 const isResetOk = await showDialog('このレコードを初期状態にリセットしますか？\n入力された予約日時などのデータや経過情報もすべて消去されます。', 'confirm', 'リセット確認');
@@ -2248,10 +2596,15 @@
                         const now = new Date();
                         
                         // タイムアウト計算
-                        if (timeoutVal === '今日中') {
+                        if (timeoutVal === '今日中' || timeoutVal === '本日中') {
                             const endOfToday = new Date(sentTime);
                             endOfToday.setHours(23, 59, 59, 999);
                             if (now > endOfToday) isTimeout = true;
+                        } else if (timeoutVal === '明日午前中') {
+                            const endOfTomorrowMorning = new Date(sentTime);
+                            endOfTomorrowMorning.setDate(endOfTomorrowMorning.getDate() + 1);
+                            endOfTomorrowMorning.setHours(11, 59, 59, 999);
+                            if (now > endOfTomorrowMorning) isTimeout = true;
                         } else if (timeoutVal === '明日中') {
                             const endOfTomorrow = new Date(sentTime);
                             endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
@@ -2273,10 +2626,17 @@
                         }
 
                         if (isTimeout) {
+                            const tk = latestRecord[CONFIG.FIELDS.URL_TOKEN]?.value || '';
+                            const cm = latestRecord[CONFIG.FIELDS.METHOD]?.value || '';
+                            let confirmUrlStr = '';
+                            if (tk) {
+                                confirmUrlStr = `URL: ${CONFIG.CONFIRM_BASE_URL}?token=${tk}`;
+                                if (cm === 'phone') confirmUrlStr += '&mode=phone';
+                            }
                             // タイムアウト確定 -> ステータス更新実行
                             await updateRecord(recordId, {
                                 [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_TIMEOUT_VALUE }
-                            });
+                            }, [], false, false, confirmUrlStr);
                             
                             // 更新通知を出してリロードを促す
                             latestStatus = CONFIG.STATUS_TIMEOUT_VALUE; // ステータスを更新後のものとして扱う

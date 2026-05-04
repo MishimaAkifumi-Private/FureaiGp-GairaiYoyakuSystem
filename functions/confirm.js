@@ -338,6 +338,10 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     const phoneConfirmDate = (record["電話確認日時"] && record["電話確認日時"].value) || "";
     const mailReadDate = (record["メール既読日時"] && record["メール既読日時"].value) || "";
     const currentStaff = (record["担当者"] && record["担当者"].value) || "システム";
+    const sendDateVal = (record["メール送信日時"] && record["メール送信日時"].value) || "";
+    const timeoutVal = (record["タイムアウト"] && record["タイムアウト"].value) || "2時間";
+    const recordUrlToken = (record["URLトークン"] && record["URLトークン"].value) || "";
+    const methodVal = (record["対応方法"] && record["対応方法"].value) || (record["応対方法"] && record["応対方法"].value) || "";
 
     // ---------------------------------------------------------
     // POSTリクエスト処理 (キャンセル実行)
@@ -413,6 +417,15 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
       if (action === 're_request') {
         console.log(`[LOG] 再依頼処理開始: RecordID=${recordId}`);
         
+        // 日付またぎチェック
+        const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric' });
+        const sendDateStr = sendDateVal ? fmt.format(new Date(sendDateVal)) : "";
+        const nowDateStr = fmt.format(new Date());
+        if (sendDateStr !== nowDateStr) {
+            res.status(200).send(getTimeoutHtml(centerName, phoneNumber));
+            return;
+        }
+
         const currentHistories = record["経過情報"]?.value || [];
         currentHistories.push({
             value: {
@@ -487,13 +500,24 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         // ステータスが上記以外（主に「メール送信済」）の場合のみ「メール既読」に変更
         if (!keepStatusList.includes(currentStatus)) {
             updateBody.record["管理状況"] = { value: "メール既読" };
-            currentHistories.push({
-                value: {
-                    "経過情報_日時": { value: getJSTFormattedDate() },
-                    "経過情報_担当者": { value: currentStaff },
-                    "経過情報_管理状態": { value: "メール既読" }
+            
+            let confirmUrlStr = '';
+            if (recordUrlToken || token) {
+                const CONFIRM_BASE_URL = 'https://confirmreservation-yoslzibmlq-uc.a.run.app/';
+                confirmUrlStr = `${CONFIRM_BASE_URL}?token=${recordUrlToken || token}`;
+                if (methodVal === 'phone' || methodVal === '電話対応' || mode === 'phone') {
+                    confirmUrlStr += '&mode=phone';
                 }
-            });
+            }
+            const newHistory = {
+                "経過情報_日時": { value: getJSTFormattedDate() },
+                "経過情報_担当者": { value: currentStaff },
+                "経過情報_管理状態": { value: "メール既読" }
+            };
+            if (confirmUrlStr) {
+                newHistory["経過情報_理由"] = { value: confirmUrlStr };
+            }
+            currentHistories.push({ value: newHistory });
             updateBody.record["経過情報"] = { value: currentHistories };
         }
 
@@ -608,13 +632,24 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         const keepStatusList = ["閲覧期限切れ", "電話合意済", "完了", "メール既読", "メール合意済"];
         if (!keepStatusList.includes(currentStatus)) {
             updateBody.record["管理状況"] = { value: "メール既読" };
-            currentHistories.push({
-                value: {
-                    "経過情報_日時": { value: getJSTFormattedDate() },
-                    "経過情報_担当者": { value: currentStaff },
-                    "経過情報_管理状態": { value: "メール既読" }
+            
+            let confirmUrlStr = '';
+            if (recordUrlToken || token) {
+                const CONFIRM_BASE_URL = 'https://confirmreservation-yoslzibmlq-uc.a.run.app/';
+                confirmUrlStr = `URL: ${CONFIRM_BASE_URL}?token=${recordUrlToken || token}`;
+                if (methodVal === 'phone' || methodVal === '電話対応' || mode === 'phone') {
+                    confirmUrlStr += '&mode=phone';
                 }
-            });
+            }
+            const newHistory = {
+                "経過情報_日時": { value: getJSTFormattedDate() },
+                "経過情報_担当者": { value: currentStaff },
+                "経過情報_管理状態": { value: "メール既読" }
+            };
+            if (confirmUrlStr) {
+                newHistory["経過情報_理由"] = { value: confirmUrlStr };
+            }
+            currentHistories.push({ value: newHistory });
             updateBody.record["経過情報"] = { value: currentHistories };
         }
 
@@ -774,6 +809,38 @@ function getAlreadyCancelledHtml(centerName, phoneNumber) {
           <h1>この予約は無効になりました</h1>
           <p>この予約は無効となったか、既に取り消し手続きが完了しています。<br>ご不明な点がございましたら、${centerName}までお問い合わせください。</p>
           ${phoneNumber ? `<p style="font-size: 14px; font-weight: bold;">TEL: ${phoneNumber}</p>` : ''}
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
+ * 統合による無効時のHTML
+ */
+function getMergedHtml(centerName, phoneNumber) {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ご予約依頼の統合</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #e67e22; font-size: 20px; }
+          p { color: #555; line-height: 1.6; text-align: left; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1 style="text-align: center;">ご予約依頼の統合について</h1>
+          <p>お客様から複数のご予約依頼を頂戴したため、こちらの窓口は他のご依頼と統合して調整を行いました。</p>
+          <p>大変お手数ですが、別途当センターからお送りしている <strong>最新のメール</strong>、または <strong>お電話でのご案内</strong> をご確認ください。</p>
+          <hr style="border:0; border-top:1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 13px; text-align: center;">ご不明な点がございましたら、${centerName}までお問い合わせください。</p>
+          ${phoneNumber ? `<p style="font-size: 13px; font-weight: bold; text-align: center;">TEL: ${phoneNumber}</p>` : ''}
         </div>
       </body>
       </html>

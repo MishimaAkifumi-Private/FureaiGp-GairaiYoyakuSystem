@@ -85,12 +85,14 @@
         display: inline-flex;
         flex-direction: column;
         align-items: flex-start;
-        background: #fff;
-        padding: 8px 15px;
-        border-radius: 6px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        background: #fdfdfd;
+        padding: 6px 12px;
+        border-radius: 4px;
+        box-shadow: none;
+        border: 1px solid #e0e0e0;
         border-left: 5px solid #3498db;
-        min-width: 120px;
+        min-width: 100px;
+        cursor: default;
       }
       .rcb-badge-label {
         font-size: 10px;
@@ -199,31 +201,84 @@
         cursor: pointer;
         font-size: 12px;
         text-align: center;
-        transition: all 0.2s;
+        transition: all 0.1s ease;
+        box-shadow: 0 2px 0 rgba(0,0,0,0.05);
       }
-      .rcb-time-btn:hover {
+      .rcb-time-btn:hover:not(.selected) {
         background-color: #e6f7ff;
         border-color: #1890ff;
+        transform: translateY(-1px);
+        box-shadow: 0 3px 0 rgba(24,144,255,0.2);
+      }
+      .rcb-time-btn:active:not(.selected) {
+        transform: translateY(1px);
+        box-shadow: none;
       }
       .rcb-time-btn.selected {
         background-color: #1890ff;
         color: white;
         border-color: #1890ff;
         font-weight: bold;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        transform: translateY(1px);
       }
       .rcb-btn-save {
         background-color: #3498db;
         color: white;
         border: none;
         padding: 10px 20px;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
         font-weight: bold;
         font-size: 14px;
-        transition: background-color 0.2s;
+        transition: all 0.1s ease;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2);
+        border-bottom: 3px solid rgba(0,0,0,0.2);
       }
-      .rcb-btn-save:hover {
-        background-color: #2980b9;
+      .rcb-btn-save:hover:not(:disabled) {
+        filter: brightness(0.9);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3);
+        border-bottom: 4px solid rgba(0,0,0,0.2);
+        margin-bottom: -1px;
+      }
+      .rcb-btn-save:active:not(:disabled) {
+        filter: brightness(0.85);
+        transform: translateY(2px);
+        border-bottom: 1px solid rgba(0,0,0,0.2);
+        margin-bottom: 2px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1), inset 0 2px 4px rgba(0,0,0,0.2);
+      }
+      .rcb-btn-save:disabled {
+        cursor: not-allowed;
+        box-shadow: none;
+        border-bottom: none;
+        transform: none;
+        margin-bottom: 3px;
+        opacity: 0.6;
+      }
+      .rcb-btn-secondary {
+        background-color: #fff;
+        color: #555;
+        border: 1px solid #ccc;
+        padding: 6px 15px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+        display: flex; align-items: center; gap: 5px;
+        transition: all 0.1s ease;
+        box-shadow: 0 3px 5px rgba(0,0,0,0.05), inset 0 -2px 0 rgba(0,0,0,0.05);
+      }
+      .rcb-btn-secondary:hover:not(:disabled) {
+        background-color: #f8f9fa;
+        border-color: #bbb;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.08), inset 0 -2px 0 rgba(0,0,0,0.05);
+      }
+      .rcb-btn-secondary:active:not(:disabled) {
+        transform: translateY(1px);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
       }
       .rcb-message {
         margin-top: 10px;
@@ -268,10 +323,25 @@
         display: flex; justify-content: flex-end; gap: 10px;
       }
       .rcb-modal-btn {
-        padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;
+        padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px;
+        transition: all 0.1s ease;
+        box-shadow: 0 3px 5px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2);
+        border-bottom: 3px solid rgba(0,0,0,0.2);
+      }
+      .rcb-modal-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 5px 7px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3);
+        border-bottom: 4px solid rgba(0,0,0,0.2);
+        margin-bottom: -1px;
+      }
+      .rcb-modal-btn:active:not(:disabled) {
+        transform: translateY(2px);
+        border-bottom: 1px solid rgba(0,0,0,0.2);
+        margin-bottom: 2px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1), inset 0 2px 4px rgba(0,0,0,0.2);
       }
       .rcb-modal-btn-cancel {
-        background: #f8f9fa; color: #555; border: 1px solid #ddd;
+        background: #f8f9fa; color: #555; border: 1px solid #ddd; border-bottom: 3px solid #ccc;
       }
       .rcb-modal-btn-ok {
         background: #3498db; color: #fff;

@@ -20,6 +20,8 @@
     PHONE_CONFIRM_FIELD: '電話確認日時',
     TIMEOUT_FIELD: 'タイムアウト', // タイムアウトフィールド
     SEND_DATE_FIELD: 'メール送信日時', // 送信日時フィールド
+    URL_TOKEN_FIELD: 'URLトークン', 
+    CONFIRM_BASE_URL: 'https://confirmreservation-yoslzibmlq-uc.a.run.app/',
     CANCEL_VALUE: 'キャンセル',     // グレーアウトする値
     FINISH_VALUE: '終了',           // 終了ステータス（グレーアウト）
     EVALUATION_WAIT_VALUE: '評価待ち', // 評価待ちステータス
@@ -57,6 +59,7 @@
     // 管理ステータスフィールドの要素を取得（一覧に表示されている必要があります）
     const statusElements = kintone.app.getFieldElements(CONFIG.STATUS_FIELD);
     const methodElements = kintone.app.getFieldElements(CONFIG.METHOD_FIELD);
+    const chartNoElements = kintone.app.getFieldElements('カルテNo');
     if (!statusElements) return event;
 
     // --- 1. 同期的なDOM操作（スタイル適用とアイコン化） ---
@@ -126,6 +129,39 @@
 
     // 非同期で処理を実行（DOM操作およびデータ補完）
     (async () => {
+        // 多重チケットの検知と担当者自動設定
+        const chartNos = records.map(r => r['カルテNo']?.value).filter(v => v);
+        const uniqueChartNos = [...new Set(chartNos)];
+        const duplicateChartNos = new Set();
+        const duplicateAssignedMap = {};
+        
+        if (uniqueChartNos.length > 0) {
+            try {
+                const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+                const query = `カルテNo in ("${uniqueChartNos.join('","')}") and 管理状況 not in ${activeStatuses}`;
+                const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+                    app: kintone.app.getId(),
+                    query: query,
+                    fields: ['$id', 'カルテNo', '担当者', '管理状況']
+                });
+                const countMap = {};
+                resp.records.forEach(r => {
+                    const cNo = r['カルテNo'].value;
+                    countMap[cNo] = (countMap[cNo] || 0) + 1;
+                    if (r['担当者']?.value && r['管理状況']?.value !== '未着手') {
+                        duplicateAssignedMap[cNo] = r['担当者'].value;
+                    }
+                });
+                Object.keys(countMap).forEach(cNo => {
+                    if (countMap[cNo] > 1) {
+                        duplicateChartNos.add(cNo);
+                    }
+                });
+            } catch(e) {
+                console.error('[ListRowStyler] 多重チケット確認エラー', e);
+            }
+        }
+
         // 必要なフィールドが一覧にあるか確認
         const hasExecutor = records[0].hasOwnProperty(CONFIG.EXECUTOR_FIELD);
         const hasStaffConfirm = records[0].hasOwnProperty(CONFIG.STAFF_CONFIRM_FIELD);
@@ -133,17 +169,18 @@
         const hasTimeout = records[0].hasOwnProperty(CONFIG.TIMEOUT_FIELD);
         const hasSendDate = records[0].hasOwnProperty(CONFIG.SEND_DATE_FIELD);
         const hasHistory = records[0].hasOwnProperty('経過情報');
+        const hasMemo = records[0].hasOwnProperty('人物メモ');
         
         let recordMap = {};
 
         // フィールドが不足している場合はAPIで取得
-        if (!hasExecutor || !hasStaffConfirm || !hasLock || !hasTimeout || !hasSendDate || !hasHistory) {
+        if (!hasExecutor || !hasStaffConfirm || !hasLock || !hasTimeout || !hasSendDate || !hasHistory || !hasMemo) {
             const ids = records.map(r => r.$id.value);
             try {
                 const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
                     app: kintone.app.getId(),
                     query: `$id in ("${ids.join('","')}")`,
-                    fields: ['$id', CONFIG.EXECUTOR_FIELD, CONFIG.STAFF_CONFIRM_FIELD, CONFIG.RESERVE_LOCK_FIELD, CONFIG.TIMEOUT_FIELD, CONFIG.SEND_DATE_FIELD, '経過情報', '共通評価', 'キャンセル日時']
+                    fields: ['$id', CONFIG.EXECUTOR_FIELD, CONFIG.STAFF_CONFIRM_FIELD, CONFIG.RESERVE_LOCK_FIELD, CONFIG.TIMEOUT_FIELD, CONFIG.SEND_DATE_FIELD, '経過情報', '共通評価', 'キャンセル日時', '人物メモ']
                 });
                 resp.records.forEach(r => {
                     recordMap[r.$id.value] = r;
@@ -195,6 +232,41 @@
                 try { applyStylesSync(record, index, executor, staffConfirm); } catch(e){}
             }
 
+            const currentMemo = getVal('人物メモ') || '';
+            const hasConfirmedDup = currentMemo.includes('[複数の予約を短期間に依頼:');
+
+            // 多重チケットの警告表示 (DOM操作)
+            if (duplicateChartNos.has(record['カルテNo']?.value) && !hasConfirmedDup) {
+                // カルテNoフィールドがあればそこへ、なければ管理状況フィールドへ
+                const targetEl = (chartNoElements && chartNoElements[index]) ? chartNoElements[index] : statusElements[index];
+                if (targetEl && !targetEl.querySelector('.duplicate-warn')) {
+                    const warnIcon = document.createElement('span');
+                    warnIcon.className = 'duplicate-warn';
+                    warnIcon.textContent = ' ⚠️重複';
+                    warnIcon.style.color = '#e74c3c';
+                    warnIcon.style.fontWeight = 'bold';
+                    warnIcon.style.fontSize = '12px';
+                    warnIcon.title = '同一カルテNoで進行中の他チケットが存在します';
+                    
+                    const innerWrapper = targetEl.querySelector('.recordlist-cell-gaia > div') || targetEl.firstChild;
+                    if (innerWrapper) {
+                        innerWrapper.appendChild(warnIcon);
+                    } else {
+                        targetEl.appendChild(warnIcon);
+                    }
+                    
+                    const row = targetEl.closest('tr');
+                    if (row) {
+                        Array.from(row.children).forEach(cell => {
+                            cell.style.borderTop = '2px solid #e74c3c';
+                            cell.style.borderBottom = '2px solid #e74c3c';
+                        });
+                        if (row.firstElementChild) row.firstElementChild.style.borderLeft = '2px solid #e74c3c';
+                        if (row.lastElementChild) row.lastElementChild.style.borderRight = '2px solid #e74c3c';
+                    }
+                }
+            }
+
             // 3. 自動更新ロジック (終了判定 & ロック解除)
             let updatePayload = {};
             let needsUpdate = false;
@@ -238,8 +310,11 @@
                 let expireDate = new Date(sentTime);
 
                 // タイムアウト計算
-                if (timeoutVal === '今日中') {
+                if (timeoutVal === '今日中' || timeoutVal === '本日中') {
                     expireDate.setHours(23, 59, 59, 999);
+                } else if (timeoutVal === '明日午前中') {
+                    expireDate.setDate(expireDate.getDate() + 1);
+                    expireDate.setHours(11, 59, 59, 999);
                 } else if (timeoutVal === '明日中') {
                     expireDate.setDate(expireDate.getDate() + 1);
                     expireDate.setHours(23, 59, 59, 999);
@@ -273,8 +348,18 @@
                     else if (!Array.isArray(currentHistories)) currentHistories = [];
                     const nowStr = formatDateTime(new Date());
                     
+                    const tokenVal = getVal(CONFIG.URL_TOKEN_FIELD);
+                    let confirmUrlStr = '';
+                    if (tokenVal) {
+                        confirmUrlStr = `URL: ${CONFIG.CONFIRM_BASE_URL}?token=${tokenVal}`;
+                        if (getVal(CONFIG.METHOD_FIELD) === 'phone') confirmUrlStr += '&mode=phone';
+                    }
+
+                    const newHistory = { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: '要電話対応' } };
+                    if (confirmUrlStr) newHistory["経過情報_理由"] = { value: confirmUrlStr };
+
                     currentHistories.push({
-                        value: { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: '要電話対応' } }
+                        value: newHistory
                     });
                     
                     updatePayload['経過情報'] = { value: currentHistories };
@@ -313,6 +398,25 @@
                         needsUpdate = true;
                     }
                 }
+            }
+
+            // (E) 未着手多重チケットの自動担当設定
+            if (status === '未着手' && duplicateChartNos.has(record['カルテNo']?.value) && duplicateAssignedMap[record['カルテNo'].value]) {
+                const autoStaff = duplicateAssignedMap[record['カルテNo'].value];
+                updatePayload['担当者'] = { value: autoStaff };
+                updatePayload[CONFIG.STATUS_FIELD] = { value: '担当設定' };
+                
+                let currentHistories = getVal('経過情報');
+                if (updatePayload['経過情報']) currentHistories = updatePayload['経過情報'].value;
+                else if (!Array.isArray(currentHistories)) currentHistories = [];
+                const nowStr = formatDateTime(new Date());
+                
+                currentHistories.push({
+                    value: { "経過情報_日時": { value: nowStr }, "経過情報_担当者": { value: 'システム' }, "経過情報_管理状態": { value: '担当設定' }, "経過情報_理由": { value: '多重チケットのため担当者を自動設定' } }
+                });
+                
+                updatePayload['経過情報'] = { value: currentHistories };
+                needsUpdate = true;
             }
 
             if (needsUpdate) {

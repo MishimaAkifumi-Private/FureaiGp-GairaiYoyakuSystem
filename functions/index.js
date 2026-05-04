@@ -366,7 +366,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     const sendDateVal = (record["メール送信日時"] && record["メール送信日時"].value) || "";
     const timeoutVal = (record["タイムアウト"] && record["タイムアウト"].value) || "2時間";
     const recordUrlToken = (record["URLトークン"] && record["URLトークン"].value) || "";
-    const methodVal = (record["応対方法"] && record["応対方法"].value) || "";
+    const methodVal = (record["対応方法"] && record["対応方法"].value) || (record["応対方法"] && record["応対方法"].value) || "";
     const currentStaff = (record["担当者"] && record["担当者"].value) || "システム";
 
     // ---------------------------------------------------------
@@ -444,6 +444,15 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
       if (action === 're_request') {
         console.log(`[LOG] 再依頼処理開始: RecordID=${recordId}`);
         
+        // 日付またぎチェック
+        const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric' });
+        const sendDateStr = sendDateVal ? fmt.format(new Date(sendDateVal)) : "";
+        const nowDateStr = fmt.format(new Date());
+        if (sendDateStr !== nowDateStr) {
+            res.status(200).send(getTimeoutHtml(centerName, phoneNumber));
+            return;
+        }
+
         const currentHistories = record["経過情報"]?.value || [];
         currentHistories.push({
             value: {
@@ -498,46 +507,6 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     if (currentStatus === "キャンセル" || currentStatus === "URL取下" || currentStatus === "スタッフ取下" || currentStatus === "終了" || currentStatus === "担当設定") {
         res.status(200).send(getAlreadyCancelledHtml(centerName, phoneNumber));
         return;
-    }
-
-    // 2. 既読日時の更新
-    // 有効なURLで、かつ未読の場合のみアクセスがあった時点で既読日時を記録する
-    if (!mailReadDate) {
-        const nowISO = new Date().toISOString();
-        const currentHistories = record["経過情報"]?.value || [];
-        const updateBody = {
-            app: APP_ID,
-            id: recordId,
-            record: {
-                "メール既読日時": { value: nowISO }
-            }
-        };
-        
-        // ステータス更新判定
-        // 以下のステータスの場合は、ステータス自体は変更せず既読日時のみ記録する
-        const keepStatusList = ["閲覧期限切れ", "電話合意済", "完了", "メール既読", "メール合意済"];
-        
-        // ステータスが上記以外（主に「メール送信済」）の場合のみ「メール既読」に変更
-        if (!keepStatusList.includes(currentStatus)) {
-            updateBody.record["管理状況"] = { value: "メール既読" };
-            currentHistories.push({
-                value: {
-                    "経過情報_日時": { value: getJSTFormattedDate() },
-                    "経過情報_担当者": { value: currentStaff },
-                    "経過情報_管理状態": { value: "メール既読" }
-                }
-            });
-            updateBody.record["経過情報"] = { value: currentHistories };
-        }
-
-        try {
-            const updateResponse = await fetch(`${BASE_URI}/record.json`, {
-                method: "PUT",
-                headers: { "X-Cybozu-API-Token": API_TOKEN, "Content-Type": "application/json" },
-                body: JSON.stringify(updateBody)
-            });
-            if (!updateResponse.ok) console.error(`[ERROR] 既読更新失敗: ${await updateResponse.text()}`);
-        } catch (e) { console.error(`[ERROR] 既読更新エラー:`, e); }
     }
 
     // 1.2 再依頼済みの場合
@@ -629,6 +598,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     // ステータスが既に「メール既読検知」でも、メール既読日時が空なら更新する
     if (!mailReadDate) {
         const nowISO = new Date().toISOString();
+        const currentHistories = record["経過情報"]?.value || [];
         const updateBody = {
             app: APP_ID,
             id: recordId,
@@ -641,6 +611,25 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         const keepStatusList = ["キャンセル", "URL取下", "スタッフ取下", "閲覧期限切れ", "電話合意済", "完了", "終了", "メール既読", "メール合意済"];
         if (!keepStatusList.includes(currentStatus)) {
             updateBody.record["管理状況"] = { value: "メール既読" };
+
+            let confirmUrlStr = '';
+            if (recordUrlToken || token) {
+                const CONFIRM_BASE_URL = 'https://confirmreservation-yoslzibmlq-uc.a.run.app/';
+                confirmUrlStr = `${CONFIRM_BASE_URL}?token=${recordUrlToken || token}`;
+                if (methodVal === 'phone' || methodVal === '電話対応' || mode === 'phone') {
+                    confirmUrlStr += '&mode=phone';
+                }
+            }
+            const newHistory = {
+                "経過情報_日時": { value: getJSTFormattedDate() },
+                "経過情報_担当者": { value: currentStaff },
+                "経過情報_管理状態": { value: "メール既読" }
+            };
+            if (confirmUrlStr) {
+                newHistory["経過情報_理由"] = { value: confirmUrlStr };
+            }
+            currentHistories.push({ value: newHistory });
+            updateBody.record["経過情報"] = { value: currentHistories };
         }
 
         const updateResponse = await fetch(`${BASE_URI}/record.json`, {
@@ -810,6 +799,38 @@ function getAlreadyCancelledHtml(centerName, phoneNumber) {
 }
 
 /**
+ * 統合による無効時のHTML
+ */
+function getMergedHtml(centerName, phoneNumber) {
+    return `
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ご予約依頼の統合</title>
+        <style>
+          body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #e67e22; font-size: 20px; }
+          p { color: #555; line-height: 1.6; text-align: left; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1 style="text-align: center;">ご予約依頼の統合について</h1>
+          <p>お客様から複数のご予約依頼を頂戴したため、こちらの窓口は他のご依頼と統合して調整を行いました。</p>
+          <p>大変お手数ですが、別途当センターからお送りしている <strong>最新のメール</strong>、または <strong>お電話でのご案内</strong> をご確認ください。</p>
+          <hr style="border:0; border-top:1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 13px; text-align: center;">ご不明な点がございましたら、${centerName}までお問い合わせください。</p>
+          ${phoneNumber ? `<p style="font-size: 13px; font-weight: bold; text-align: center;">TEL: ${phoneNumber}</p>` : ''}
+        </div>
+      </body>
+      </html>
+    `;
+}
+
+/**
  * URL取下完了時のHTML (新規追加)
  */
 function getWithdrawnHtml(centerName, phoneNumber) {
@@ -866,9 +887,9 @@ function getTimeoutRetryHtml(recordId, centerName, phoneNumber) {
       <body>
         <div class="container">
           <h1>予約確認の期限が切れました</h1>
-          <p>所定の時間内にご確認いただけなかったため、予約枠の確保を解除いたしました。</p>
-          <p>本日中であれば以下のボタンから<strong>再依頼</strong>を行うことが可能です。<br>再依頼を行うと、すでに頂ている希望内容をもとに再調整してご連絡いたします。</p>
-          <p>再依頼を行わない場合は「再依頼しない」を選択してください。<br>この予約はキャンセル扱いとなりますが、明日まで待つことなくWEBフォームから新たな予約を行うことができます。</p>
+          <p>一定の時間内にご確認されなかったため、一旦この仮予約枠は無効となりました。</p>
+          <p>別の仮予約枠をご希望される場合は、以下の「再依頼する」ボタンを押してください。すでに頂ている希望内容をもとに再調整してご連絡させていただきます。</p>
+          <p>もし希望の条件を変えてご予約を変更される場合は「再依頼しない」ボタンを押していただき、予約フォームから新規予約としてご依頼ください。</p>
           <div class="btn-group">
             <form method="POST" action="?id=${recordId}">
               <input type="hidden" name="action" value="re_request">
