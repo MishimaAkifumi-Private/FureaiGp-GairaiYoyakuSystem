@@ -1,4 +1,4 @@
-﻿﻿﻿﻿/*
+﻿﻿/*
  * kintone Display Order Reset Button (for Number Field)
  * Copyright (c) 2024 Your Name
  * Released under the MIT license
@@ -26,6 +26,15 @@
 
     if (isFiltered) {
       return event; // 絞り込み時はボタンを表示しない
+    }
+
+    // ソート順チェック: 「表示順」フィールドでソートされている場合のみ処理する
+    const query = kintone.app.getQuery() || '';
+    const match = query.match(/order\s+by\s+([^\s,]+)/i);
+    const sortField = match ? match[1].replace(/['"`]/g, '') : null;
+
+    if (sortField !== ORDER_FIELD_CODE) {
+      return event; // 「表示順」以外でソートされている（またはソート指定がない）場合はボタンを表示しない
     }
 
     // 非同期で全件チェックしてボタン表示判定
@@ -98,16 +107,20 @@
     try {
       const allRecords = await fetchAllRecords();
       
+      const query = kintone.app.getQuery() || '';
+      const isDesc = /\border\s+by\s+[^\s,]+\s+desc/i.test(query);
+      
       let needsReset = false;
-      let previousVal = -Infinity;
+      let previousVal = isDesc ? Infinity : -Infinity;
 
       for (let i = 0; i < allRecords.length; i++) {
         const record = allRecords[i];
         const val = Number(record[ORDER_FIELD_CODE].value);
         
         // 1. 10の倍数でない
-        // 2. 昇順になっていない (前の値より小さい)
-        if (val % 10 !== 0 || val < previousVal) {
+        // 2. 順序が崩れている（昇順ソート時に前より小さい、または降順ソート時に前より大きい）
+        const isOrderBroken = isDesc ? (val > previousVal) : (val < previousVal);
+        if (val % 10 !== 0 || isOrderBroken) {
           needsReset = true;
           break;
         }

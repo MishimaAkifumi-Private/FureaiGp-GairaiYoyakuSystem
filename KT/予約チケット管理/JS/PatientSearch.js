@@ -74,7 +74,7 @@
         legendBtn.id = 'custom-legend-btn';
         legendBtn.textContent = '管理状況凡例';
         // 独立したボタンとしてスタイルを定義
-        legendBtn.style.cssText = 'display: inline-flex; align-items: center; background: #6c757d; color: #fff; border: 1px solid #565e64; border-radius: 40px; padding: 4px 15px; margin-left: 10px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); height: 48px; box-sizing: border-box; font-weight: bold; cursor: pointer;';
+        legendBtn.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; background: #6c757d; color: #fff; border: 1px solid #565e64; border-radius: 4px; padding: 0 12px; margin-left: 10px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); height: 32px; box-sizing: border-box; font-size: 12px; font-weight: bold; cursor: pointer;';
         legendBtn.onmouseover = () => legendBtn.style.background = '#5a6268';
         legendBtn.onmouseout = () => legendBtn.style.background = '#6c757d';
         legendBtn.onclick = showStatusLegendDialog;
@@ -141,29 +141,29 @@
         content.className = 'rcb-modal-body';
 
         const legendData = [
-            { status: '未着手', desc: '新規のチケットが到着した直後。' },
-            { status: '担当設定', desc: '担当者を設定した。' },
-            { status: 'メール送信済', desc: '患者に仮予約日時を確保に関する案内メールを送信した。' },
-            { status: 'メール既読', desc: '患者に送信した仮予定日時確保の案内メールを読んだ。' },
-            { status: '閲覧期限切れ', desc: '患者に送信した仮予定日時確保の案内が読まれず期限が過ぎた。' },
-            { status: '申込者再依頼', desc: '閲覧期限後に改めて仮予約日時の再確保を依頼された(※1)。' },
-            { status: 'URL取下', desc: '予約日時が確定していたが、受診日時までに患者が予約を取下げた。' },
-            { status: 'スタッフ取下', desc: 'スタッフが手違いなどにより確保した仮予約日時の取下げを行った。' },
-            { status: 'スタッフ取下中止', desc: 'スタッフが仮予約日時を取下げたが復活させた(取下をやめた)。' },
-            { status: '終了', desc: '患者の受診日時が予定通り過ぎた、あるいはスタッフの判断により患者の受診日時の予定を手動で無効にした(※2)。' },
-            { status: 'WEB取下', desc: '患者によるWebフォームからの予約取下げ依頼をスタッフが処理した。' }
+            { status: '未着手', desc: '新規のチケットが到着した直後' },
+            { status: '担当設定', desc: '担当者を設定した' },
+            { status: 'メール送信済', desc: '患者に仮予約日時を確保に関する案内メールを送信した' },
+            { status: 'メール既読', desc: '患者に送信した仮予定日時確保の案内メールを患者が読んだ' },
+            { status: '閲覧期限切れ', desc: '患者に送信した仮予定日時確保の案内が患者に読まれず期限が過ぎた' },
+            { status: '申込者再依頼', desc: '閲覧期限後に改めて仮予約日時の再確保を患者から依頼された(※1)' },
+            { status: 'URL取下', desc: '予約日時が確定していたが、受診日時までに患者がその予約を取下げた' },
+            { status: 'スタッフ取下', desc: 'スタッフの手違いなどにより確保した仮予約日時の取下げをスタッフが行った' },
+            { status: 'スタッフ取下中止', desc: 'スタッフが仮予約日時を取下げたものの復活させることにした(取下をやめた)' },
+            { status: '終了', desc: '患者の受診日時が(予定通り)経過した、あるいはスタッフの判断により患者の受診日時の予定を手動で無効にした(※2)' },
+            { status: 'WEB取下', desc: '患者がWebフォームから行った予約取下げ依頼を、スタッフが処理した' }
         ];
 
         const notes = `
             <div style="margin-top: 20px; font-size: 12px; line-height: 1.6; color: #555; background-color: #f8f9fa; padding: 15px; border-radius: 4px; border: 1px solid #e9ecef;">
-                <p style="margin:0 0 10px 0;"><strong>(※1)</strong> 閲覧期限当日中であれば患者はWebフォームを経由せずに仮予約日時確保を再依頼出来ます。</p>
-                <p style="margin:0 0 5px 0;"><strong>(※2)</strong> Webフォームで予約が確定すると、以下の条件を満たすまでWebフォームからの新らたな予約はできません。</p>
+                <p style="margin:0 0 10px 0;"><strong>(※1)</strong> 閲覧期限当日中であれば、患者はWebフォームを経由せずに仮予約日時確保を再依頼出来ます</p>
+                <p style="margin:0 0 5px 0;"><strong>(※2)</strong> Webフォームで予約が確定すると、患者は以下いずれかの条件を満たすまでWebフォームから新たな予約はできません</p>
                 <ul style="margin: 0; padding-left: 20px;">
-                    <li>患者からのWebフォームからの取下げ依頼をスタッフが処理した場合。</li>
-                    <li>患者に届いているメール上のURL(リンク)から取下げた場合。</li>
-                    <li>患者の診療予約日時が過ぎたたまま翌日になった場合。</li>
-                    <li>スタッフが【手動終了】のボタン操作を行った場合。</li>
-                    <li>スタッフが【スタッフ取下】後に即時無効処理を選択した場合★要確認★。</li>
+                    <li>患者からのWebフォームからの取下げ依頼をスタッフが処理した場合</li>
+                    <li>患者に届いているメール上のURL(リンク)から取下げた場合</li>
+                    <li>患者の診療予約日時が過ぎたたまま翌日になった場合</li>
+                    <li>スタッフが【手動終了】のボタン操作を行った場合</li>
+                    <li>スタッフが【スタッフ取下】のボタン操作後に即時無効処理を選択した場合★要確認★</li>
                 </ul>
             </div>
         `;
@@ -173,8 +173,9 @@
             <style>
                 .legend-table { width: 100%; border-collapse: collapse; font-size: 13px; }
                 .legend-table th, .legend-table td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
-                .legend-table th { background-color: #f8f9fa; font-weight: bold; }
+                .legend-table th { background-color: #f8f9fa; font-weight: bold; text-align: center; vertical-align: middle; }
                 .legend-table th:first-child { width: 150px; }
+                .legend-table td:first-child { text-align: center; vertical-align: middle; }
                 .legend-table tr:nth-child(even) { background-color: #fdfdfd; }
             </style>
             <table class="legend-table">

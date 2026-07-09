@@ -1,3 +1,4 @@
+
 /*
  * ShinryoViewer.js (v30)
  * 診療シフト管理アプリ(ID:156)用 - 描画エンジン
@@ -264,18 +265,19 @@ window.ShinryoApp = window.ShinryoApp || {};
 
       /* --- 詳細ボタン --- */
       .btn-detail {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
         background-color: #466dd8;
         color: #fff;
         border: none;
         border-radius: 4px;
-        padding: 4px 16px;
+        padding: 4px 12px;
         font-size: 11px;
         cursor: pointer;
-        margin-left: 8px;
         transition: all 0.2s;
-        vertical-align: middle;
         white-space: nowrap;
-        flex-shrink: 0; /* ★追加: ボタンが縮まないようにする */
       }
       .btn-detail:hover { background-color: #218838; }
 
@@ -336,9 +338,10 @@ window.ShinryoApp = window.ShinryoApp || {};
           padding: 6px 10px;
           display: flex;
           align-items: center;
-          justify-content: space-between; /* ボタンを右寄せにするため変更 */
+          justify-content: center;
           border-bottom: 1px solid #eee;
           box-sizing: border-box;
+          position: relative;
       }
     `;
     const styleElement = document.createElement('style');
@@ -1360,10 +1363,12 @@ window.ShinryoApp = window.ShinryoApp || {};
                         containerDiv.style.color = '#fff';
                     }
 
-                    // ★追加: 1人の場合は高さを100%にする
+                    // ★追加: 1人の場合は高さを100%、複数人の場合はrowSpan分で等分する
                     if (rowSpan === 1) {
                         containerDiv.style.height = '100%';
                         containerDiv.style.borderBottom = 'none';
+                    } else {
+                        containerDiv.style.height = `calc(100% / ${rowSpan})`;
                     }
 
                     // ★追加: 個別レコードの変更判定（医師名枠を点滅させる）

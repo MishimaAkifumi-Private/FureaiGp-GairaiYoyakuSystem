@@ -127,6 +127,51 @@
         applyStylesSync(record, index, executor, staffConfirm);
     });
 
+    // --- 管理状況に基づくカスタムソート ---
+    const STATUS_ORDER = {
+        '未着手': 1,
+        '担当設定': 2,
+        'メール送信済': 3,
+        'メール既読': 4,
+        '電話合意済': 4,
+        '閲覧期限切れ': 5,
+        '申込者再依頼': 6,
+        'URL取下': 7,
+        'スタッフ取下': 8,
+        'スタッフ取下中止': 9,
+        '終了': 10,
+        '評価待ち': 10,
+        '強制終了': 10,
+        'WEB取下': 11
+    };
+
+    if (statusElements && statusElements.length > 0) {
+        const tbody = statusElements[0].closest('tbody');
+        if (tbody) {
+            const rowsWithData = [];
+            records.forEach((record, index) => {
+                const el = statusElements[index];
+                const row = el ? el.closest('tr') : null;
+                if (row) {
+                    rowsWithData.push({ record, row, index });
+                }
+            });
+
+            rowsWithData.sort((a, b) => {
+                const orderA = STATUS_ORDER[a.record[CONFIG.STATUS_FIELD]?.value] || 999;
+                const orderB = STATUS_ORDER[b.record[CONFIG.STATUS_FIELD]?.value] || 999;
+                if (orderA !== orderB) {
+                    return orderA - orderB;
+                }
+                return a.index - b.index; // 元の順序（更新日時等）を維持
+            });
+
+            rowsWithData.forEach(item => {
+                tbody.appendChild(item.row);
+            });
+        }
+    }
+
     // 非同期で処理を実行（DOM操作およびデータ補完）
     (async () => {
         // 多重チケットの検知と担当者自動設定
