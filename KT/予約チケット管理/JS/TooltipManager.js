@@ -15,18 +15,10 @@
         position: relative;
         display: inline-flex;
         align-items: center;
-<<<<<<< HEAD
-        margin-left: 6px;
-        color: #9DA0A4;
-        cursor: help;
-        vertical-align: middle;
-        font-size: 16px;
-=======
         margin-left: 8px;
         cursor: help;
         vertical-align: middle;
         font-size: 20px; /* アイコンサイズ調整 */
->>>>>>> d536855 (updated)
       }
       /* ツールチップ吹き出し本体 */
       .custom-tooltip-icon::after {
@@ -89,11 +81,7 @@
     const span = document.createElement('span');
     span.className = 'custom-tooltip-icon';
     span.setAttribute('data-tooltip', tooltipText);
-<<<<<<< HEAD
-    span.innerHTML = '💡';
-=======
     span.textContent = '💡';
->>>>>>> d536855 (updated)
     return span;
   };
 
@@ -107,7 +95,7 @@
     },
     {
       match: (el) => el.id === 'rcb-reset-btn',
-      text: '担当者等を初期化してチケット到着時の状態まで戻します（チケット情報は維持されます）。メールを送信した後の場合、そのメールに含まれる予約時日時などのリンク(URL)情報をアクセスすると無効表示になります',
+      text: '詳しくはツールバーにある【管理状況凡例】の説明を参照してください。',
       position: 'inside' // ボタンの内部に配置
     },
     {
@@ -139,6 +127,11 @@
       match: (el) => el.classList && el.classList.contains('rcb-btn-save') && el.textContent.includes('メールを送信する'),
       text: '仮予約日時など、設定した内容で依頼者にメールを送信します。',
       position: 'inside' // ボタンの内部に配置
+    },
+    {
+      match: (el) => el.id === 'rcb-search-btn',
+      text: '詳しくはツールバーにある【管理状況凡例】の説明を参照してください。',
+      position: 'inside'
     }
   ];
 
