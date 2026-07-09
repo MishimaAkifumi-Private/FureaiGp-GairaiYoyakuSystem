@@ -262,7 +262,7 @@
             // ★変更: 全体編集ボタンを右側に配置
             const btnDetail = document.createElement('button');
             btnDetail.className = 'mode-switch-btn btn-to-detail';
-            btnDetail.textContent = '全医師';
+            btnDetail.textContent = '全編集';
             btnDetail.style.position = 'absolute';
             btnDetail.style.right = '20px';
             btnDetail.style.top = '50%';
@@ -2755,6 +2755,7 @@
       }
   }
 
+<<<<<<< HEAD
   // ★追加: 保存成功時に一覧画面(inputモード)へ戻る
   kintone.events.on(['app.record.edit.submit.success', 'app.record.create.submit.success'], function(event) {
       const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
@@ -2779,10 +2780,21 @@
           if (document.getElementById('custom-nav-buttons')) return;
 
           const editButtons = document.querySelector('.gaia-argoui-app-edit-buttons');
+=======
+  // ★追加: 個別編集画面へのナビゲーションボタン追加
+  kintone.events.on(['app.record.detail.show', 'app.record.edit.show'], function(event) {
+      const headerSpace = kintone.app.record.getHeaderMenuSpaceElement();
+      if (headerSpace && !document.getElementById('custom-nav-buttons')) {
+          const container = document.createElement('div');
+          container.id = 'custom-nav-buttons';
+          // ★修正: z-indexを追加してクリック可能にする (ヘッダー領域外へのはみ出し対策)
+          container.style.cssText = "float: left; display: flex; gap: 10px; margin-left: 10px; align-items: center; margin-top: 15px; margin-right: 40px; position: relative; z-index: 1000;";
+>>>>>>> d536855 (updated)
           
           let targetSpace = null;
           let insertBeforeNode = null;
 
+<<<<<<< HEAD
           if (editButtons) {
               // 編集画面: 保存・キャンセルボタンと同じ領域の先頭に配置
               targetSpace = editButtons;
@@ -2803,6 +2815,14 @@
               // フォールバック
               targetSpace = kintone.app.record.getHeaderMenuSpaceElement();
           }
+=======
+          const btnDashboard = document.createElement('i');
+          btnDashboard.className = 'fa-solid fa-hospital';
+          btnDashboard.title = 'Dashboard';
+          btnDashboard.style.cssText = "font-size: 35px; color: rgb(60, 147, 225); cursor: pointer; margin-right:0px; margin-left: 0px; margin-bottom: 5px;"; // ★変更: 指定色
+          // 個別編集画面(show/edit)からは階層を一つ上がって一覧へ遷移
+          btnDashboard.onclick = () => window.location.href = appRoot + '?view_mode=dashboard';
+>>>>>>> d536855 (updated)
 
           if (targetSpace) {
               const container = document.createElement('div');

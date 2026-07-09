@@ -15,11 +15,18 @@
         position: relative;
         display: inline-flex;
         align-items: center;
+<<<<<<< HEAD
         margin-left: 6px;
         color: #9DA0A4;
         cursor: help;
         vertical-align: middle;
         font-size: 16px;
+=======
+        margin-left: 8px;
+        cursor: help;
+        vertical-align: middle;
+        font-size: 20px; /* アイコンサイズ調整 */
+>>>>>>> d536855 (updated)
       }
       /* ツールチップ吹き出し本体 */
       .custom-tooltip-icon::after {
@@ -39,7 +46,7 @@
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.2s, visibility 0.2s;
-        z-index: 10000;
+        z-index: 20000;
         width: max-content;
         max-width: 250px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -62,13 +69,16 @@
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.2s, visibility 0.2s;
-        z-index: 10000;
+        z-index: 20000;
       }
       /* マウスオーバーで表示 */
       .custom-tooltip-icon:hover::after,
       .custom-tooltip-icon:hover::before {
         opacity: 1;
         visibility: visible;
+      }
+      .custom-tooltip-icon:hover {
+        opacity: 0.8;
       }
     `;
     document.head.appendChild(style);
@@ -79,7 +89,11 @@
     const span = document.createElement('span');
     span.className = 'custom-tooltip-icon';
     span.setAttribute('data-tooltip', tooltipText);
+<<<<<<< HEAD
     span.innerHTML = '💡';
+=======
+    span.textContent = '💡';
+>>>>>>> d536855 (updated)
     return span;
   };
 

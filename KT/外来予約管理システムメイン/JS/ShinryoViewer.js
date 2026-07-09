@@ -196,10 +196,21 @@ window.ShinryoApp = window.ShinryoApp || {};
       .dept-header-container { display: flex; align-items: center; justify-content: center; gap: 10px; }
 
       /* --- アイコン・ツールチップ --- */
+      /* --- ヘッダーツールチップ --- */
+      .header-tooltip-icon {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        cursor: help;
+        font-size: 16px; /* アイコンサイズ調整 */
+      }
+      .header-tooltip-icon:hover {
+        opacity: 0.8;
+      }
       .custom-icon { display: inline-block; width: 20px; height: 20px; vertical-align: middle; background-repeat: no-repeat; background-size: contain; cursor: help; margin-left: 4px; }
       .icon-schedule { background: none; font-size: 18px; line-height: 1.1; text-align: center; width: auto; height: auto; }
       .dept-info-row { margin-top: 4px; display: flex; justify-content: center; gap: 4px; align-items: center; flex-wrap: wrap; }
-      #customHtmlTooltip { display: none; position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 0 4px 15px rgba(0,0,0,0.3); padding: 15px; z-index: 10000; width: 600px; max-width: 90vw; max-height: 500px; overflow-y: auto; border-radius: 4px; color: #333; text-align: left; }
+      #customHtmlTooltip { display: none; position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 0 4px 15px rgba(0,0,0,0.3); padding: 15px; z-index: 20000; width: 600px; max-width: 90vw; max-height: 500px; overflow-y: auto; border-radius: 4px; color: #333; text-align: left; }
 
       /* --- カレンダー --- */
       .calendar-container { padding: 0 5px; font-size: 12px; min-width: 600px; }
@@ -264,6 +275,7 @@ window.ShinryoApp = window.ShinryoApp || {};
         transition: all 0.2s;
         vertical-align: middle;
         white-space: nowrap;
+        flex-shrink: 0; /* ★追加: ボタンが縮まないようにする */
       }
       .btn-detail:hover { background-color: #218838; }
 
@@ -958,12 +970,12 @@ window.ShinryoApp = window.ShinryoApp || {};
     table.className = 'shinryo-config-table';
     
     const columns = [
-      { header: '診療分野', field: '診療分野', width: '8%', merge: true, cls: 'large-font-cell align-top' }, // ★復元
-      { header: '診療科', field: '診療科', width: '10%', merge: true, cls: 'large-font-cell' },
-      { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
-      { header: '予約期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell' },
-      { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell' },
-      { header: '医師', field: '医師名', width: '10%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top' }
+      { header: '診療分野', field: '診療分野', width: '8%', merge: true, cls: 'large-font-cell align-top', tooltip: '診療分野です' },
+      { header: '診療科', field: '診療科', width: '10%', merge: true, cls: 'large-font-cell', tooltip: '診療分野に属する個別の診療科です' },
+      { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
+      { header: '予約期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療受け付ける期間の設定になります。病院全体の期間とは異なる期間を設定する場合に指定します' },
+      { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: '診療科全体の予約を受け付け可否を設定します。例えば一時的に予約受付を停止する場合に使います。' },
+      { header: '医師', field: '医師名', width: '10%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' }
     ];
 
     // ★追加: colgroupによる列幅制御
@@ -979,12 +991,33 @@ window.ShinryoApp = window.ShinryoApp || {};
     const hRow = thead.insertRow();
     columns.forEach(col => {
         if (col.skipHeader) return; // ★追加: ヘッダー生成スキップ
-
         const th = document.createElement('th');
-        th.textContent = col.header;
-        // if (col.width) th.style.width = col.width; // colgroupに任せるため削除
-        if (col.colspan) th.colSpan = col.colspan; // ★追加: colspan設定
+        
+        const headerContent = document.createElement('div');
+        headerContent.style.display = 'flex';
+        headerContent.style.alignItems = 'center';
+        headerContent.style.justifyContent = 'center';
+        headerContent.style.gap = '4px';
 
+        const headerText = document.createElement('span');
+        headerText.textContent = col.header;
+        headerContent.appendChild(headerText);
+
+        if (col.tooltip) {
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'header-tooltip-icon';
+            iconSpan.textContent = '💡';
+            headerContent.appendChild(iconSpan);
+
+            // ★変更: グローバルツールチップ関数を呼び出すように修正
+            iconSpan.addEventListener('mouseover', (e) => {
+                window.ShinryoApp.Viewer.showTooltip(e, col.tooltip);
+            });
+            iconSpan.addEventListener('mouseout', () => {
+                window.ShinryoApp.Viewer.hideTooltip();
+            });
+        }
+        th.appendChild(headerContent);
         if (col.cls) col.cls.split(' ').forEach(c => th.classList.add(c));
         hRow.appendChild(th);
     });
@@ -1349,7 +1382,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                     // ★追加: 編集ボタン
                     const searchBtn = document.createElement('button');
                     searchBtn.className = 'btn-detail';
-                    searchBtn.textContent = '詳細・編集';
+                    searchBtn.textContent = '個別編集';
                     searchBtn.title = 'この医師で絞り込んで編集';
                     searchBtn.onclick = (e) => {
                        e.stopPropagation();

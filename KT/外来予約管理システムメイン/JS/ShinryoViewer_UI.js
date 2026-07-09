@@ -72,7 +72,7 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
       .toggle-switch.large { width: 50px; height: 26px; }
       .toggle-switch.large .toggle-slider:before { height: 20px; width: 20px; left: 3px; bottom: 3px; }
       .toggle-switch.large input:checked + .toggle-slider:before { transform: translateX(24px); }
-      #customHtmlTooltip { display: none; position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 2px 2px 8px rgba(0,0,0,0.3); padding: 10px; z-index: 10000; max-width: 700px; border-radius: 4px; color: #333; text-align: left; }
+      #customHtmlTooltip { display: none; position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 2px 2px 8px rgba(0,0,0,0.3); padding: 10px; z-index: 20000; max-width: 700px; border-radius: 4px; color: #333; text-align: left; }
       .calendar-container { padding: 0 5px; font-size: 12px; min-width: 600px; }
       .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
       .calendar-nav { cursor: pointer; padding: 4px 12px; border-radius: 4px; user-select: none; color: #999; font-size: 16px; }
@@ -559,12 +559,18 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
   function adjustTooltipPosition(e) {
       const tooltipRect = tooltipEl.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
       const offset = 15;
       let top = e.pageY + offset;
       let left = e.pageX + offset;
       if (top + tooltipRect.height > scrollTop + viewportHeight) {
           top = e.pageY - tooltipRect.height - offset;
+      }
+      // ★追加: 左右のはみ出し防止
+      if (left + tooltipRect.width > scrollLeft + viewportWidth) {
+          left = e.pageX - tooltipRect.width - offset;
       }
       tooltipEl.style.top = top + 'px';
       tooltipEl.style.left = left + 'px';
