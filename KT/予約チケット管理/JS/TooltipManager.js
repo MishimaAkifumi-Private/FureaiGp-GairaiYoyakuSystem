@@ -127,11 +127,6 @@
       match: (el) => el.classList && el.classList.contains('rcb-btn-save') && el.textContent.includes('メールを送信する'),
       text: '仮予約日時など、設定した内容で依頼者にメールを送信します。',
       position: 'inside' // ボタンの内部に配置
-    },
-    {
-      match: (el) => el.id === 'rcb-search-btn',
-      text: '詳しくはツールバーにある【管理状況凡例】の説明を参照してください。',
-      position: 'inside'
     }
   ];
 

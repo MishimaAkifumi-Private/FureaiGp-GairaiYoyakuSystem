@@ -2,14 +2,14 @@
  * PatientSearch.js
  * 一覧画面上部にカルテNoでの患者検索機能を設けます。
  */
-(function() {
+(function () {
     'use strict';
 
     const STORAGE_KEY_SEARCH = 'shinryo_ticket_search_chart_no';
     const STORAGE_KEY_MODE = 'shinryo_ticket_status_filter';
     const STORAGE_KEY_STAFF = 'shinryo_staff_filter_selected';
 
-    kintone.events.on('app.record.index.show', function(event) {
+    kintone.events.on('app.record.index.show', function (event) {
         if (document.getElementById('custom-patient-search-container')) return event;
 
         const headerSpace = kintone.app.getHeaderMenuSpaceElement();
@@ -24,7 +24,7 @@
         input.type = 'text';
         input.placeholder = 'カルテNo・名前で検索';
         input.style.cssText = 'border: none; outline: none; font-size: 15px; width: 160px; background: transparent; color: #333; margin-right: 5px;';
-        
+
         const currentSearch = sessionStorage.getItem(STORAGE_KEY_SEARCH) || '';
         input.value = currentSearch;
 
@@ -36,7 +36,7 @@
         clearBtn.onmouseout = () => clearBtn.style.color = '#aaa';
 
         const searchBtn = document.createElement('button');
-        searchBtn.innerHTML = '🔍 検索'; 
+        searchBtn.innerHTML = '🔍 検索';
         searchBtn.id = 'rcb-search-btn'; // ★追加: ツールチップ用のID
         searchBtn.style.cssText = 'background: #3498db; color: #fff; border: none; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: bold; padding: 6px 15px; transition: background 0.2s;';
         searchBtn.onmouseover = () => searchBtn.style.background = '#2980b9';
@@ -101,7 +101,7 @@
             headerSpace.appendChild(container); // 一時的な配置
             headerSpace.appendChild(legendBtn);
         }
-        
+
         // DOMの変更を監視し、トグルボタンが現れた・移動したタイミングで右隣をキープする
         const observer = new MutationObserver(() => insertSearchContainer());
         observer.observe(document.body, { childList: true, subtree: true });
@@ -129,10 +129,10 @@
 
         const overlay = document.createElement('div');
         overlay.className = 'rcb-modal-overlay';
-        
+
         const box = document.createElement('div');
         box.className = 'rcb-modal';
-        
+
         const header = document.createElement('div');
         header.className = 'rcb-modal-header';
         header.innerHTML = '<span>ℹ️</span> <span>管理状況凡例</span>';
@@ -143,24 +143,24 @@
         const legendData = [
             { status: '未着手', desc: '新規のチケットが到着した直後' },
             { status: '担当設定', desc: '担当者を設定した' },
-            { status: 'メール送信済', desc: '患者に仮予約日時を確保に関する案内メールを送信した' },
-            { status: 'メール既読', desc: '患者に送信した仮予定日時確保の案内メールを患者が読んだ' },
-            { status: '閲覧期限切れ', desc: '患者に送信した仮予定日時確保の案内が患者に読まれず期限が過ぎた' },
-            { status: '申込者再依頼', desc: '閲覧期限後に改めて仮予約日時の再確保を患者から依頼された(※1)' },
-            { status: 'URL取下', desc: '予約日時が確定していたが、受診日時までに患者がその予約を取下げた' },
-            { status: 'スタッフ取下', desc: 'スタッフの手違いなどにより確保した仮予約日時の取下げをスタッフが行った' },
-            { status: 'スタッフ取下中止', desc: 'スタッフが仮予約日時を取下げたものの復活させることにした(取下をやめた)' },
+            { status: 'メール送信済', desc: '患者に仮予約日時を確保した旨の案内メールを送信した' },
+            { status: 'メール既読', desc: '患者に送信した仮予約日時を確保した旨の案内メールを患者が読んだ' },
+            { status: '閲覧期限切れ', desc: '患者に送信した仮予約日時を確保した旨の案内メールが患者に読まれないまま期限が過ぎた' },
+            { status: '申込者再依頼', desc: '閲覧期限が過ぎた後に患者から改めて仮予約日時の確保を依頼された(※1)' },
+            { status: 'URL取下', desc: '既に予約日時は確定していたが、受診日時までに患者がその予約を取下げた' },
+            { status: 'スタッフ取下', desc: 'スタッフの手違いなどの理由により確保した仮予約日時の取下げをスタッフが行った' },
+            { status: 'スタッフ取下中止', desc: 'スタッフが仮予約日時を取下げたものの、やっぱり復活させることにした(取下をやめた)' },
             { status: '終了', desc: '患者の受診日時が(予定通り)経過した、あるいはスタッフの判断により患者の受診日時の予定を手動で無効にした(※2)' },
             { status: 'WEB取下', desc: '患者がWebフォームから行った予約取下げ依頼を、スタッフが処理した' }
         ];
 
         const notes = `
             <div style="margin-top: 20px; font-size: 12px; line-height: 1.6; color: #555; background-color: #f8f9fa; padding: 15px; border-radius: 4px; border: 1px solid #e9ecef;">
-                <p style="margin:0 0 10px 0;"><strong>(※1)</strong> 閲覧期限当日中であれば、患者はWebフォームを経由せずに仮予約日時確保を再依頼出来ます</p>
-                <p style="margin:0 0 5px 0;"><strong>(※2)</strong> Webフォームで予約が確定すると、患者は以下いずれかの条件を満たすまでWebフォームから新たな予約はできません</p>
+                <p style="margin:0 0 10px 0;"><strong>(※1)</strong>閲覧期限当日中であれば、患者はWebフォームを経由せずに仮予約日時確保の再依頼が出来ます（スタッフ側が当日中の対応が困難と予想される場合（退勤時刻が近い場合など）には仮予約日時の案内メールを送信する際に閲覧期限を明日までとする設定も可能です）</p>
+                <p style="margin:0 0 10px 0;"><strong>(※2)</strong>Webフォームで予約が確定すると、同じ患者は以下いずれかの条件を満たすまでWebフォームから新たな予約はできません</p>
                 <ul style="margin: 0; padding-left: 20px;">
-                    <li>患者からのWebフォームからの取下げ依頼をスタッフが処理した場合</li>
-                    <li>患者に届いているメール上のURL(リンク)から取下げた場合</li>
+                    <li>患者のWebフォームから来たの取下げ依頼をスタッフが処理した場合</li>
+                    <li>患者に届いているメールに記載のURL(リンク)から取下を行った場合</li>
                     <li>患者の診療予約日時が過ぎたたまま翌日になった場合</li>
                     <li>スタッフが【手動終了】のボタン操作を行った場合</li>
                     <li>スタッフが【スタッフ取下】のボタン操作後に即時無効処理を選択した場合★要確認★</li>
@@ -190,7 +190,7 @@
         tableHtml += `</tbody></table>` + notes;
 
         content.innerHTML = tableHtml;
-        
+
         const footer = document.createElement('div');
         footer.className = 'rcb-modal-footer';
 
@@ -198,22 +198,22 @@
         closeBtn.className = 'rcb-modal-btn rcb-modal-btn-cancel';
         closeBtn.textContent = '閉じる';
         closeBtn.onclick = () => document.body.removeChild(overlay);
-        
+
         footer.appendChild(closeBtn);
-        
+
         box.appendChild(header);
         box.appendChild(content);
         box.appendChild(footer);
         overlay.appendChild(box);
-        
+
         overlay.onclick = (e) => {
             if (e.target === overlay) document.body.removeChild(overlay);
         };
-        
+
         document.body.appendChild(overlay);
-        setTimeout(() => { 
-            overlay.style.opacity = '1'; 
-            box.style.transform = 'translateY(0)'; 
+        setTimeout(() => {
+            overlay.style.opacity = '1';
+            box.style.transform = 'translateY(0)';
         }, 10);
     }
 })();

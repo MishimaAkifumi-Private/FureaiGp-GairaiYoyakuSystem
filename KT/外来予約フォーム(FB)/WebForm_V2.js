@@ -357,7 +357,7 @@
           const requirementDisplayMap = {
               '変更': '予約日時を変更したい',
               '取消': '予約を取り消したい',
-              '初診': '初診で予約したい'
+              '初診': '初診/再診で予約したい'
           };
           html += createSummaryRow('ご用件', requirementDisplayMap[requirement] || requirement);
 
@@ -771,7 +771,7 @@
           const options = [
               { value: '変更', displayText: '予約日時を変更したい' },
               { value: '取消', displayText: '予約を取り消したい' },
-              { value: '初診', displayText: '初診で予約したい' }
+              { value: '初診', displayText: '初診/再診で予約したい' }
           ];
           createSelector(radioContainer, 'radio', 'requirement', options, null, true);
           area.appendChild(radioContainer);
