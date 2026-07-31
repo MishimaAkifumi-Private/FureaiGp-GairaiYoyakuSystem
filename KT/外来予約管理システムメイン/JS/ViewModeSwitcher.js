@@ -371,18 +371,14 @@
              }
 
         } else if (viewMode === 'overview') {
-             const btnMainMenu = document.createElement('i');
-             btnMainMenu.className = 'fa-solid fa-hospital';
-             btnMainMenu.title = 'Dashboard';
-             btnMainMenu.style.fontSize = '40px';
-             btnMainMenu.style.color = 'rgb(60, 147, 225)'; // ★変更: 指定色
-             btnMainMenu.style.cursor = 'pointer';
-             btnMainMenu.style.marginRight = '15px';
-             btnMainMenu.style.marginRight = '10px';
-             btnMainMenu.style.marginLeft = '25px';
-             btnMainMenu.style.marginBottom = '5px';
-             btnMainMenu.onclick = () => location.href = '?view_mode=dashboard';
-             div.appendChild(btnMainMenu);
+             const titleLabel = document.createElement('div');
+             titleLabel.textContent = '予約待ち受け管理';
+             titleLabel.style.fontSize = '22px';
+             titleLabel.style.fontWeight = 'bold';
+             titleLabel.style.color = '#333';
+             titleLabel.style.marginLeft = '20px';
+             titleLabel.style.marginRight = '20px'; // 以降のボタン群との間隔
+             div.appendChild(titleLabel);
 
              const btnHoliday = document.createElement('button');
              btnHoliday.className = 'mode-switch-btn';
@@ -539,6 +535,31 @@
 
              div.appendChild(btnPublicView);
              div.appendChild(flowContainer);
+
+             const btnDashboard = document.createElement('button');
+             btnDashboard.className = 'mode-switch-btn';
+             btnDashboard.textContent = 'Dashboard';
+             btnDashboard.style.backgroundColor = 'rgba(248, 75, 31, 0.83)';
+             btnDashboard.style.marginTop = '0';
+             btnDashboard.style.whiteSpace = 'nowrap';
+             btnDashboard.style.flexShrink = '0';
+             btnDashboard.onclick = () => location.href = '?view_mode=dashboard';
+
+             const titlebar = document.querySelector('.gaia-argoui-app-titlebar');
+             if (titlebar) {
+                 // タイトルバーをFlexコンテナ化して右端に押しやる
+                 titlebar.style.display = 'flex';
+                 titlebar.style.alignItems = 'center';
+                 btnDashboard.style.marginLeft = 'auto';
+                 btnDashboard.style.marginRight = '20px';
+                 btnDashboard.style.height = '35px'; // タイトルバーに馴染むよう少し小さめに
+                 titlebar.appendChild(btnDashboard);
+             } else {
+                 // フォールバック: 元の場所
+                 btnDashboard.style.marginLeft = '15px';
+                 btnDashboard.style.height = '40px';
+                 div.appendChild(btnDashboard);
+             }
 
 
              // 更新チェックロジック (ボタン生成後に移動)
