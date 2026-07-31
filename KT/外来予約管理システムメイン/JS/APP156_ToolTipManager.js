@@ -50,7 +50,7 @@
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       }
 
-      /* 吹き出し下部の三角矢印 */
+      /* 通常時：吹き出し下部の三角矢印（上側に表示する場合） */
       #pure-custom-tooltip::after {
         content: '';
         position: absolute;
@@ -60,6 +60,13 @@
         border-width: 5px;
         border-style: solid;
         border-color: #334155 transparent transparent transparent;
+      }
+
+      /* 固定ヘッダー時：吹き出し上部の三角矢印（下側に表示する場合） */
+      #pure-custom-tooltip.is-bottom::after {
+        top: auto;
+        bottom: 100%;
+        border-color: transparent transparent #334155 transparent;
       }
 
       /* 一覧画面：ヘッダーホバー時のカーソル */
@@ -99,13 +106,24 @@
 
     const rect = targetEl.getBoundingClientRect();
     const tooltipWidth = 260;
-
     const left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
-    const top = rect.top - 8;
 
-    tooltipEl.style.left = `${Math.max(10, left)}px`;
-    tooltipEl.style.top = `${top}px`;
-    tooltipEl.style.transform = 'translateY(-100%)';
+    // ヘッダー固定モード（または画面上端付近）の判定
+    const isFixedHeader = !!targetEl.closest('.gaia-app-recordlist-fixedheader') || rect.top < 110;
+
+    if (isFixedHeader) {
+      // 下側に表示（矢印は上向き）
+      tooltipEl.classList.add('is-bottom');
+      tooltipEl.style.left = `${Math.max(10, left)}px`;
+      tooltipEl.style.top = `${rect.bottom + 8}px`;
+      tooltipEl.style.transform = 'translateY(0)';
+    } else {
+      // 上側に表示（矢印は下向き）
+      tooltipEl.classList.remove('is-bottom');
+      tooltipEl.style.left = `${Math.max(10, left)}px`;
+      tooltipEl.style.top = `${rect.top - 8}px`;
+      tooltipEl.style.transform = 'translateY(-100%)';
+    }
 
     tooltipEl.style.opacity = '1';
     tooltipEl.style.visibility = 'visible';
@@ -117,19 +135,24 @@
     tooltipEl.style.visibility = 'hidden';
   };
 
-  // 一覧画面の処理（💡なし・タイトルホバー）
+  // 一覧画面の処理（💡なし・タイトルホバー / 固定ヘッダー両対応）
   const attachIndexTooltips = () => {
     Object.keys(TOOLTIP_MAP).forEach(id => {
       const text = TOOLTIP_MAP[id];
       if (!text) return;
 
-      const thEl = document.querySelector(`th.label-${id}`);
-      if (!thEl || thEl.classList.contains('has-custom-tooltip')) return;
+      // 通常ヘッダーおよび固定ヘッダー（.gaia-app-recordlist-fixedheader）の両方を取得
+      const thEls = document.querySelectorAll(`th.label-${id}`);
+      if (!thEls || thEls.length === 0) return;
 
-      thEl.classList.add('has-custom-tooltip');
+      thEls.forEach(thEl => {
+        if (thEl.classList.contains('has-custom-tooltip')) return;
 
-      thEl.addEventListener('mouseenter', () => showTooltip(thEl, text));
-      thEl.addEventListener('mouseleave', hideTooltip);
+        thEl.classList.add('has-custom-tooltip');
+
+        thEl.addEventListener('mouseenter', () => showTooltip(thEl, text));
+        thEl.addEventListener('mouseleave', hideTooltip);
+      });
     });
   };
 
@@ -139,7 +162,6 @@
       const text = TOOLTIP_MAP[id];
       if (!text) return;
 
-      // 通常フィールドのラベルおよびサブテーブルタイトルの親要素を取得
       const selectors = [
         `.field-${id} .control-label-gaia`,
         `.label-${id}`,
@@ -151,13 +173,11 @@
       labelEls.forEach(labelEl => {
         if (labelEl.querySelector('.custom-tooltip-bulb-icon')) return;
 
-        // 💡マーク要素を作成
         const bulbSpan = document.createElement('span');
         bulbSpan.className = 'custom-tooltip-bulb-icon';
         bulbSpan.textContent = '💡';
-        bulbSpan.title = ''; // ブラウザ標準のツールチップを打ち消し
+        bulbSpan.title = '';
 
-        // 💡アイコンに対するホバーイベントを設定
         bulbSpan.addEventListener('mouseenter', (e) => {
           e.stopPropagation();
           showTooltip(bulbSpan, text);
@@ -168,7 +188,6 @@
           hideTooltip();
         });
 
-        // ラベルテキストの直後に電球マークを追加
         labelEl.appendChild(bulbSpan);
 
         console.log(`[Tooltip Custom] Inserted 💡 icon for field ID: ${id}`, labelEl);
@@ -194,7 +213,7 @@
     return event;
   };
 
-  // DOM監視（編集画面等での動的レンダリング対策）
+  // DOM監視（スクロール時の固定ヘッダー生成や編集画面の動的描画に対応）
   const startObserver = () => {
     const targetNode = document.getElementById('record-gaia') || document.body;
     const observer = new MutationObserver(() => {
