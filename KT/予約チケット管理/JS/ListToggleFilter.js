@@ -42,7 +42,7 @@
         const container = document.createElement('div');
         container.id = 'custom-status-toggle-container';
         // スタッフバッジの高さ(48px)に合わせ、背景を少し濃くしてボタンを目立たせる
-        container.style.cssText = 'display: inline-flex; align-items: center; background: #dce1e6; border-radius: 40px; padding: 4px; margin-left: 100px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 2px 6px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.9); height: 48px; box-sizing: border-box;';
+        container.style.cssText = 'display: inline-flex; align-items: center; background: #dce1e6; border-radius: 40px; padding: 4px; margin-left: 100px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 2px 6px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.9); height: 48px; box-sizing: border-box; visibility: hidden;';
 
         const btnStyle = 'height: 100%; padding: 0 24px; font-size: 15px; font-weight: bold; border: none; border-radius: 36px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none; margin: 0; display: flex; align-items: center; justify-content: center; letter-spacing: 0.5px; ';
 
@@ -88,13 +88,14 @@
             const staffBadge = document.getElementById('staff-badge-wrapper');
             if (staffBadge && staffBadge.parentNode) {
                 const parent = staffBadge.parentNode;
-                if (staffBadge.nextSibling === container) return true; // 既に正しい位置にある
-                
-                if (staffBadge.nextSibling) {
-                    parent.insertBefore(container, staffBadge.nextSibling);
-                } else {
-                    parent.appendChild(container);
+                if (staffBadge.nextSibling !== container) {
+                    if (staffBadge.nextSibling) {
+                        parent.insertBefore(container, staffBadge.nextSibling);
+                    } else {
+                        parent.appendChild(container);
+                    }
                 }
+                container.style.visibility = 'visible'; // 配置完了後に可視化
                 return true;
             }
             return false;
@@ -112,6 +113,11 @@
                 }
             });
             observer.observe(document.body, { childList: true, subtree: true });
+
+            // タイムアウトフォールバック
+            setTimeout(() => {
+                container.style.visibility = 'visible';
+            }, 400);
         }
 
         return event;

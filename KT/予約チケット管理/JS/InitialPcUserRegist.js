@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/*
+/*
  * InitialPcUserRegist.js
  * 担当者表示スクリプト (APP142用)
  * 指定されたデザインで現在の端末利用者を表示します。
@@ -467,6 +467,21 @@
     wrapper.style.display = 'inline-flex';
     wrapper.style.alignItems = 'center';
 
+    const titleLabel = document.createElement('div');
+    titleLabel.style.cssText = 'display: flex; align-items: center; gap: 4px; font-weight: bold; color: rgb(51, 51, 51); margin-left: 0; margin-right: 20px;';
+    
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = '🎫';
+    iconSpan.style.fontSize = '45px'; // ★絵文字のフォントサイズ
+    
+    const textSpan = document.createElement('span');
+    textSpan.textContent = '予約チケット管理';
+    textSpan.style.fontSize = '23px'; // ★テキストのフォントサイズ
+
+    titleLabel.appendChild(iconSpan);
+    titleLabel.appendChild(textSpan);
+    wrapper.appendChild(titleLabel);
+
     const displayName = staffName;
     const nameColor = '#ffffff';
 
@@ -501,8 +516,10 @@
 
   kintone.events.on('app.record.index.show', (event) => {
     loadFontAwesome();
-    // DOM構築待ちを含めて実行
+    renderStaffBadge(); // 即時実行 (他ボタンの並び順決定用)
     setTimeout(renderStaffBadge, 100);
+    setTimeout(renderStaffBadge, 500);
+    setTimeout(renderStaffBadge, 1200);
     return event;
   });
 

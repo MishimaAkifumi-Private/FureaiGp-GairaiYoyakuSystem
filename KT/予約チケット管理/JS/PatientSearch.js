@@ -15,38 +15,37 @@
         const headerSpace = kintone.app.getHeaderMenuSpaceElement();
         if (!headerSpace) return event;
 
+        // コンテナの構築
         const container = document.createElement('div');
         container.id = 'custom-patient-search-container';
-        // 他のヘッダーUIと馴染むデザイン
-        container.style.cssText = 'display: inline-flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 40px; padding: 4px 15px; margin-left: 15px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); height: 48px; box-sizing: border-box;';
+        container.style.cssText = 'display: inline-flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 40px; padding: 4px 15px; margin-left: 15px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); height: 48px; box-sizing: border-box; visibility: hidden;';
 
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = 'カルテNo・名前で検索';
-        input.style.cssText = 'border: none; outline: none; font-size: 15px; width: 160px; background: transparent; color: #333; margin-right: 5px;';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'カルテNo・名前で検索';
+        searchInput.style.cssText = 'border: none; outline: none; font-size: 15px; width: 160px; background: transparent; color: #333; margin-right: 5px;';
 
         const currentSearch = sessionStorage.getItem(STORAGE_KEY_SEARCH) || '';
-        input.value = currentSearch;
+        searchInput.value = currentSearch;
 
         const clearBtn = document.createElement('button');
-        clearBtn.innerHTML = '✖';
+        clearBtn.textContent = '✖';
         clearBtn.title = '検索クリア';
         clearBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 5px; color: #aaa; display: ' + (currentSearch ? 'block' : 'none') + '; margin-right: 5px; transition: color 0.2s;';
-        clearBtn.onmouseover = () => clearBtn.style.color = '#555';
+        clearBtn.onmouseover = () => clearBtn.style.color = '#e74c3c';
         clearBtn.onmouseout = () => clearBtn.style.color = '#aaa';
 
         const searchBtn = document.createElement('button');
-        searchBtn.innerHTML = '🔍 検索';
-        searchBtn.id = 'rcb-search-btn'; // ★追加: ツールチップ用のID
+        searchBtn.id = 'rcb-search-btn';
+        searchBtn.textContent = '🔍 検索';
         searchBtn.style.cssText = 'background: #3498db; color: #fff; border: none; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: bold; padding: 6px 15px; transition: background 0.2s;';
         searchBtn.onmouseover = () => searchBtn.style.background = '#2980b9';
         searchBtn.onmouseout = () => searchBtn.style.background = '#3498db';
 
         const executeSearch = () => {
-            const val = input.value.trim();
+            const val = searchInput.value.trim();
             if (val) {
                 sessionStorage.setItem(STORAGE_KEY_SEARCH, val);
-                // 検索時は見つけやすくするため、強制的に全担当に変更する（有効/終了タブは現在の状態を維持）
                 localStorage.setItem(STORAGE_KEY_STAFF, '全担当');
             } else {
                 sessionStorage.removeItem(STORAGE_KEY_SEARCH);
@@ -55,17 +54,17 @@
         };
 
         searchBtn.onclick = executeSearch;
-        input.onkeydown = (e) => {
+        searchInput.onkeydown = (e) => {
             if (e.key === 'Enter') executeSearch();
         };
 
         clearBtn.onclick = () => {
-            input.value = '';
+            searchInput.value = '';
             sessionStorage.removeItem(STORAGE_KEY_SEARCH);
             location.reload();
         };
 
-        container.appendChild(input);
+        container.appendChild(searchInput);
         container.appendChild(clearBtn);
         container.appendChild(searchBtn);
 
@@ -73,24 +72,65 @@
         const legendBtn = document.createElement('button');
         legendBtn.id = 'custom-legend-btn';
         legendBtn.textContent = '管理状況凡例';
-        // 独立したボタンとしてスタイルを定義
-        legendBtn.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; background: #6c757d; color: #fff; border: 1px solid #565e64; border-radius: 4px; padding: 0 12px; margin-left: 10px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); height: 32px; box-sizing: border-box; font-size: 12px; font-weight: bold; cursor: pointer;';
+        // パンくず情報バー右端に独立配置するデザイン
+        legendBtn.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; background: #6c757d; color: #fff; border: 1px solid #565e64; border-radius: 4px; padding: 0 12px; margin-left: auto; margin-right: 20px; height: 26px; box-sizing: border-box; font-size: 12px; font-weight: bold; cursor: pointer; flex-shrink: 0; visibility: hidden; line-height: 1; position: relative; z-index: 10;';
         legendBtn.onmouseover = () => legendBtn.style.background = '#5a6268';
         legendBtn.onmouseout = () => legendBtn.style.background = '#6c757d';
         legendBtn.onclick = showStatusLegendDialog;
 
-        // 「有効/終了チケット」のトグルの右隣に挿入する（描画タイミングを考慮して追従）
+        // 「有効/終了チケット」のトグルの右隣に検索ボックスを挿入する
         const insertSearchContainer = () => {
             const toggleContainer = document.getElementById('custom-status-toggle-container');
-            if (toggleContainer && toggleContainer.parentNode) {
+            if (toggleContainer && toggleContainer.parentNode && toggleContainer.style.visibility !== 'hidden') {
                 const parent = toggleContainer.parentNode;
-                // 検索コンテナを挿入
                 if (toggleContainer.nextSibling !== container) {
                     parent.insertBefore(container, toggleContainer.nextSibling);
                 }
-                // 凡例ボタンを検索コンテナの右隣に挿入
-                if (container.nextSibling !== legendBtn) {
-                    parent.insertBefore(legendBtn, container.nextSibling);
+                container.style.visibility = 'visible'; // 位置確定後に可視化
+                return true;
+            }
+            return false;
+        };
+
+        // パンくず情報バー (.gaia-argoui-app-infobar-breadcrumb-iconlist) を Flex 化し、右端に独立して凡例ボタンを設置する
+        const insertLegendBtn = () => {
+            const iconlistWrapper = document.querySelector('.gaia-argoui-app-infobar-breadcrumb-iconlist');
+            const iconList = document.querySelector('.gaia-argoui-app-infobar-iconlist');
+            
+            if (iconlistWrapper) {
+                // 行全体を Flexbox 化して垂直中央揃えを強制
+                iconlistWrapper.style.display = 'flex';
+                iconlistWrapper.style.alignItems = 'center';
+                iconlistWrapper.style.width = '100%';
+                
+                if (iconList) {
+                    iconList.style.marginLeft = '0'; // アイコン群はパンくずテキストの直後に配置
+                    iconList.style.marginRight = '10px';
+                    iconList.style.display = 'inline-flex';
+                    iconList.style.alignItems = 'center';
+                }
+
+                // 凡例ボタン自体に margin-left: auto を付与して画面最右端へ押し出す
+                legendBtn.style.marginLeft = 'auto';
+                legendBtn.style.marginRight = '20px';
+                legendBtn.style.visibility = 'visible';
+
+                if (legendBtn.parentNode !== iconlistWrapper) {
+                    iconlistWrapper.appendChild(legendBtn);
+                }
+                return true;
+            }
+
+            const infobar = document.querySelector('.gaia-argoui-app-infobar');
+            if (infobar) {
+                infobar.style.display = 'flex';
+                infobar.style.alignItems = 'center';
+                infobar.style.width = '100%';
+                legendBtn.style.marginLeft = 'auto';
+                legendBtn.style.marginRight = '20px';
+                legendBtn.style.visibility = 'visible';
+                if (legendBtn.parentNode !== infobar) {
+                    infobar.appendChild(legendBtn);
                 }
                 return true;
             }
@@ -99,12 +139,21 @@
 
         if (!insertSearchContainer()) {
             headerSpace.appendChild(container); // 一時的な配置
-            headerSpace.appendChild(legendBtn);
         }
+        insertLegendBtn();
 
-        // DOMの変更を監視し、トグルボタンが現れた・移動したタイミングで右隣をキープする
-        const observer = new MutationObserver(() => insertSearchContainer());
+        // DOMの変更を監視して再配置
+        const observer = new MutationObserver(() => {
+            insertSearchContainer();
+            insertLegendBtn();
+        });
         observer.observe(document.body, { childList: true, subtree: true });
+
+        // タイムアウトフォールバック
+        setTimeout(() => {
+            container.style.visibility = 'visible';
+            insertLegendBtn();
+        }, 400);
 
         return event;
     });

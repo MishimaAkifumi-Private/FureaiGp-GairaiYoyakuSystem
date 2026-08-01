@@ -2698,42 +2698,48 @@
         applyStyles();
         styleGroupLabels();
 
-        // ★追加: Dashboardボタンをタイトルバー右端に設置
-        if (!document.getElementById('custom-dashboard-btn-142')) {
-            const titlebar = document.querySelector('.gaia-argoui-app-titlebar');
-            if (titlebar) {
-                const btnDashboard = document.createElement('button');
-                btnDashboard.id = 'custom-dashboard-btn-142';
-                btnDashboard.textContent = 'Dashboard';
-                btnDashboard.style.backgroundColor = 'rgba(248, 75, 31, 0.83)';
-                btnDashboard.style.color = 'white';
-                btnDashboard.style.border = '1px solid transparent';
-                btnDashboard.style.borderRadius = '4px';
-                btnDashboard.style.padding = '0 15px';
-                btnDashboard.style.height = '35px';
-                btnDashboard.style.fontSize = '14px';
-                btnDashboard.style.fontWeight = 'bold';
-                btnDashboard.style.cursor = 'pointer';
-                btnDashboard.style.marginLeft = 'auto';
-                btnDashboard.style.marginRight = '20px';
-                btnDashboard.style.whiteSpace = 'nowrap';
-                btnDashboard.style.flexShrink = '0';
-                
-                btnDashboard.onmouseover = () => btnDashboard.style.opacity = '0.8';
-                btnDashboard.onmouseout = () => btnDashboard.style.opacity = '1';
-                
-                // メインアプリ(App 156)のDashboardへ遷移
-                btnDashboard.onclick = () => {
-                    const appId = kintone.app.getId();
-                    const mainAppPath = location.pathname.replace(new RegExp('/' + appId + '(/.*)?$'), '/156/');
-                    location.href = mainAppPath + '?view_mode=dashboard';
-                };
+        // ★追加: Dashboardボタンをタイトルバー右端に設置 (遅延再試行付き)
+        const insertDashboardBtn = () => {
+            if (!document.getElementById('custom-dashboard-btn-142')) {
+                const titlebar = document.querySelector('.gaia-argoui-app-titlebar');
+                if (titlebar) {
+                    const btnDashboard = document.createElement('button');
+                    btnDashboard.id = 'custom-dashboard-btn-142';
+                    btnDashboard.textContent = 'Dashboard';
+                    btnDashboard.style.backgroundColor = 'rgba(248, 75, 31, 0.83)';
+                    btnDashboard.style.color = 'white';
+                    btnDashboard.style.border = '1px solid transparent';
+                    btnDashboard.style.borderRadius = '4px';
+                    btnDashboard.style.padding = '0 15px';
+                    btnDashboard.style.height = '35px';
+                    btnDashboard.style.fontSize = '14px';
+                    btnDashboard.style.fontWeight = 'bold';
+                    btnDashboard.style.cursor = 'pointer';
+                    btnDashboard.style.marginLeft = 'auto';
+                    btnDashboard.style.marginRight = '20px';
+                    btnDashboard.style.whiteSpace = 'nowrap';
+                    btnDashboard.style.flexShrink = '0';
+                    
+                    btnDashboard.onmouseover = () => btnDashboard.style.opacity = '0.8';
+                    btnDashboard.onmouseout = () => btnDashboard.style.opacity = '1';
+                    
+                    // メインアプリ(App 156)のDashboardへ遷移
+                    btnDashboard.onclick = () => {
+                        const appId = kintone.app.getId();
+                        const mainAppPath = location.pathname.replace(new RegExp('/' + appId + '(/.*)?$'), '/156/');
+                        location.href = mainAppPath + '?view_mode=dashboard';
+                    };
 
-                titlebar.style.display = 'flex';
-                titlebar.style.alignItems = 'center';
-                titlebar.appendChild(btnDashboard);
+                    titlebar.style.display = 'flex';
+                    titlebar.style.alignItems = 'center';
+                    titlebar.appendChild(btnDashboard);
+                }
             }
-        }
+        };
+
+        insertDashboardBtn();
+        setTimeout(insertDashboardBtn, 300);
+        setTimeout(insertDashboardBtn, 1000);
 
         return event;
     });

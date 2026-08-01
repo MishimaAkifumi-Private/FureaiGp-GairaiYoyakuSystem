@@ -226,11 +226,9 @@
   kintone.events.on('app.record.index.show', async function(event) {
     console.log('ViewModeSwitcher.js: app.record.index.show triggered.');
 
-    // ShinryoViewerが読み込まれているかチェック
+    // ShinryoViewerが読み込まれているかチェック (他アプリへ誤登録された場合は安全にスキップ)
     if (!window.ShinryoApp || !window.ShinryoApp.Viewer || !window.ShinryoApp.Viewer.renderOverview) {
-        const errorMsg = '【エラー】ShinryoViewer.js が正しく読み込まれていません。\n設定画面の「JavaScript / CSSでカスタマイズ」で、ShinryoViewer.js がアップロードされているか、ViewModeSwitcher.js より上に配置されているか確認してください。';
-        console.error(errorMsg);
-        window.alert(errorMsg); // Fallback to standard alert for critical init error
+        console.warn('ViewModeSwitcher.js: ShinryoViewer.js が読み込まれていないため処理をスキップしました。');
         return event;
     }
 
@@ -241,19 +239,112 @@
 
     if (viewMode === 'overview' || viewMode === 'dashboard') {
         document.body.classList.add('view-mode-overview');
+        document.body.style.overflowX = 'hidden';
     } else {
         document.body.classList.remove('view-mode-overview');
+        document.body.style.overflowX = '';
     }
 
     const headerMenu = kintone.app.getHeaderMenuSpaceElement();
+    if (headerMenu) {
+        if (viewMode === 'dashboard') {
+            headerMenu.style.flex = '1';
+            headerMenu.style.display = 'flex';
+            headerMenu.style.justifyContent = 'center';
+            headerMenu.style.alignItems = 'center';
+        } else {
+            headerMenu.style.flex = '';
+            headerMenu.style.display = 'flex';
+            headerMenu.style.justifyContent = 'flex-start';
+            headerMenu.style.alignItems = 'center';
+        }
+    }
+
     if (!document.getElementById('mode-switch-container')) {
         const div = document.createElement('div');
         div.id = 'mode-switch-container';
         div.style.display = 'flex';
         div.style.alignItems = 'center';
-        div.style.flexWrap = 'wrap'; // ★追加: 画面幅が狭い場合に折り返す
+        div.style.flexWrap = 'wrap';
+        if (viewMode === 'dashboard') {
+            div.style.justifyContent = 'center';
+            div.style.flex = '1';
+            div.style.width = '100%';
+        } else {
+            div.style.justifyContent = 'flex-start';
+            div.style.flex = '';
+            div.style.width = '';
+        }
         
         let btnUpdate = null;
+
+        if (viewMode === 'dashboard') {
+             // ダッシュボード表示時、左側の不要なビュー切替・絞り込みボタン等を非表示にして中央寄せを確実にする
+             const viewToggle = document.querySelector('.gaia-argoui-app-viewtoggle');
+             if (viewToggle) viewToggle.style.display = 'none';
+             const filterBtn = document.querySelector('.gaia-argoui-app-filterbutton');
+             if (filterBtn) filterBtn.style.display = 'none';
+             const subtotalBtn = document.querySelector('.gaia-argoui-app-subtotalbutton');
+             if (subtotalBtn) subtotalBtn.style.display = 'none';
+
+             // Kintone純正ツールバーの背景色と絶対中央配置を設定
+             const toolbar = document.querySelector('.gaia-argoui-app-toolbar');
+             if (toolbar) {
+                 toolbar.style.position = 'relative';
+                 toolbar.style.backgroundColor = '#eef6ff';
+                 toolbar.style.borderBottom = '1px solid #d0e3f5';
+             }
+
+             const headerRow = document.createElement('div');
+             headerRow.style.cssText = `
+                 position: absolute;
+                 left: 50%;
+                 top: 50%;
+                 transform: translate(-50%, -50%);
+                 display: flex;
+                 align-items: center;
+                 justify-content: center;
+                 gap: 30px;
+                 white-space: nowrap;
+                 z-index: 5;
+             `;
+
+             const logo = document.createElement('img');
+             logo.src = 'https://www.fureai-g.or.jp/fureai-g/images/shared/site-logo.svg'; 
+             logo.style.cssText = 'height: 38px; width: auto; display: block;';
+             headerRow.appendChild(logo);
+
+             const centerName = localStorage.getItem('shinryo_center_name') || '湘南東部外来予約センター';
+             const subTitle = document.createElement('h1');
+             subTitle.textContent = centerName;
+             subTitle.style.cssText = 'margin: 0; font-size: 24px; font-weight: bold; color: #444; line-height: 1; position: relative; top: 2px;';
+             headerRow.appendChild(subTitle);
+
+             const sysTitle = document.createElement('h2');
+             sysTitle.textContent = '外来予約管理システム';
+             sysTitle.style.cssText = 'margin: 0; font-size: 24px; font-weight: bold; color: #666; line-height: 1; position: relative; top: 2px;';
+             headerRow.appendChild(sysTitle);
+
+             div.appendChild(headerRow);
+        } else {
+             // 通常画面(overview/input等)ではツールバー要素を標準表示・元位置へ
+             const viewToggle = document.querySelector('.gaia-argoui-app-viewtoggle');
+             if (viewToggle) viewToggle.style.display = '';
+             const filterBtn = document.querySelector('.gaia-argoui-app-filterbutton');
+             if (filterBtn) filterBtn.style.display = '';
+             const subtotalBtn = document.querySelector('.gaia-argoui-app-subtotalbutton');
+             if (subtotalBtn) subtotalBtn.style.display = '';
+
+             const toolbar = document.querySelector('.gaia-argoui-app-toolbar');
+             if (toolbar) {
+                 toolbar.style.position = '';
+                 toolbar.style.backgroundColor = '';
+                 toolbar.style.borderBottom = '';
+                 toolbar.style.display = '';
+                 toolbar.style.alignItems = '';
+                 toolbar.style.justifyContent = '';
+             }
+        }
 
         if (viewMode === 'overview') {
             const titleContainer = document.createElement('div');
@@ -357,7 +448,7 @@
                  const btnOverview = document.createElement('span');
                  btnOverview.className = 'material-symbols-outlined';
                  btnOverview.textContent = '📅';
-                 btnOverview.title = '予約待ち受け管理';
+                 btnOverview.title = '予約待ち受け制御';
                  btnOverview.style.fontSize = '28px';
                  btnOverview.style.color = 'rgb(102, 102, 102)';
                  btnOverview.style.cursor = 'pointer';
@@ -372,8 +463,8 @@
 
         } else if (viewMode === 'overview') {
              const titleLabel = document.createElement('div');
-             titleLabel.textContent = '予約待ち受け管理';
-             titleLabel.style.fontSize = '22px';
+             titleLabel.textContent = '📅予約待ち受け制御';
+             titleLabel.style.fontSize = '25px';
              titleLabel.style.fontWeight = 'bold';
              titleLabel.style.color = '#333';
              titleLabel.style.marginLeft = '20px';
@@ -638,8 +729,7 @@
 
       container = document.createElement('div');
       container.id = 'dashboard-container';
-      // align-content: flex-start を追加して、行間の余計な広がりを防止
-      container.style.cssText = 'display: flex; flex-wrap: wrap; gap: 30px 20px; padding: 30px; justify-content: center; align-items: flex-start; align-content: flex-start; background-color: #f5f5f5; min-height: 80vh;';
+      container.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 30px; background-color: #f5f5f5; min-height: 80vh; width: 100%; box-sizing: border-box;';
       
       // FontAwesomeのロード
       if (!document.getElementById('font-awesome-css')) {
@@ -647,68 +737,57 @@
           link.id = 'font-awesome-css'; link.rel = 'stylesheet'; link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
           document.head.appendChild(link);
       }
-      
-      // --- ヘッダー行 (3つのエレメントを横並び) ---
-      const headerRow = document.createElement('div');
-      headerRow.style.cssText = 'width: 100%; display: flex; align-items: center; justify-content: center; gap: 30px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap;';
 
-      // 区切り線生成ヘルパー
-      const createDivider = () => {
-          const div = document.createElement('div');
-          div.style.cssText = 'width: 3px; height: 70px; background-color: #e0e0e0;';
-          return div;
-      };
+      // --- ② Dashboard 外枠コンテナ (薄いオレンジ背景・灰色の枠線と立体影文字) ---
+      const dashboardBox = document.createElement('div');
+      dashboardBox.className = 'dashboard-outer-box';
+      dashboardBox.style.cssText = `
+          position: relative;
+          background: linear-gradient(135deg, rgba(254, 190, 51, 0.9) 0%, #ffefe8 100%);
+          border: 1px solid #cccccc;
+          border-radius: 22px;
+          padding: 20px 60px 30px 60px;
+          margin: 0 auto;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: fit-content;
+          max-width: calc(100% - 40px);
+          box-sizing: border-box;
+      `;
 
-      // ① ロゴ + センター名 (group1)
-      const group1 = document.createElement('div');
-      group1.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; justify-content: center;';
+      // 上部の立体的な白文字（灰色の縁取り/影） "Dashboard"
+      const dashboardTitleText = document.createElement('div');
+      dashboardTitleText.textContent = 'Dashboard';
+      dashboardTitleText.style.cssText = `
+          font-size: 38px;
+          font-weight: 900;
+          color: #ffffff;
+          letter-spacing: 3px;
+          text-shadow: 1px 1px 2px #888888, 2px 3px 5px #bbbbbb, -1px -1px 1px #ffffff;
+          margin-bottom: 15px;
+          user-select: none;
+          line-height: 1;
+      `;
+      dashboardBox.appendChild(dashboardTitleText);
 
-      const logo = document.createElement('img');
-      logo.src = 'https://www.fureai-g.or.jp/fureai-g/images/shared/site-logo.svg'; 
-      logo.style.cssText = 'height: 30px; width: auto; margin-bottom: 5px;';
-      group1.appendChild(logo);
-
-      const centerName = localStorage.getItem('shinryo_center_name') || '湘南東部外来予約センター';
-      const subTitle = document.createElement('div');
-      subTitle.textContent = centerName;
-      subTitle.style.cssText = 'font-size: 24px; font-weight: bold; color: #555;';
-      group1.appendChild(subTitle);
-
-      // ② タイトル + バージョン (group2)
-      const group2 = document.createElement('div');
-      group2.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 15px;';
-
-      // ★追加: システムアイコン
-      const systemIcon = document.createElement('div');
-      systemIcon.innerHTML = '<i class="fa-solid fa-hospital"></i>'; 
-      systemIcon.style.cssText = 'font-size: 65px; line-height: 1; cursor: default; color: #808080; margin-right: 15px; margin-bottom: 20px;';
-      group2.appendChild(systemIcon);
-
-      const titleContainer = document.createElement('div');
-      titleContainer.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; justify-content: center;';
-
-      const title = document.createElement('h1');
-      title.textContent = '外来予約管理システム';
-      title.style.cssText = 'margin: 0; font-size: 35px; color: #444; font-family: "HGP創英角ﾎﾟｯﾌﾟ体", "HGSoeiKakupoptai", "HGPSoeiKakupoptai", "Rounded Mplus 1c", "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", Osaka, "メイリオ", Meiryo, sans-serif; line-height: 1.2;';
-      titleContainer.appendChild(title);
-
-      const version = document.createElement('span');
-      version.textContent = `Ver. ${APP_VERSION}`;
-      version.style.cssText = 'color: #888; font-size: 20px; align-self: flex-end;';
-      titleContainer.appendChild(version);
-
-      group2.appendChild(titleContainer);
-
-      // 並び順: ②システム情報 -> ①ロゴ -> ③利用者 (ユーザーとロゴを入れ替え)
-      headerRow.appendChild(group2);
-      headerRow.appendChild(createDivider());
-      headerRow.appendChild(group1);
-
-      container.appendChild(headerRow);
+      // 5つのカードを配置するグリッド (1行あたり3列固定: 240px * 3 + 20px * 2 = 760px)
+      const cardsGrid = document.createElement('div');
+      cardsGrid.style.cssText = 'display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: center; width: 760px; min-width: 760px; max-width: 100%; box-sizing: border-box;';
 
       const cards = [
-          { title: '予約チケット管理', icon: '📬', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約変更/取消/初診の着信を管理、予約枠を確保して患者に返信します' },
-          { title: '予約待ち受け管理', icon: '📅', url: '?view_mode=overview', target: '_self', desc: '個別医師の予定状況等から予約が受け付けられる選択肢を組み立てます' },
+          { title: '予約チケット管理', icon: '🎫', iconSize: '65px', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約変更/取消/初診の着信を管理、予約枠を確保して患者に返信します' },
+          { title: '予約待ち受け制御', icon: '📅', url: '?view_mode=overview', target: '_self', desc: '個別医師の予定状況等から予約が受け付けられる選択肢を組み立てます' },
+          { title: '公開中Webフォーム', icon: '🌐', action: () => {
+              const formUrl = localStorage.getItem('shinryo_form_url');
+              if (formUrl && formUrl.trim()) {
+                  window.open(formUrl.trim(), '_blank');
+              } else {
+                  alert('公開用WebフォームのURLが設定されていません。\n「共通マスタ管理」画面より設定してください。');
+              }
+          }, desc: '患者様向けに公開されている外来Web予約フォームを開きます' },
+          { title: '医師診療パターン編集', icon: '🩺', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療スケジュールや枠組みを一覧・一括編集します' },
           { title: '共通マスタ管理', icon: '🏢', action: () => showCenterRegistrationMenu(), desc: '予約センター基本設定や管轄施設などの管理を行います' },
           { title: '各種システム設定', icon: '🔐', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
       ];
@@ -735,7 +814,7 @@
 
           const icon = document.createElement('div');
           icon.textContent = c.icon;
-          icon.style.fontSize = '56px';
+          icon.style.fontSize = c.iconSize || '56px'; // ★個別指定がなければデフォルト56px
           icon.style.marginBottom = '20px';
           
           const label = document.createElement('div');
@@ -754,9 +833,24 @@
           card.appendChild(label);
           card.appendChild(desc);
 
-          container.appendChild(card);
+          cardsGrid.appendChild(card);
       });
 
+      dashboardBox.appendChild(cardsGrid);
+
+      // ★Dashboard枠とその右下著作権表記をラッパーでまとめ、右端ラインを完全一致させる
+      const dashboardWrapper = document.createElement('div');
+      dashboardWrapper.style.cssText = 'display: flex; flex-direction: column; align-items: flex-end; width: fit-content; margin: 0 auto; max-width: 100%; box-sizing: border-box;';
+
+      dashboardWrapper.appendChild(dashboardBox);
+
+      // ★Dashboard枠外の右下に著作権表記 (40pxインセット調整)
+      const copyright = document.createElement('div');
+      copyright.textContent = 'ⓒ Copyright ㈱ FMC 情報システム室';
+      copyright.style.cssText = 'font-size: 11px; color: #888; margin-top: 10px; margin-right: 40px; font-weight: bold; user-select: none; text-align: right; box-sizing: border-box;';
+      dashboardWrapper.appendChild(copyright);
+
+      container.appendChild(dashboardWrapper);
       main.appendChild(container);
   }
 
@@ -2829,7 +2923,7 @@
               const btnOverview = document.createElement('span');
               btnOverview.className = 'material-symbols-outlined';
               btnOverview.textContent = '📅';
-              btnOverview.title = '予約待ち受け管理';
+              btnOverview.title = '予約待ち受け制御';
               btnOverview.style.cssText = "font-size: 45px; color: rgb(102, 102, 102); cursor: pointer; margin: 0; line-height: 1; position: relative; top: -5px;";
               btnOverview.onclick = () => window.location.href = appRoot + '?view_mode=overview';
 
@@ -2872,7 +2966,7 @@
               const btnOverview = document.createElement('span');
               btnOverview.className = 'material-symbols-outlined';
               btnOverview.textContent = '📅';
-              btnOverview.title = '予約待ち受け管理';
+              btnOverview.title = '予約待ち受け制御';
               btnOverview.style.cssText = "font-size: 35px; color: rgb(102, 102, 102); cursor: pointer; margin: 0; line-height: 1; position: relative; top: -2px;";
               btnOverview.onclick = () => window.location.href = appRoot + '?view_mode=overview';
 
