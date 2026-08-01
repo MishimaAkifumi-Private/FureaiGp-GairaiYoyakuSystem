@@ -73,7 +73,7 @@
         legendBtn.id = 'custom-legend-btn';
         legendBtn.textContent = '管理状況凡例';
         // パンくず情報バー右端に独立配置するデザイン
-        legendBtn.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; background: #6c757d; color: #fff; border: 1px solid #565e64; border-radius: 4px; padding: 0 12px; margin-left: auto; margin-right: 20px; height: 26px; box-sizing: border-box; font-size: 12px; font-weight: bold; cursor: pointer; flex-shrink: 0; visibility: hidden; line-height: 1; position: relative; z-index: 10;';
+        legendBtn.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; background: #6c757d; color: #fff; border: 1px solid #565e64; border-radius: 4px; padding: 0 12px; margin-left: auto; margin-right: 26px; height: 26px; box-sizing: border-box; font-size: 12px; font-weight: bold; cursor: pointer; flex-shrink: 0; visibility: hidden; line-height: 1; position: relative; z-index: 10;';
         legendBtn.onmouseover = () => legendBtn.style.background = '#5a6268';
         legendBtn.onmouseout = () => legendBtn.style.background = '#6c757d';
         legendBtn.onclick = showStatusLegendDialog;
@@ -112,7 +112,7 @@
 
                 // 凡例ボタン自体に margin-left: auto を付与して画面最右端へ押し出す
                 legendBtn.style.marginLeft = 'auto';
-                legendBtn.style.marginRight = '20px';
+                legendBtn.style.marginRight = '26px';
                 legendBtn.style.visibility = 'visible';
 
                 if (legendBtn.parentNode !== iconlistWrapper) {
@@ -127,7 +127,7 @@
                 infobar.style.alignItems = 'center';
                 infobar.style.width = '100%';
                 legendBtn.style.marginLeft = 'auto';
-                legendBtn.style.marginRight = '20px';
+                legendBtn.style.marginRight = '26px';
                 legendBtn.style.visibility = 'visible';
                 if (legendBtn.parentNode !== infobar) {
                     infobar.appendChild(legendBtn);

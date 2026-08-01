@@ -387,8 +387,35 @@
                      .gaia-argoui-app-toolbar > .gaia-argoui-app-subtotalbutton {
                          display: none !important;
                      }
+                     .gaia-argoui-app-toolbar {
+                         padding-top: 0px !important;
+                         padding-bottom: 0px !important;
+                     }
                  `;
                     document.head.appendChild(inputHideStyle);
+                }
+
+                const toolbar = document.querySelector('.gaia-argoui-app-toolbar');
+                if (toolbar) {
+                    toolbar.style.paddingTop = '0px';
+                    toolbar.style.paddingBottom = '0px';
+                }
+
+                // ★ ヘッダー領域の左側に「🩺 医師診療パターン編集」タイトルを配置 (右側の操作ボタン群は右寄せを保持)
+                const headerSpace = kintone.app.getHeaderMenuSpaceElement();
+                if (headerSpace) {
+                    headerSpace.style.display = 'flex';
+                    headerSpace.style.alignItems = 'center';
+                    let titleEl = document.getElementById('custom-input-title');
+                    if (!titleEl) {
+                        titleEl = document.createElement('div');
+                        titleEl.id = 'custom-input-title';
+                        titleEl.innerHTML = '<span style="font-size: 32px; margin-right: 6px; line-height: 1; vertical-align: middle;">🧑‍⚕️</span><span style="vertical-align: middle;">医師診療パターン編集</span>';
+                        titleEl.style.cssText = 'font-size: 25px; font-weight: bold; color: #333; margin-left: 10px; margin-right: 20px; white-space: nowrap; flex-shrink: 0; line-height: 1; display: inline-flex; align-items: center;';
+                    }
+                    if (titleEl.parentNode !== headerSpace) {
+                        headerSpace.appendChild(titleEl);
+                    }
                 }
 
                 // ★ ページャー要素の取得とレイアウト設定
@@ -401,7 +428,7 @@
                     pager.style.width = '100%';
                     pager.style.float = 'none';
                     pager.style.gap = '15px';
-                    pager.style.marginTop = '8px';
+                    pager.style.marginTop = '0px';
                     pager.style.marginBottom = '0px';
                     pager.style.paddingTop = 'unset';
                     pager.style.paddingBottom = '0px';
@@ -704,6 +731,15 @@
     // ★パンくず情報バー(.gaia-argoui-app-infobar-breadcrumb-iconlist) の並び順カスタマイズ
     // [パンくずパス] -> [📅 予約待ち受け制御] -> [Dashboard] -> (空白) -> [⭐お気に入り iconlist]
     function setupInfobarNavButtons() {
+        const currentMode = determineViewMode();
+        let navContainer = document.getElementById('custom-infobar-nav-buttons');
+
+        // 📅予約待ち受け制御画面(overview) または ダッシュボード画面(dashboard) 表示時はボタン群を非表示にする
+        if (currentMode === 'overview' || currentMode === 'dashboard') {
+            if (navContainer) navContainer.style.display = 'none';
+            return;
+        }
+
         const wrapper = document.querySelector('.gaia-argoui-app-infobar-breadcrumb-iconlist');
         if (!wrapper) return;
 
@@ -711,14 +747,11 @@
         wrapper.style.alignItems = 'center';
         wrapper.style.width = '100%';
 
-        const breadcrumb = wrapper.querySelector('.gaia-argoui-app-infobar-breadcrumb');
         const iconList = wrapper.querySelector('.gaia-argoui-app-infobar-iconlist');
 
-        let navContainer = document.getElementById('custom-infobar-nav-buttons');
         if (!navContainer) {
             navContainer = document.createElement('div');
             navContainer.id = 'custom-infobar-nav-buttons';
-            navContainer.style.cssText = 'display: inline-flex; align-items: center; gap: 8px; margin-left: 20px; flex-shrink: 0;';
 
             // 📅 予約待ち受け制御 ボタン
             const btnOverview = document.createElement('button');
@@ -733,7 +766,7 @@
             const btnDashboard = document.createElement('button');
             btnDashboard.textContent = 'Dashboard';
             btnDashboard.title = 'ダッシュボード画面を表示します';
-            btnDashboard.style.cssText = 'background: rgba(248, 75, 31, 0.88); color: #fff; border: none; border-radius: 4px; padding: 4px 14px; font-size: 13px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1;';
+            btnDashboard.style.cssText = 'background: rgba(248, 75, 31, 0.88); color: #fff; border: none; border-radius: 4px; padding: 4px 14px; font-size: 13px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; margin-right: 55px;';
             btnDashboard.onmouseover = () => { btnDashboard.style.opacity = '0.85'; };
             btnDashboard.onmouseout = () => { btnDashboard.style.opacity = '1'; };
             btnDashboard.onclick = () => location.href = '?view_mode=dashboard';
@@ -742,20 +775,21 @@
             navContainer.appendChild(btnDashboard);
         }
 
-        // パンくずの直後に navContainer を挿入
-        if (breadcrumb && breadcrumb.nextSibling !== navContainer) {
-            if (breadcrumb.nextSibling) {
-                wrapper.insertBefore(navContainer, breadcrumb.nextSibling);
-            } else {
-                wrapper.appendChild(navContainer);
-            }
-        }
+        // 右寄せスタイルを適用
+        navContainer.style.cssText = 'display: inline-flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 12px; flex-shrink: 0;';
 
-        // お気に入りアイコン群 (iconList) を最右端に移動・配置
+        // iconList (お気に入り) の直前に navContainer を挿入
         if (iconList) {
-            iconList.style.marginLeft = 'auto';
+            if (iconList.parentNode === wrapper && iconList.previousSibling !== navContainer) {
+                wrapper.insertBefore(navContainer, iconList);
+            }
+            iconList.style.marginLeft = '0';
             iconList.style.display = 'inline-flex';
             iconList.style.alignItems = 'center';
+        } else {
+            if (navContainer.parentNode !== wrapper) {
+                wrapper.appendChild(navContainer);
+            }
         }
     }
 
@@ -827,7 +861,7 @@
                     }
                 }, desc: '患者様向けに公開されている外来Web予約フォームを開きます'
             },
-            { title: '医師診療パターン編集', icon: '🩺', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療スケジュールや枠組みを一覧・一括編集します' },
+            { title: '医師診療パターン編集', icon: '🧑‍⚕️', iconSize: '68px', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療スケジュールや枠組みを一覧・一括編集します' },
             { title: '共通マスタ管理', icon: '🏢', action: () => showCenterRegistrationMenu(), desc: '予約センター基本設定や管轄施設などの管理を行います' },
             { title: '各種システム設定', icon: '🔐', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
         ];
