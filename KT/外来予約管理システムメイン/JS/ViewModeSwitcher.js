@@ -401,7 +401,7 @@
                     toolbar.style.paddingBottom = '0px';
                 }
 
-                // ★ ヘッダー領域の左側に「🩺 医師診療パターン編集」タイトルを配置 (右側の操作ボタン群は右寄せを保持)
+                // ★ ヘッダー領域の左側に「🧑‍⚕️ 診療スケジュール編集」タイトルを配置 (右側の操作ボタン群は右寄せを保持)
                 const headerSpace = kintone.app.getHeaderMenuSpaceElement();
                 if (headerSpace) {
                     headerSpace.style.display = 'flex';
@@ -410,7 +410,7 @@
                     if (!titleEl) {
                         titleEl = document.createElement('div');
                         titleEl.id = 'custom-input-title';
-                        titleEl.innerHTML = '<span style="font-size: 32px; margin-right: 6px; line-height: 1; vertical-align: middle;">🧑‍⚕️</span><span style="vertical-align: middle;">医師診療パターン編集</span>';
+                        titleEl.innerHTML = '<span style="font-size: 32px; margin-right: 6px; line-height: 1; vertical-align: middle;">🧑‍⚕️</span><span style="vertical-align: middle;">診療スケジュール編集</span>';
                         titleEl.style.cssText = 'font-size: 25px; font-weight: bold; color: #333; margin-left: 10px; margin-right: 20px; white-space: nowrap; flex-shrink: 0; line-height: 1; display: inline-flex; align-items: center;';
                     }
                     if (titleEl.parentNode !== headerSpace) {
@@ -849,10 +849,10 @@
         cardsGrid.style.cssText = 'display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: center; width: 760px; min-width: 760px; max-width: 100%; box-sizing: border-box;';
 
         const cards = [
-            { title: '予約チケット管理', icon: '🎫', iconSize: '65px', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約変更/取消/初診の着信を管理、予約枠を確保して患者に返信します' },
-            { title: '予約待ち受け制御', icon: '📅', url: '?view_mode=overview', target: '_self', desc: '個別医師の予定状況等から予約が受け付けられる選択肢を組み立てます' },
+            { title: '予約チケット管理', icon: '🎫', iconSize: '65px', iconTop: '-10px', url: 'https://w60013hke2ct.cybozu.com/k/guest/11/142/', target: '_blank', desc: '予約変更/取消/初診の着信を管理、予約枠を確保して患者に返信します' },
+            { title: '予約待ち受け制御', icon: '📅', iconTop: '-10px', textTop: '3px', url: '?view_mode=overview', target: '_self', desc: '個別医師の予定状況等から予約が受け付けられる選択肢を組み立てます' },
             {
-                title: '公開中Webフォーム', icon: '🌐', action: () => {
+                title: '公開中Webフォーム', icon: '🌐', iconTop: '-10px', action: () => {
                     const formUrl = localStorage.getItem('shinryo_form_url');
                     if (formUrl && formUrl.trim()) {
                         window.open(formUrl.trim(), '_blank');
@@ -861,9 +861,9 @@
                     }
                 }, desc: '患者様向けに公開されている外来Web予約フォームを開きます'
             },
-            { title: '医師診療パターン編集', icon: '🧑‍⚕️', iconSize: '68px', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療スケジュールや枠組みを一覧・一括編集します' },
-            { title: '共通マスタ管理', icon: '🏢', action: () => showCenterRegistrationMenu(), desc: '予約センター基本設定や管轄施設などの管理を行います' },
-            { title: '各種システム設定', icon: '🔐', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
+            { title: '診療スケジュール編集', icon: '🧑‍⚕️', iconSize: '68px', iconTop: '-10px', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療スケジュールや枠組みを一覧・一括編集します' },
+            { title: '共通マスタ管理', icon: '🏢', iconTop: '-10px', textTop: '8px', action: () => showCenterRegistrationMenu(), desc: '予約センター基本設定や管轄施設などの管理を行います' },
+            { title: '各種システム設定', icon: '🔐', iconTop: '-20px', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
         ];
 
         cards.forEach(c => {
@@ -889,7 +889,9 @@
             const icon = document.createElement('div');
             icon.textContent = c.icon;
             icon.style.fontSize = c.iconSize || '56px'; // ★個別指定がなければデフォルト56px
-            icon.style.marginBottom = '20px';
+            icon.style.marginBottom = '0px';
+            icon.style.position = 'relative';
+            icon.style.top = c.iconTop || '-10px';
 
             const label = document.createElement('div');
             label.textContent = c.title;
@@ -902,6 +904,13 @@
             desc.style.fontSize = '12px';
             desc.style.color = '#666';
             desc.style.lineHeight = '1.4';
+
+            if (c.textTop) {
+                label.style.position = 'relative';
+                label.style.top = c.textTop;
+                desc.style.position = 'relative';
+                desc.style.top = c.textTop;
+            }
 
             card.appendChild(icon);
             card.appendChild(label);
