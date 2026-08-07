@@ -489,17 +489,6 @@
         justify-content: center !important;
       }
 
-      /* Group Label Style (for "チケット情報") */
-      .custom-ticket-text {
-        background-color: #444444 !important;
-        color: white !important;
-        padding: 5px 12px;
-        border-radius: 4px;
-        font-weight: bold;
-        margin-left: 2px !important;
-        display: inline-block;
-      }
-
       /* アサインボタン点滅アニメーション */
       @keyframes rcb-btn-blink-anim {
         0% { opacity: 1; }
@@ -515,28 +504,6 @@
       style.id = 'rcb-styles';
       style.textContent = STYLES;
       document.head.appendChild(style);
-    };
-  
-    // 特定のグループラベルにスタイルクラスを付与
-    const styleGroupLabels = () => {
-      // Kintoneの描画タイミングを考慮して少し待機
-      setTimeout(() => {
-        const labels = document.querySelectorAll('.group-label-gaia');
-        labels.forEach(label => {
-          if (label.textContent.trim() === 'チケット情報' && !label.querySelector('.custom-ticket-text')) {
-            // Kintone標準のアウトライン（フォーカス時の青枠）を消去
-            label.style.outline = 'none';
-            label.style.border = 'none';
-            
-            // テキスト部分だけを別のspanで囲んで、アイコンと分離させる
-            label.textContent = ''; 
-            const textSpan = document.createElement('span');
-            textSpan.className = 'custom-ticket-text';
-            textSpan.textContent = 'チケット情報';
-            label.appendChild(textSpan);
-          }
-        });
-      }, 100);
     };
 
     // --- 砂時計 (スピナー) の表示・非表示関数 ---
@@ -987,7 +954,7 @@
     window.RcbUI = {
         CONFIG,
         applyStyles,
-        styleGroupLabels,
+        styleGroupLabels: () => {},
         showSpinner,
         hideSpinner,
         showDialog,

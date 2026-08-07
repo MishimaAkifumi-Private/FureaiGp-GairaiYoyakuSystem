@@ -99,7 +99,7 @@
       position: 'inside' // ボタンの内部に配置
     },
     {
-      match: (el) => el.classList && el.classList.contains('custom-ticket-text') && el.textContent.includes('チケット情報'),
+      match: (el) => el.classList && (el.classList.contains('custom-ticket-text') || el.classList.contains('group-label-gaia')) && el.textContent.includes('チケット情報'),
       text: 'このチケットの詳細情報を表示します。',
       position: 'inside' // テキストの内部（右横）に配置
     },
