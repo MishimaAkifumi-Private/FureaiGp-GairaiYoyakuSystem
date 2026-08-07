@@ -1,4 +1,4 @@
-﻿(function() {
+(function() {
   "use strict";
 
   // ★追加: グローバルエラーハンドラによる詳細なデバッグ
@@ -521,9 +521,12 @@
               config.state.kintoneRecords = parsedData.records.map(inflateRecord);
               config.state.descriptions = parsedData.descriptions || {};
               config.state.labelSettings = parsedData.labelSettings || {}; 
+              config.state.labelVisibility = parsedData.labelVisibility || {}; // ★追加
           } else {
               config.state.kintoneRecords = Array.isArray(parsedData) ? parsedData : [];
               config.state.descriptions = {};
+              config.state.labelSettings = {};
+              config.state.labelVisibility = {};
           }
 
           const holidays = [];
@@ -715,18 +718,30 @@
           const descriptions = config.state.descriptions;
           if (!descriptions) return;
 
-          const processLabel = (areaId, content) => {
+          const processLabel = (areaId, key) => {
+              const content = descriptions[key];
+              const isVisible = config.state.labelVisibility ? config.state.labelVisibility[key] !== false : true;
               const area = document.getElementById(areaId);
-              if (area && content) {
-                  area.innerHTML = normalizeKintoneFontSize(content);
-                  toggleSection(areaId, true);
+              
+              if (area && content && isVisible) {
+                  const normalized = normalizeKintoneFontSize(content);
+                  const tempDiv = document.createElement('div');
+                  tempDiv.innerHTML = normalized;
+                  // 空文字や改行のみ(<p><br></p>)の場合は非表示にする
+                  if (tempDiv.textContent.trim().length > 0 || tempDiv.querySelector('img')) {
+                      area.innerHTML = normalized;
+                      toggleSection(areaId, true);
+                  } else {
+                      area.innerHTML = '';
+                      toggleSection(areaId, false);
+                  }
               } else if (area) {
                   area.innerHTML = '';
                   toggleSection(areaId, false);
               }
           };
 
-          processLabel(config.uiIds.COMMON_LABEL_AREA, descriptions['__Global_Header__']);
+          processLabel(config.uiIds.COMMON_LABEL_AREA, '__Global_Header__');
           
           let requirementKey;
           if (requirement === '変更') requirementKey = '__Global_Change__';
@@ -734,7 +749,7 @@
           if (requirement === '取消') requirementKey = '__Global_Cancel__';
           
           if (requirementKey) {
-              processLabel(config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA, descriptions[requirementKey]);
+              processLabel(config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA, requirementKey);
           } else {
               toggleSection(config.uiIds.REQUIREMENT_SPECIFIC_LABEL_AREA, false);
           }
@@ -1153,11 +1168,16 @@
 
       function updateDepartmentGuidance() {
           const area = document.getElementById(config.uiIds.GUIDANCE_AREA);
+          if (!area) return;
+          
           area.innerHTML = '';
           area.style.display = 'none';
 
           const dept = config.state.selectedDepartment;
           if (!dept) return;
+
+          // ★追加: 診療科別ラベルの表示/非表示フラグをチェック
+          if (config.state.labelVisibility && config.state.labelVisibility[dept] === false) return;
 
           const setting = config.state.labelSettings ? config.state.labelSettings[dept] : 'both';
           const req = config.state.requirement;

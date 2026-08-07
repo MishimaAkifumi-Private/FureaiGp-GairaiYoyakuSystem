@@ -975,10 +975,10 @@ window.ShinryoApp = window.ShinryoApp || {};
     const columns = [
       { header: '診療分野', field: '診療分野', width: '8%', merge: true, cls: 'large-font-cell align-top', tooltip: '診療分野です' },
       { header: '診療科', field: '診療科', width: '10%', merge: true, cls: 'large-font-cell', tooltip: '診療分野に属する個別の診療科です' },
-      { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
-      { header: '予約期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療受け付ける期間の設定になります。病院全体の期間とは異なる期間を設定する場合に指定します' },
       { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: '診療科全体の予約を受け付け可否を設定します。例えば一時的に予約受付を停止する場合に使います。' },
-      { header: '診療スケジュール連動', field: '診療科', type: 'schedule_link_toggle', width: '8%', merge: true, cls: 'large-font-cell', tooltip: 'OffにするとWebフォームで担当医師選択が非表示になり、希望日指定時に医師のスケジュールに関係なく指定可能になります。' },
+      { header: '予約受付期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療受け付ける期間の設定になります。病院全体の期間とは異なる期間を設定する場合に指定します' },
+      { header: '診療予定連動', field: '診療科', type: 'schedule_link_toggle', width: '8%', merge: true, cls: 'large-font-cell', tooltip: 'OffにするとWebフォームで担当医師選択が非表示になり、希望日指定時に医師の診療予定に関係なく指定可能になります。' },
+      { header: '診療予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
       { header: '医師', field: '医師名', width: '10%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' }
     ];
 
@@ -1274,7 +1274,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 
                 linkInput.onchange = async function() {
                     const newState = linkInput.checked ? 'Off' : 'On';
-                    const msg = `診療科「${currentDept}」の診療スケジュール連動を【${newState}】に変更しますか？\n※Webフォームへの反映には少し時間がかかる場合があります。`;
+                    const msg = `診療科「${currentDept}」の診療予定連動を【${newState}】に変更しますか？\n※Webフォームへの反映には少し時間がかかる場合があります。`;
                     
                     const confirmed = await showCustomDialog(msg, 'confirm', { ok: '変更する', cancel: 'キャンセル' });
                     if (!confirmed) {
@@ -1725,14 +1725,17 @@ window.ShinryoApp = window.ShinryoApp || {};
               // 差分なし: 無効化
               previewBtn.classList.add('btn-disabled');
               previewBtn.style.pointerEvents = 'none';
+              previewBtn.style.backgroundColor = '#ccc';
               
               if (revertBtn) {
                   revertBtn.classList.add('btn-disabled');
                   revertBtn.style.pointerEvents = 'none';
+                  revertBtn.style.backgroundColor = '#ccc';
               }
               if (publishBtn) {
                   publishBtn.classList.add('btn-disabled');
                   publishBtn.style.pointerEvents = 'none';
+                  publishBtn.style.backgroundColor = '#ccc';
               }
           }
       }

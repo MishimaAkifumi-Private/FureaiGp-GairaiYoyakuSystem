@@ -20,6 +20,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   let publishedDepartmentSettings = {}; // ★追加: 診療科単位の設定キャッシュ
   let publishedCommonSettings = {}; // ★追加: 病院共通の設定キャッシュ
   let publishedLabelSettings = {}; // ★追加: ラベル表示制御設定キャッシュ
+  let publishedLabelVisibility = {}; // ★追加: ラベル表示/非表示フラグキャッシュ
   let lastPublishedAt = null;
   let lastJsonLength = 0;
   let isDataOldFormat = false;
@@ -39,6 +40,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     init: initConfigManager,
     fetchPublishedData: fetchPublishedData,
     saveConfig: saveConfig,
+    updateLabelVisibility: updateLabelVisibility,
     checkDiff: checkDiff,
     hasUnsavedChanges: hasUnsavedChanges,
     deployToProduction: deployToProduction, // ★追加
@@ -193,6 +195,17 @@ window.ShinryoApp = window.ShinryoApp || {};
         let prodData = {};
         try { prodData = JSON.parse(prodJsonStr || '{}'); } catch(e) { console.warn('Prod JSON parse error', e); }
         
+        // ★追加: labelVisibility内のtrueは未設定と同義として扱うため、比較前に除去
+        const cleanVisibility = (d) => {
+            if (d.labelVisibility) {
+                Object.keys(d.labelVisibility).forEach(k => {
+                    if (d.labelVisibility[k] === true) delete d.labelVisibility[k];
+                });
+            }
+        };
+        cleanVisibility(data);
+        cleanVisibility(prodData);
+
         const norm1 = JSON.stringify(canonicalize(data));
         const norm2 = JSON.stringify(canonicalize(prodData));
         isProductionDiff = (norm1 !== norm2);
@@ -209,6 +222,8 @@ window.ShinryoApp = window.ShinryoApp || {};
             publishedDescriptions = {};
             publishedDepartmentSettings = {};
             publishedCommonSettings = {};
+            publishedLabelSettings = {};
+            publishedLabelVisibility = {};
             isDataOldFormat = true;
         } else {
             // ★変更: 圧縮されたレコードをKintone形式に復元して読み込む
@@ -217,6 +232,7 @@ window.ShinryoApp = window.ShinryoApp || {};
             publishedDepartmentSettings = data.departmentSettings || {}; // ★追加: 読み込み
             publishedCommonSettings = data.commonSettings || {}; // ★追加: 読み込み
             publishedLabelSettings = data.labelSettings || {}; // ★追加: 読み込み
+            publishedLabelVisibility = data.labelVisibility || {}; // ★追加: 読み込み
             isDataOldFormat = false;
         }
 
@@ -232,13 +248,14 @@ window.ShinryoApp = window.ShinryoApp || {};
 
         console.log('ConfigManager: Published data fetched.', data);
 
-        // ★修正: 取得成功時にデータを返却する（これがないと下の初期化処理に流れて空になる）
+        // ★修正: 取得成功時にデータを返却する
         return { 
             records: records, 
             descriptions: publishedDescriptions, 
             departmentSettings: publishedDepartmentSettings,
             commonSettings: publishedCommonSettings,
-            labelSettings: publishedLabelSettings
+            labelSettings: publishedLabelSettings,
+            labelVisibility: publishedLabelVisibility
         };
       }
     } catch (e) {
@@ -252,22 +269,24 @@ window.ShinryoApp = window.ShinryoApp || {};
     publishedDepartmentSettings = {};
     publishedCommonSettings = {};
     publishedLabelSettings = {};
+    publishedLabelVisibility = {};
     lastPublishedAt = null;
     isDataOldFormat = false;
     isProductionDiff = false;
-    return { records: [], descriptions: {}, departmentSettings: {}, commonSettings: {}, labelSettings: {} };
+    return { records: [], descriptions: {}, departmentSettings: {}, commonSettings: {}, labelSettings: {}, labelVisibility: {} };
   }
 
   /**
    * 現在のアプリの状態をJSONとして共通設定保管アプリに保存（公開）する
    */
-  async function saveConfig(currentRecords, currentDescriptions, currentDeptSettings, currentCommonSettings, currentLabelSettings, targetRecordId = null) {
+  async function saveConfig(currentRecords, currentDescriptions, currentDeptSettings, currentCommonSettings, currentLabelSettings, currentLabelVisibility, targetRecordId = null) {
     const myAppId = kintone.app.getId();
 
     // 設定の解決
     const deptSettings = currentDeptSettings || publishedDepartmentSettings;
     const commonSettings = currentCommonSettings || publishedCommonSettings;
     const labelSettings = currentLabelSettings || publishedLabelSettings;
+    const labelVisibility = currentLabelVisibility || publishedLabelVisibility;
 
     // ★Webフォーム互換対応: レコード内の「予約開始」「予約可能期間」フィールドを設定値で上書き同期する
     if (currentRecords && Array.isArray(currentRecords)) {
@@ -382,7 +401,8 @@ window.ShinryoApp = window.ShinryoApp || {};
       descriptions: currentDescriptions,
       departmentSettings: deptSettings,
       commonSettings: commonSettings,
-      labelSettings: labelSettings
+      labelSettings: labelSettings,
+      labelVisibility: labelVisibility
     };
     const jsonStr = JSON.stringify(data);
     lastJsonLength = jsonStr.length;
@@ -571,6 +591,7 @@ window.ShinryoApp = window.ShinryoApp || {};
           prodData.departmentSettings || {}, 
           prodData.commonSettings || {}, 
           prodData.labelSettings || {},
+          prodData.labelVisibility || {},
           recId // ★追加: 特定したレコードIDを渡して更新を強制する
       );
       
@@ -779,7 +800,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
 
   /**
-   * ★追加: 診療科ごとのスケジュール連動設定を更新し、公開データに保存する
+   * ★追加: 診療科ごとの予定連動設定を更新し、公開データに保存する
    */
   async function updateDepartmentScheduleLink(deptName, newStatus) {
     return enqueueUpdate(async () => {
@@ -814,7 +835,7 @@ window.ShinryoApp = window.ShinryoApp || {};
             settings[deptName] = { start: start, duration: duration };
         }
         
-        await saveConfig(currentPublished.records, currentPublished.descriptions, settings, currentPublished.commonSettings, currentPublished.labelSettings);
+        await saveConfig(currentPublished.records, currentPublished.descriptions, settings, currentPublished.commonSettings, currentPublished.labelSettings, currentPublished.labelVisibility);
         console.log(`ConfigManager: Department ${deptName} term updated.`);
       }
     } catch (e) {
@@ -838,13 +859,38 @@ window.ShinryoApp = window.ShinryoApp || {};
             labelSettings[deptName] = targetRequirement;
         }
         
-        await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, labelSettings);
+        await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, labelSettings, currentPublished.labelVisibility);
         console.log(`ConfigManager: Department ${deptName} description updated.`);
       }
     } catch (e) {
       console.error('ConfigManager: Failed to update department description.', e);
       throw e;
     }
+  }
+
+  /**
+   * ★追加: 案内ラベルの表示/非表示フラグを更新し、公開データに保存する
+   */
+  async function updateLabelVisibility(key, isVisible) {
+    return enqueueUpdate(async () => {
+        try {
+            const currentPublished = await fetchPublishedData();
+            if (currentPublished) {
+                const labelVisibility = currentPublished.labelVisibility || {};
+                if (isVisible) {
+                    delete labelVisibility[key];
+                } else {
+                    labelVisibility[key] = false;
+                }
+                
+                await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings, labelVisibility);
+                console.log(`ConfigManager: Label visibility for ${key} updated to ${isVisible}.`);
+            }
+        } catch (e) {
+            console.error('ConfigManager: Failed to update label visibility.', e);
+            throw e;
+        }
+    });
   }
 
   /**
