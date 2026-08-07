@@ -24,6 +24,16 @@ window.ShinryoApp = window.ShinryoApp || {};
   let lastJsonLength = 0;
   let isDataOldFormat = false;
   let isProductionDiff = false; // ★追加: 本番環境との差分有無
+  
+  let updateQueue = Promise.resolve(); // ★追加: 非同期更新の直列化用キュー
+  function enqueueUpdate(updateFn) {
+      const currentTask = updateQueue.then(updateFn);
+      updateQueue = currentTask.catch(e => {
+          console.error('ConfigManager: Update queue error', e);
+          // エラーが発生してもキューをブロックしないようにする
+      });
+      return currentTask; // 呼び出し元にはエラーを伝播させる
+  }
 
   window.ShinryoApp.ConfigManager = {
     init: initConfigManager,
@@ -36,6 +46,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     updateStatusImmediately: updateStatusImmediately,
     updateStatusBatch: updateStatusBatch,
     updateDepartmentStatus: updateDepartmentStatus,
+    updateDepartmentScheduleLink: updateDepartmentScheduleLink, // ★追加
     updateDepartmentTerm: updateDepartmentTerm, // ★追加
     updateDepartmentDescription: updateDepartmentDescription, // ★追加
     updateCommonCenterInfo: updateCommonCenterInfo, // ★追加
@@ -444,8 +455,11 @@ window.ShinryoApp = window.ShinryoApp || {};
 
       // ★追加: 保存成功時に最終更新日時を現在時刻で更新
       lastPublishedAt = new Date().toISOString();
-
-      console.log('ConfigManager: Config saved successfully.');
+      
+      console.log('ConfigManager: Config saved successfully. Refreshing published data to update diff status...');
+      
+      // ★追加: 保存直後に最新のデータを再取得し、本番環境(設定情報)との差分(isProductionDiff)を正確に再計算する
+      await fetchPublishedData();
     } catch (e) {
       console.error('ConfigManager: Failed to save config.', e);
       throw e;
@@ -746,20 +760,43 @@ window.ShinryoApp = window.ShinryoApp || {};
    * ※レコード自体は変更せず、表示制御用のフラグとして保存
    */
   async function updateDepartmentStatus(deptName, newStatus) {
-    try {
-      const currentPublished = await fetchPublishedData();
-      if (currentPublished) {
-        const descriptions = currentPublished.descriptions || {};
-        // 診療科ステータス用の特殊キーを使用
-        descriptions['__status__' + deptName] = newStatus;
-        
-        await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings);
-        console.log(`ConfigManager: Department ${deptName} status updated to ${newStatus}`);
+    return enqueueUpdate(async () => {
+      try {
+        const currentPublished = await fetchPublishedData();
+        if (currentPublished) {
+          const descriptions = currentPublished.descriptions || {};
+          // 診療科ステータス用の特殊キーを使用
+          descriptions['__status__' + deptName] = newStatus;
+          
+          await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings);
+          console.log(`ConfigManager: Department ${deptName} status updated to ${newStatus}`);
+        }
+      } catch (e) {
+        console.error('ConfigManager: Failed to update department status.', e);
+        throw e;
       }
-    } catch (e) {
-      console.error('ConfigManager: Failed to update department status.', e);
-      throw e;
-    }
+    });
+  }
+
+  /**
+   * ★追加: 診療科ごとのスケジュール連動設定を更新し、公開データに保存する
+   */
+  async function updateDepartmentScheduleLink(deptName, newStatus) {
+    return enqueueUpdate(async () => {
+      try {
+        const currentPublished = await fetchPublishedData();
+        if (currentPublished) {
+          const descriptions = currentPublished.descriptions || {};
+          descriptions['__schedule_link__' + deptName] = newStatus;
+          
+          await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings);
+          console.log(`ConfigManager: Department ${deptName} schedule link updated to ${newStatus}`);
+        }
+      } catch (e) {
+        console.error('ConfigManager: Failed to update department schedule link.', e);
+        throw e;
+      }
+    });
   }
 
   /**

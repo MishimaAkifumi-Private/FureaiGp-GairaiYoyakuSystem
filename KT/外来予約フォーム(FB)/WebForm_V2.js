@@ -1,4 +1,4 @@
-﻿﻿(function() {
+﻿(function() {
   "use strict";
 
   // ★追加: グローバルエラーハンドラによる詳細なデバッグ
@@ -619,11 +619,24 @@
 
       function isAvailable(date, time, records) {
           if (!records || records.length === 0) return false;
+          
+          let isScheduleLinkOn = true;
+          if (config.state.selectedDepartment && config.state.descriptions) {
+              const linkStatus = config.state.descriptions['__schedule_link__' + config.state.selectedDepartment];
+              if (linkStatus === 'Off') {
+                  isScheduleLinkOn = false;
+              }
+          }
+
           const dateStrYMD = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
           const dayOfWeek = date.getDay();
           if (dayOfWeek === 0) return false;
           if (dateStrYMD in config.state.publicHolidays) return false;
           if (config.state.companyHolidays.some(d => d.getTime() === date.getTime())) return false;
+          
+          if (!isScheduleLinkOn) {
+              return true;
+          }
           
           return records.some(record => {
               const ngDates = record[config.jsonKeys.NG_DATES]?.value;
@@ -1219,6 +1232,25 @@
 
       function updateDoctorOptions() {
           const area = document.getElementById(config.uiIds.DOCTOR_AREA);
+
+          let isScheduleLinkOn = true;
+          if (config.state.selectedDepartment && config.state.descriptions) {
+              const linkStatus = config.state.descriptions['__schedule_link__' + config.state.selectedDepartment];
+              if (linkStatus === 'Off') {
+                  isScheduleLinkOn = false;
+              }
+          }
+
+          if (!isScheduleLinkOn) {
+              config.state.selectedDoctor = null;
+              updateFbField(config.fbFields.DOCTOR, '');
+              area.innerHTML = '';
+              toggleSection(config.uiIds.DOCTOR_AREA, false);
+              updateDoctorGuidance();
+              updateMethodSection();
+              return;
+          }
+
           const recordsForDoctor = getFilteredRecords();
           const uniqueDoctors = [...new Set(recordsForDoctor.map(r => r[config.jsonKeys.DOCTOR]?.value).filter(Boolean))];
           

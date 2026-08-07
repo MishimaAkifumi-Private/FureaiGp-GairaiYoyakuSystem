@@ -978,6 +978,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       { header: '予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
       { header: '予約期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療受け付ける期間の設定になります。病院全体の期間とは異なる期間を設定する場合に指定します' },
       { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: '診療科全体の予約を受け付け可否を設定します。例えば一時的に予約受付を停止する場合に使います。' },
+      { header: '診療スケジュール連動', field: '診療科', type: 'schedule_link_toggle', width: '8%', merge: true, cls: 'large-font-cell', tooltip: 'OffにするとWebフォームで担当医師選択が非表示になり、希望日指定時に医師のスケジュールに関係なく指定可能になります。' },
       { header: '医師', field: '医師名', width: '10%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' }
     ];
 
@@ -1256,6 +1257,45 @@ window.ShinryoApp = window.ShinryoApp || {};
                 deptLabel.appendChild(deptInput);
                 deptLabel.appendChild(deptSlider);
                 cell.appendChild(deptLabel);
+
+            } else if (col.type === 'schedule_link_toggle') {
+                const scheduleLinkStatus = descriptions['__schedule_link__' + currentDept] || 'On';
+                const isScheduleLinkOff = scheduleLinkStatus === 'Off';
+                
+                const linkLabel = document.createElement('label');
+                linkLabel.className = 'toggle-switch large';
+                
+                const linkInput = document.createElement('input');
+                linkInput.type = 'checkbox';
+                linkInput.checked = isScheduleLinkOff; 
+                
+                const linkSlider = document.createElement('span');
+                linkSlider.className = 'toggle-slider';
+                
+                linkInput.onchange = async function() {
+                    const newState = linkInput.checked ? 'Off' : 'On';
+                    const msg = `診療科「${currentDept}」の診療スケジュール連動を【${newState}】に変更しますか？\n※Webフォームへの反映には少し時間がかかる場合があります。`;
+                    
+                    const confirmed = await showCustomDialog(msg, 'confirm', { ok: '変更する', cancel: 'キャンセル' });
+                    if (!confirmed) {
+                        linkInput.checked = !linkInput.checked;
+                        return;
+                    }
+                    linkInput.disabled = true;
+                    try {
+                        await window.ShinryoApp.ConfigManager.updateDepartmentScheduleLink(currentDept, newState);
+                        descriptions['__schedule_link__' + currentDept] = newState;
+                        renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings, sourceRecords); // 再描画
+                    } catch(e) {
+                        await showCustomDialog('更新に失敗しました', 'alert');
+                        linkInput.checked = !linkInput.checked;
+                        linkInput.disabled = false;
+                    }
+                };
+                
+                linkLabel.appendChild(linkInput);
+                linkLabel.appendChild(linkSlider);
+                cell.appendChild(linkLabel);
 
             } else if (col.type === 'calendar_icon') {
                 const groupRecs = records.filter(r => r['診療科']?.value === currentDept);
