@@ -220,8 +220,8 @@
           YOYAKU_METHOD_AUTO: 'おまかせ',
           YOYAKU_METHOD_SPECIFIC: '希望日を指定',
           TOOLTIPS: {
-              omakase: '※最も早く予約できる日時を当院で調整し、ご連絡します。',
-              specific: '※ご希望の予約日や時間帯を、第5希望まで指定できます。'
+              omakase: '最も早く予約できる日時を当院で調整し、ご連絡します。',
+              specific: 'ご希望の予約日や時間帯を、第5希望まで指定できます。'
           }
       };
 
