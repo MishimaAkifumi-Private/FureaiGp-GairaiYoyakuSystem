@@ -368,65 +368,65 @@
                   const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
                   
                   // 既に全ての重複チケットが別件として確認済みの場合は警告を出さない
-                  const allConfirmed = dupIds.every(id => currentMemoStr.includes(`[複数の予約を短期間に依頼:${id}]`));
+                  const allConfirmed = dupIds.every(id => currentMemoStr.includes(`[複数の用件を短期間に依頼:${id}]`));
                   if (allConfirmed) return false;
 
                   const banner = document.createElement('div');
                   banner.style.cssText = 'background-color: #fff3f3; border: 2px solid #e74c3c; border-radius: 6px; padding: 15px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: flex-start; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); gap: 15px;';
                   
-                  const msgDiv = document.createElement('div');
-                  const dupUrlsHtml = dupIds.map(id => `<a href="${appRoot}show#record=${id}" target="_blank" style="color: #3498db; text-decoration: underline; font-weight: bold;">${id}</a>`).join(', ');
-                  
-                  msgDiv.innerHTML = `<span style="font-size:20px; margin-right:10px; vertical-align:middle;">⚠️</span><strong style="color: #c0392b; font-size: 15px;">注意：この患者は現在、他に進行中の予約チケットがあります！</strong><br><span style="font-size:13px; color:#555; margin-left:35px;">チケット番号: ${dupUrlsHtml}</span>`;
-                  banner.appendChild(msgDiv);
-                  
+                  // 1. 案内メッセージ（ボタンの上）
+                  const topNoticeDiv = document.createElement('div');
+                  topNoticeDiv.style.cssText = 'color: #c0392b; font-weight: bold; line-height: 1.6; font-size: 14px;';
+                  topNoticeDiv.innerHTML = '⚠️この患者には他にも現在進行中のチケットがあります。<br>念のため、誤操作等の意図していないチケットの可能性がないかを確認し、<br>下の「このチケットを有効とする」または「このチケットを無効とする」<br>のいずれかをボタンでこのチケットの取り扱い方針を決定してください。';
+                  banner.appendChild(topNoticeDiv);
+
+                  // 2. 対処ボタンエリア
                   const btnArea = document.createElement('div');
                   btnArea.style.display = 'flex';
                   btnArea.style.gap = '8px';
                   btnArea.style.flexWrap = 'wrap';
                   btnArea.style.alignItems = 'center';
-                  btnArea.style.marginLeft = '35px';
 
                   const okBtn = document.createElement('button');
-                  okBtn.textContent = 'このチケットは有効として扱う';
+                  okBtn.textContent = 'このチケットを有効とする';
                   okBtn.style.cssText = 'background-color: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; transition: background-color 0.2s;';
                   okBtn.onmouseover = () => okBtn.style.backgroundColor = '#2ecc71';
                   okBtn.onmouseout = () => okBtn.style.backgroundColor = '#27ae60';
                   okBtn.onclick = async () => {
                       // 3件以上（自分を含めると3件以上＝他のチケットが2件以上）の場合はブロック
                       if (dupIds.length >= 2) {
-                          await showDialog('多重チケットが3件以上存在します。\n先に不要なチケットを統合（取下げ）して、進行中のチケットを2件のみに絞ってから有効化してください。', 'error');
+                          await showDialog('現在多重チケットが3件以上存在します。\n先に不要なチケットを統合（あるいは取下げ等）を実施して、進行中のチケットを2件のみに絞ってから有効化してください。', 'error');
                           return;
                       }
 
                       const dupId = dupIds[0];
-                      const isOk = await showDialog(`このチケットと、もう一方の進行中チケット（番号: ${dupId}）の両方を有効扱いにしますか？`, 'confirm');
+                      const isOk = await showDialog(`進行中チケット（番号: ${dupId}）に加えてこちらのチケットも有効にしてもよろしいですか？`, 'confirm');
                       if (isOk) {
                           let newMemo = currentMemoStr;
-                          if (!newMemo.includes(`[複数の予約を短期間に依頼:${dupId}]`)) {
-                              newMemo = newMemo ? newMemo + `\n[複数の予約を短期間に依頼:${dupId}]` : `[複数の予約を短期間に依頼:${dupId}]`;
+                          if (!newMemo.includes(`[複数の用件を短期間に依頼:${dupId}]`)) {
+                              newMemo = newMemo ? newMemo + `\n[複数の用件を短期間に依頼:${dupId}]` : `[複数の用件を短期間に依頼:${dupId}]`;
                           }
                           
                           // もう一方のチケットも自動的に有効化（相互に確認済マークをつける）
                           try {
                               const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', { app: kintone.app.getId(), id: dupId });
                               let otherMemo = resp.record['人物メモ']?.value || '';
-                              if (!otherMemo.includes(`[複数の予約を短期間に依頼:${recordId}]`)) {
-                                  otherMemo = otherMemo ? otherMemo + `\n[複数の予約を短期間に依頼:${recordId}]` : `[複数の予約を短期間に依頼:${recordId}]`;
-                                  await updateRecord(dupId, { '人物メモ': { value: otherMemo } }, ['多重チケット解消'], false, true, `別件の予約として有効化\nID:${recordId} ${appRoot}show#record=${recordId}`);
+                              if (!otherMemo.includes(`[複数の用件を短期間に依頼:${recordId}]`)) {
+                                  otherMemo = otherMemo ? otherMemo + `\n[複数の用件を短期間に依頼:${recordId}]` : `[複数の用件を短期間に依頼:${recordId}]`;
+                                  await updateRecord(dupId, { '人物メモ': { value: otherMemo } }, ['多重チケット解消'], false, true, `用件として有効化\n比較対象チケットID:${recordId} ${appRoot}show#record=${recordId}`);
                               }
                           } catch (e) {
                               console.error('Failed to update the other duplicate ticket', e);
                           }
 
-                          const success = await updateRecord(recordId, { '人物メモ': { value: newMemo } }, ['多重チケット解消'], false, true, `別件の予約として有効化\nID:${dupId} ${appRoot}show#record=${dupId}`);
+                          const success = await updateRecord(recordId, { '人物メモ': { value: newMemo } }, ['多重チケット解消'], false, true, `用件として有効化\n比較対象チケットID:${dupId} ${appRoot}show#record=${dupId}`);
                           if (success) location.reload();
                       }
                   };
                   btnArea.appendChild(okBtn);
 
                   const mergeBtn = document.createElement('button');
-                  mergeBtn.textContent = 'このチケットは取下げて強制終了とする';
+                  mergeBtn.textContent = 'このチケットを無効とする（取下げて強制終了）';
                   mergeBtn.style.cssText = 'background-color: #e67e22; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; transition: background-color 0.2s;';
                   
                   if (isRead || isPhoneConfirmed) {
@@ -440,11 +440,11 @@
                       mergeBtn.onmouseover = () => mergeBtn.style.backgroundColor = '#d35400';
                       mergeBtn.onmouseout = () => mergeBtn.style.backgroundColor = '#e67e22';
                       mergeBtn.onclick = async () => {
-                          const isOk = await showDialog(`このチケットを他の進行中チケット（番号: ${dupIds.join(', ')}）に統合し、取下げて強制終了としますか？\n※この操作は元に戻せません。`, 'confirm');
+                          const isOk = await showDialog(`このチケットは他の進行中チケット（番号: ${dupIds.join(', ')}）にて扱うため取下げて強制終了としますか？\n※この操作は元に戻せません。`, 'confirm');
                           if (isOk) {
                               const dupUrlsText = dupIds.map(id => `ID:${id} ${appRoot}show#record=${id}`).join('\n');
-                              const reason = `重複依頼のため、以下のチケットに統合して取下げ\n${dupUrlsText}`;
-                              const memoAdd = `多重チケットによる取下げ\n${dupUrlsText}`;
+                              const reason = `重複依頼と思われるため、以下のチケットにて扱うものとして本チケットは取下げる\n${dupUrlsText}`;
+                              const memoAdd = `多重チケットによる取下げ\n関連チケットID:${dupIds}`;
                               const newMemo = currentMemoStr ? currentMemoStr + '\n' + memoAdd : memoAdd;
                               
                               const payload = {
@@ -457,7 +457,7 @@
                               // 統合先（残された側）のチケットにも「解消」の履歴を記録する
                               try {
                                   for (const dId of dupIds) {
-                                      await updateRecord(dId, {}, ['多重チケット解消'], false, true, `重複していたチケットが統合・取下げられたため有効化\nID:${recordId} ${appRoot}show#record=${recordId}`);
+                                      await updateRecord(dId, {}, ['多重チケット解消'], false, true, `以下の重複チケットが取下げられたため、本チケットを有効化\nID:${recordId} ${appRoot}show#record=${recordId}`);
                                   }
                               } catch (e) {
                                   console.error('Failed to update merged target tickets', e);
@@ -469,8 +469,15 @@
                       };
                   }
                   btnArea.appendChild(mergeBtn);
-                  
                   banner.appendChild(btnArea);
+
+                  // 3. 他の進行中チケット番号案内（ボタンの下）
+                  const bottomNoticeDiv = document.createElement('div');
+                  const dupUrlsHtml = dupIds.map(id => `<a href="${appRoot}show#record=${id}" target="_blank" style="color: #3498db; text-decoration: underline; font-weight: bold;">${id}</a>`).join(', ');
+                  bottomNoticeDiv.style.cssText = 'font-size: 13px; color: #555;';
+                  bottomNoticeDiv.innerHTML = `他に進行中のチケット番号: ${dupUrlsHtml}`;
+                  banner.appendChild(bottomNoticeDiv);
+                  
                   container.insertBefore(banner, container.firstChild);
                   
                   return true; // 重複未解決
@@ -485,10 +492,6 @@
 
       // ★ 重複チケット未解決の場合は操作をロックする
       if (isDuplicateBlocked) {
-          const blockMsg = document.createElement('div');
-          blockMsg.style.cssText = 'text-align: center; padding: 30px 20px; background-color: #fff5f5; border: 1px dashed #e74c3c; border-radius: 8px; margin-top: 20px; color: #c0392b; font-weight: bold; line-height: 1.6;';
-          blockMsg.innerHTML = '⚠️ 上記の重複警告について、「別件の予約として有効にする」または<br>「このチケットは多重を理由に取下げる」のいずれかを選択して<br>解決するまで、このチケットの操作はロックされています。';
-          container.appendChild(blockMsg);
           spaceElement.appendChild(container);
           return;
       }
@@ -696,7 +699,7 @@
             診療科: ${dept}<br>
             ${message ? `<br>${message.replace(/\n/g, '<br>')}<br>` : ''}
             <br>
-            本メールは手続き完了の通知のみとなります。別途お手続きは不要です。 お大事になさってください。
+            本メールは手続き完了の通知のみとなります。\n\n別途お手続きは不要です。\n\nお大事になさってください。
             ${getNoReplyFooterHtml()}
           `;
 

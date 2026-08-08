@@ -160,12 +160,14 @@
       }
       .ci-current-ticket-badge {
         font-weight: bold; 
-        font-size: 10px;
+        font-size: 6.5px;
         color: #1565c0;
         background-color: #e3f2fd;
-        padding: 2px 6px;
-        border-radius: 3px;
+        border: 1px solid #90caf9;
+        padding: 1px 5px;
+        border-radius: 4px;
         white-space: nowrap;
+        display: inline-block;
       }
 
       /* 経過情報サブテーブル用スタイル */
@@ -329,7 +331,7 @@
             const status = r['管理状況']?.value;
             const isActive = !['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下'].includes(status);
             const memoStr = r['人物メモ']?.value || '';
-            const hasConfirmedDup = memoStr.includes('[複数の予約を短期間に依頼:');
+            const hasConfirmedDup = memoStr.includes('[複数の用件を短期間に依頼:');
 
             let activeLabel = '';
             let rowStyle = '';
@@ -345,10 +347,12 @@
               }
             }
 
-            // 「このチケット」以外の過去チケットは別タブ(_blank)で開くリンクを表示
+            // 「このチケット」以外の過去チケットは別タブ(_blank)で開くリンクを表示（シンプルに管理番号のみ）
             const ticketDisplay = isCurrent 
-              ? '<span class="ci-current-ticket-badge">このチケット</span>' 
-              : `<a href="${url}" target="_blank" class="ci-ticket-open-btn" title="チケット詳細を別タブで開く">🎫 開く${activeLabel}</a>`;
+              ? '<span class="ci-current-ticket-badge">本チケット</span>' 
+              : `<a href="${url}" target="_blank" style="color: #3498db; text-decoration: underline; font-weight: bold;" title="チケット詳細を別タブで開く">${id}</a>`;
+
+            const statusStr = escapeHtml(status) || '-';
 
             const createdDate = new Date(r['作成日時'].value);
             const y = createdDate.getFullYear();
@@ -391,9 +395,10 @@
 
             return `
               <tr${rowStyle}>
-                <td style="white-space:nowrap;">${ticketDisplay}</td>
-                <td style="white-space:nowrap;">${dateStr}</td>
+                <td style="white-space:nowrap; text-align:center;">${ticketDisplay}</td>
                 <td style="white-space:nowrap;">${purpose}</td>
+                <td style="white-space:nowrap; text-align:center;">${statusStr}</td>
+                <td style="white-space:nowrap;">${dateStr}</td>
                 <td style="white-space:nowrap; text-align:center;">${dept}</td>
                 <td style="white-space:nowrap; text-align:center;">${methodEmoji}</td>
                 <td style="white-space:nowrap;">${recApplicant}</td>
@@ -414,9 +419,10 @@
               <table class="ci-history-table">
                 <thead>
                   <tr>
-                    <th rowspan="2" style="width:80px; white-space:nowrap;">チケット</th>
-                    <th rowspan="2" style="width:70px; white-space:nowrap;">申込日</th>
+                    <th rowspan="2" style="width:60px; white-space:nowrap;">チケット</th>
                     <th rowspan="2" style="width:70px; white-space:nowrap;">用件</th>
+                    <th rowspan="2" style="width:85px; white-space:nowrap;">管理状況</th>
+                    <th rowspan="2" style="width:70px; white-space:nowrap;">申込日</th>
                     <th rowspan="2" style="width:105px; white-space:nowrap;">診療科</th>
                     <th rowspan="2" style="width:70px; white-space:nowrap;" title="対応方法">対応方法</th>
                     <th rowspan="2" style="width:50px; white-space:nowrap;">申込者</th>

@@ -278,7 +278,7 @@
             }
 
             const currentMemo = getVal('人物メモ') || '';
-            const hasConfirmedDup = currentMemo.includes('[複数の予約を短期間に依頼:');
+            const hasConfirmedDup = currentMemo.includes('[複数の用件を短期間に依頼:');
 
             // 多重チケットの警告表示 (DOM操作)
             if (duplicateChartNos.has(record['カルテNo']?.value) && !hasConfirmedDup) {
