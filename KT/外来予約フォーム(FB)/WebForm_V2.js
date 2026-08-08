@@ -632,64 +632,171 @@
           return '';
       }
 
-      async function checkDuplicateOnForm() {
+      let isChartNoDuplicate = false;
+      let isCheckingAuth = false;
+
+      // ① カルテNo重複チェック (ボタンクリック時に発火)
+      async function checkChartNoDuplicate() {
+          const chartNoInput = document.getElementById(config.uiIds.CHART_NO);
+          const resultArea = document.getElementById('gemini-section-duplicate-check-result');
+          const fieldsWrapper = document.getElementById('gemini-patient-fields-wrapper');
+          if (!chartNoInput || !resultArea || !fieldsWrapper) return;
+
+          const chartNo = chartNoInput.value.trim();
+          if (chartNo.length !== 8 || !/^[a-zA-Z0-9]{8}$/.test(chartNo)) {
+              alert('カルテNoを正しく8桁で入力してください。');
+              return;
+          }
+
+          resultArea.style.display = 'block';
+          resultArea.className = 'gemini-dup-check-box checking';
+          resultArea.style.cssText = 'padding: 12px; border-radius: 5px; background-color: #f0f7ff; border: 1px solid #007bff; color: #0056b3; font-weight: bold; font-size: 13px; margin-top: 15px; margin-bottom: 20px;';
+          resultArea.innerHTML = '⏳ 過去の予約状況を確認しています...';
+
+          try {
+              await fetchTicketData();
+              const ticketRecords = config.state.rawTicketRecords || [];
+              const chartKeys = ['カルテNo', 'カルテID', config.fbFields.CHART_NO, 'karte_no', 'KarteNo', 'chart_no'];
+              const statusKeys = ['管理状況', 'ステータス', 'status', 'Status'];
+
+              const matchingChartRecords = ticketRecords.filter(r => {
+                  const cNo = getFieldValue(r, chartKeys);
+                  return cNo && cNo.trim().toUpperCase() === chartNo.toUpperCase();
+              });
+              const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
+              const activeRecord = matchingChartRecords.find(r => {
+                  const status = getFieldValue(r, statusKeys);
+                  if (!status || status.trim() === '') return false;
+                  return !inactiveStatuses.includes(status);
+              });
+
+              if (activeRecord) {
+                  isChartNoDuplicate = true;
+                  resultArea.style.cssText = 'padding: 15px; border-radius: 5px; background-color: #fff5f5; border: 2px solid #e53e3e; color: #c53030; font-weight: bold; font-size: 13px; line-height: 1.6; margin-top: 15px; margin-bottom: 20px; text-align: center;';
+                  const errMsg = `⚠️ 現在、別途ご依頼いただいております用件が処理中のため、Webフォームから続けての申し込みはできません。<br>お急ぎの場合はお電話にてお問い合わせください。`;
+                  resultArea.innerHTML = errMsg;
+                  
+                  fieldsWrapper.style.display = 'none';
+                  document.body.classList.remove('gemini-fields-active');
+                  updateNavigationButtons();
+              } else {
+                  isChartNoDuplicate = false;
+                  resultArea.style.display = 'none';
+                  resultArea.innerHTML = '';
+                  showBirthdayAuthModal();
+              }
+          } catch (e) {
+              console.error('[Duplicate Check Error]', e);
+              resultArea.style.display = 'none';
+          }
+      }
+
+      function showBirthdayAuthModal() {
+          let overlay = document.getElementById('gemini-auth-modal-overlay');
+          if (!overlay) {
+              overlay = document.createElement('div');
+              overlay.id = 'gemini-auth-modal-overlay';
+              overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(2px);';
+              
+              const modal = document.createElement('div');
+              modal.style.cssText = 'background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); max-width: 400px; width: 90%; text-align: center;';
+              
+              const dobHtml = createDobFields().replace('g-form-group required', '');
+              
+              modal.innerHTML = `
+                  <h3 style="margin-top: 0; color: #333; font-size: 18px; margin-bottom: 20px;">ご本人様確認</h3>
+                  <p style="font-size: 13px; color: #555; margin-bottom: 20px; line-height: 1.5; text-align: left;">
+                      本人確認のため、生年月日を選択して「照合する」ボタンを押してください。
+                  </p>
+                  <div style="text-align: left; margin-bottom: 20px;">
+                      ${dobHtml}
+                  </div>
+                  <div id="gemini-auth-modal-error" style="color: #e53e3e; font-size: 13px; margin-bottom: 15px; font-weight: bold; display: none;"></div>
+                  <div style="display: flex; gap: 10px; justify-content: center;">
+                      <button type="button" id="gemini-auth-modal-cancel" style="padding: 8px 16px; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f9fa; color: #333; cursor: pointer;">キャンセル</button>
+                      <button type="button" id="gemini-auth-modal-submit" style="padding: 8px 24px; border: none; border-radius: 4px; background-color: #007bff; color: white; font-weight: bold; cursor: pointer;">照合する</button>
+                  </div>
+              `;
+              overlay.appendChild(modal);
+              document.body.appendChild(overlay);
+
+              document.getElementById('gemini-auth-modal-cancel').addEventListener('click', () => {
+                  overlay.style.display = 'none';
+              });
+              
+              document.getElementById('gemini-auth-modal-submit').addEventListener('click', checkBirthdayAuthModal);
+
+              const dobHandler = () => {
+                  updateDobDays();
+                  const yEl = document.getElementById(config.uiIds.DOB_YEAR);
+                  const mEl = document.getElementById(config.uiIds.DOB_MONTH);
+                  const dEl = document.getElementById(config.uiIds.DOB_DAY);
+                  if (yEl && mEl && dEl && yEl.value && mEl.value && dEl.value) {
+                      const yText = yEl.options[yEl.selectedIndex].textContent;
+                      const mText = mEl.options[mEl.selectedIndex].textContent;
+                      const dText = dEl.options[dEl.selectedIndex].textContent;
+                      updateFbField(config.fbFields.DOB, `${yText} ${mText} ${dText}`);
+                  }
+              };
+              document.getElementById(config.uiIds.DOB_YEAR)?.addEventListener('change', dobHandler);
+              document.getElementById(config.uiIds.DOB_MONTH)?.addEventListener('change', dobHandler);
+              document.getElementById(config.uiIds.DOB_DAY)?.addEventListener('change', dobHandler);
+          }
+          
+          document.getElementById('gemini-auth-modal-error').style.display = 'none';
+          document.getElementById('gemini-auth-modal-error').innerHTML = '';
+          overlay.style.display = 'flex';
+      }
+
+      async function checkBirthdayAuthModal() {
+          if (isChartNoDuplicate) return;
+
           const chartNoInput = document.getElementById(config.uiIds.CHART_NO);
           const yEl = document.getElementById(config.uiIds.DOB_YEAR);
           const mEl = document.getElementById(config.uiIds.DOB_MONTH);
           const dEl = document.getElementById(config.uiIds.DOB_DAY);
-          const resultArea = document.getElementById('gemini-section-duplicate-check-result');
+          const errorArea = document.getElementById('gemini-auth-modal-error');
           const fieldsWrapper = document.getElementById('gemini-patient-fields-wrapper');
 
-          if (!chartNoInput || !yEl || !mEl || !dEl || !resultArea || !fieldsWrapper) return;
+          if (!chartNoInput || !yEl || !mEl || !dEl || !errorArea || !fieldsWrapper) return;
 
           const chartNo = chartNoInput.value.trim();
           const yVal = yEl.value;
           const mVal = mEl.value;
           const dVal = dEl.value;
 
-          if (chartNo.length !== 8 || !/^[a-zA-Z0-9]{8}$/.test(chartNo) || !yVal || !mVal || !dVal) {
-              fieldsWrapper.style.display = 'none';
-              resultArea.style.display = 'none';
-              document.body.classList.remove('gemini-fields-active');
-              updateNavigationButtons();
+          if (!yVal || !mVal || !dVal) {
+              errorArea.innerHTML = '生年月日をすべて選択してください。';
+              errorArea.style.display = 'block';
               return;
           }
 
-          if (isCheckingDuplicate) return;
-          isCheckingDuplicate = true;
-
-          resultArea.style.display = 'block';
-          resultArea.className = 'gemini-dup-check-box checking';
-          resultArea.style.cssText = 'padding: 12px; border-radius: 5px; background-color: #f0f7ff; border: 1px solid #007bff; color: #0056b3; font-weight: bold; font-size: 13px; margin-top: 15px; margin-bottom: 20px;';
-          resultArea.innerHTML = '⏳ ご入力されたカルテNo・生年月日の照会を行っています...';
+          if (isCheckingAuth) return;
+          isCheckingAuth = true;
+          errorArea.innerHTML = '⏳ 照合中です...';
+          errorArea.style.display = 'block';
 
           try {
+              await fetchTicketData();
               const ticketRecords = config.state.rawTicketRecords || [];
               const chartKeys = ['カルテNo', 'カルテID', config.fbFields.CHART_NO, 'karte_no', 'KarteNo', 'chart_no'];
               const dobKeys = ['生年月日', config.fbFields.DOB, 'birthday', 'Birthday', 'dob'];
               const statusKeys = ['管理状況', 'ステータス', 'status', 'Status'];
-              const idKeys = ['$id', 'ID', 'id', 'ticket_id'];
 
               const matchingChartRecords = ticketRecords.filter(r => {
                   const cNo = getFieldValue(r, chartKeys);
                   return cNo && cNo.trim().toUpperCase() === chartNo.toUpperCase();
               });
 
-
-              // 1. 本人認証 (なりすまし・入力ミス防止)
-              // 過去のチケット履歴に生年月日が記録されている場合、それを「正解」として入力値と照合する。
-              // ただし、不正入力（イタズラ）による生年月日データの汚染を防ぐため、
-              // スタッフが正当性を確認した実績のあるステータス（日程調整中、予約完了など）まで進んだレコードのみを「正解データ」として採用する。
               const untrustedStatuses = ['未着手', 'スタッフ取下', '強制終了', 'URL取下', 'WEB取下'];
-              
               const recordWithDob = matchingChartRecords.find(r => {
                   const hasDob = getFieldValue(r, dobKeys);
                   if (!hasDob) return false;
                   const status = getFieldValue(r, statusKeys);
-                  // ステータスが不明、または「未着手」「強制終了」などの場合は、認証マスターデータとして信用しない
                   if (!status || untrustedStatuses.includes(status)) return false;
                   return true;
               });
+
               if (recordWithDob) {
                   const pastDob = getFieldValue(recordWithDob, dobKeys);
                   const inputY = String(yVal);
@@ -700,65 +807,18 @@
                   const isMonthMatch = pastDob.includes(`${mVal}月`) || pastDob.includes(`-${inputM}-`) || pastDob.includes(`/${inputM}/`);
                   const isDayMatch = pastDob.includes(`${dVal}日`) || pastDob.endsWith(`-${inputD}`) || pastDob.endsWith(`/${inputD}`) || pastDob.includes(`-${inputD} `);
 
-                  // 生年月日が一致しない場合はブロック（強制リロードUI）
                   if (!isYearMatch || (!isMonthMatch && !isDayMatch)) {
-                      resultArea.style.cssText = 'padding: 15px; border-radius: 5px; background-color: #fff5f5; border: 2px solid #e53e3e; color: #c53030; font-weight: bold; font-size: 13px; line-height: 1.6; margin-top: 15px; margin-bottom: 20px; text-align: center;';
-                      const errMsg = `⚠️ 入力されたカルテNoと生年月日が一致しません。<br>診察券の表記をご確認ください。`;
-                      const reloadBtn = `<div style="margin-top: 15px;"><button type="button" onclick="window.location.reload();" style="background-color: #e53e3e; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">画面をリロードして最初からやり直す</button></div>`;
-                      resultArea.innerHTML = errMsg + reloadBtn;
-                      
-                      fieldsWrapper.style.display = 'none';
-                      document.body.classList.remove('gemini-fields-active');
-                      updateNavigationButtons();
-                      isCheckingDuplicate = false;
-                      [chartNoInput, yEl, mEl, dEl].forEach(el => { if(el) el.disabled = true; });
-                      
-                      const reqRadios = document.querySelectorAll('input[name="requirement"]');
-                      reqRadios.forEach(r => r.disabled = true);
-                      
+                      errorArea.innerHTML = '⚠️ 生年月日が一致しません。<br>診察券の表記をご確認ください。';
+                      errorArea.style.display = 'block';
+                      isCheckingAuth = false;
                       return;
                   }
               }
 
-              // 2. 多重予約の防止 (進行中チケットのチェック)
-              const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
-
-              const activeRecord = matchingChartRecords.find(r => {
-                  const status = getFieldValue(r, statusKeys);
-                  // もしステータスが空（フィールド未設定・取得不可）の場合は、安全のためブロック対象から外す
-                  if (!status || status.trim() === '') return false;
-                  return !inactiveStatuses.includes(status);
-              });
-
-              if (activeRecord) {
-                  const statusStr = getFieldValue(activeRecord, statusKeys) || '不明';
-                  console.warn(`[DupCheck] ブロック対象のチケットを検知しました (ステータス: ${statusStr})`);
-                  resultArea.style.cssText = 'padding: 15px; border-radius: 5px; background-color: #fff5f5; border: 2px solid #e53e3e; color: #c53030; font-weight: bold; font-size: 13px; line-height: 1.6; margin-top: 15px; margin-bottom: 20px; text-align: center;';
-                  const errMsg = `⚠️ 現在、別途ご依頼いただいております用件が処理中のため、Webフォームから続けての申し込みはできません。<br>お急ぎの場合はお電話にてお問い合わせください。`;
-                  const reloadBtn = `<div style="margin-top: 15px;"><button type="button" onclick="window.location.reload();" style="background-color: #e53e3e; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">画面をリロードして最初からやり直す</button></div>`;
-                  resultArea.innerHTML = errMsg + reloadBtn;
-                  
-                  fieldsWrapper.style.display = 'none';
-                  document.body.classList.remove('gemini-fields-active');
-                  updateNavigationButtons();
-                  isCheckingDuplicate = false;
-                  [chartNoInput, yEl, mEl, dEl].forEach(el => { if(el) el.disabled = true; });
-                  
-                  // 念のためご用件ラジオボタンも無効化
-                  const reqRadios = document.querySelectorAll('input[name="requirement"]');
-                  reqRadios.forEach(r => r.disabled = true);
-                  
-                  return;
-              }
-
-              // 本人確認成功時: メッセージは表示せず、結果エリアを非表示にする
-              resultArea.style.display = 'none';
-              resultArea.innerHTML = '';
-              
+              document.getElementById('gemini-auth-modal-overlay').style.display = 'none';
               fieldsWrapper.style.display = 'block';
               document.body.classList.add('gemini-fields-active');
-              updateNavigationButtons();
-
+              
               // 照合OK時に選択中の「用件」に応じて内部エリアをトグル・生成表示する
               const currentReq = config.state.requirement;
               if (currentReq === '初診') {
@@ -784,12 +844,19 @@
               }
               toggleSection(config.uiIds.REASON_AREA, true);
 
+              const lastNameEl = document.getElementById(config.uiIds.LAST_NAME_KANJI);
+              if (lastNameEl) {
+                  setTimeout(() => {
+                      scrollToAndHighlight(lastNameEl);
+                  }, 100);
+              }
           } catch (e) {
-              console.error('[DuplicateCheck] Error:', e);
-              resultArea.style.display = 'none';
-              fieldsWrapper.style.display = 'block';
+              console.error('[Auth Check Error]', e);
+              errorArea.innerHTML = 'エラーが発生しました。';
+              errorArea.style.display = 'block';
           } finally {
-              isCheckingDuplicate = false;
+              updateNavigationButtons();
+              isCheckingAuth = false;
           }
       }
 
@@ -1307,7 +1374,6 @@
               }
               
               updateNavigationButtons();
-              checkDuplicateOnForm();
           });
       }
      
@@ -2337,7 +2403,10 @@
                 <label>カルテNo</label>
                 <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-start; justify-content: flex-start;">
                   <div style="flex: 1 1 280px; max-width: 380px;">
-                    <input type="text" id="${config.uiIds.CHART_NO}" class="g-form-control" placeholder="半角英数字8桁" pattern="[a-zA-Z0-9]{8}" maxlength="8" required style="max-width: 280px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="text" id="${config.uiIds.CHART_NO}" class="g-form-control" placeholder="半角英数字8桁" pattern="[a-zA-Z0-9]{8}" maxlength="8" required style="max-width: 200px;">
+                        <button type="button" id="gemini-btn-check-duplicate" style="padding: 8px 16px; border: none; border-radius: 4px; background-color: #007bff; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap;">確認する</button>
+                    </div>
                     <div class="g-form-note" style="margin-top: 10px; line-height: 1.5; color: #555; font-size: 13px;">
                       カルテNoは診察券の表の面に記載されています<br>
                       受診されたことがない場合や診察券を紛失などにより<br>
@@ -2354,7 +2423,7 @@
                 </div>
               </div>
             `)}
-            ${createFormSection('gemini-section-dob', createDobFields())}
+
 
             <!-- カルテNo＋生年月日 照会・重複判定結果メッセージ表示領域 -->
             <div id="gemini-section-duplicate-check-result" style="margin-top: 15px; margin-bottom: 20px; display: none;"></div>
@@ -2466,18 +2535,7 @@
               });
           }
           
-          const triggerDupCheck = () => {
-              checkDuplicateOnForm();
-          };
-          ['CHART_NO', 'DOB_YEAR', 'DOB_MONTH', 'DOB_DAY'].forEach(key => {
-              const el = document.getElementById(config.uiIds[key]);
-              if (el) {
-                  el.addEventListener('change', triggerDupCheck);
-                  el.addEventListener('blur', triggerDupCheck);
-              }
-          });
 
-          document.getElementById(config.uiIds.CHART_NO)?.addEventListener('input', e => updateFbField(config.fbFields.CHART_NO, e.target.value));
           document.getElementById(config.uiIds.LAST_NAME_KANJI)?.addEventListener('input', e => updateFbField(config.fbFields.LAST_NAME_KANJI, e.target.value));
           document.getElementById(config.uiIds.FIRST_NAME_KANJI)?.addEventListener('input', e => updateFbField(config.fbFields.FIRST_NAME_KANJI, e.target.value));
           document.getElementById(config.uiIds.LAST_NAME_KANA)?.addEventListener('input', e => updateFbField(config.fbFields.LAST_NAME_KANA, e.target.value));
@@ -2503,23 +2561,22 @@
               radio.addEventListener('change', e => updateFbField(config.fbFields.GENDER, e.target.value));
           });
           
-          const dobHandler = () => {
-              updateDobDays();
-              const yEl = document.getElementById(config.uiIds.DOB_YEAR);
-              const mEl = document.getElementById(config.uiIds.DOB_MONTH);
-              const dEl = document.getElementById(config.uiIds.DOB_DAY);
-              if (yEl.value && mEl.value && dEl.value) {
-                  const yText = yEl.options[yEl.selectedIndex].textContent;
-                  const mText = mEl.options[mEl.selectedIndex].textContent;
-                  const dText = dEl.options[dEl.selectedIndex].textContent;
-                  const dobValue = `${yText} ${mText} ${dText}`;
-                  updateFbField(config.fbFields.DOB, dobValue);
-              }
-          };
+          const chartNoInputEl = document.getElementById(config.uiIds.CHART_NO);
+          if (chartNoInputEl) {
+              chartNoInputEl.addEventListener('input', e => {
+                  updateFbField(config.fbFields.CHART_NO, e.target.value);
+                  // 入力変更時は結果エリアを消す
+                  const resultArea = document.getElementById('gemini-section-duplicate-check-result');
+                  if (resultArea) {
+                      resultArea.style.display = 'none';
+                      resultArea.innerHTML = '';
+                  }
+              });
+          }
           
-          document.getElementById(config.uiIds.DOB_YEAR)?.addEventListener('change', dobHandler);
-          document.getElementById(config.uiIds.DOB_MONTH)?.addEventListener('change', dobHandler);
-          document.getElementById(config.uiIds.DOB_DAY)?.addEventListener('change', dobHandler);
+          document.getElementById('gemini-btn-check-duplicate')?.addEventListener('click', () => {
+              checkChartNoDuplicate();
+          });
           
           document.getElementById(config.uiIds.PRIVACY_AGREE)?.addEventListener('change', e => {
               const isChecked = e.target.checked;
@@ -2766,7 +2823,8 @@
             #${config.uiIds.REQUIREMENT_AREA} .g-radio-group label { font-weight: bold; }
             .g-radio-label-disabled { color: #ccc; }
             .g-radio-group input, .g-checkbox-label input { margin-right: 8px; }
-            .g-dob-fields select { flex: 1; }
+            .g-dob-fields select:first-child { flex: 2.6; }
+            .g-dob-fields select:not(:first-child) { flex: 1; }
             .g-error-msg { color: #d9534f; font-size: 12px; margin-top: 5px; min-height: 1em; }
             .g-privacy-policy { border: 1px solid #ddd; padding: 15px; border-radius: 5px; background-color: #f9f9f9; }
             .g-privacy-text { margin-bottom: 10px; }

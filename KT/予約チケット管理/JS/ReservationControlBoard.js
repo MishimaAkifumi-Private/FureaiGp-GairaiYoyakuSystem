@@ -2432,7 +2432,7 @@
             takeoverBtn.id = 'rcb-takeover-staff-btn';
             takeoverBtn.textContent = '担当を引継ぐ';
             takeoverBtn.className = 'rcb-btn-save';
-            takeoverBtn.style.padding = '8px 16px';
+            takeoverBtn.style.padding = '4px 16px';
             takeoverBtn.style.fontSize = '12px';
             takeoverBtn.style.backgroundColor = '#f39c12';
             
@@ -2473,7 +2473,7 @@
             forceEndBtn.id = 'rcb-force-end-btn';
             forceEndBtn.textContent = '強制終了';
             forceEndBtn.className = 'rcb-btn-save';
-            forceEndBtn.style.padding = '8px 16px';
+            forceEndBtn.style.padding = '4px 16px';
             forceEndBtn.style.fontSize = '12px';
             forceEndBtn.style.backgroundColor = '#e74c3c';
             
@@ -2517,7 +2517,7 @@
             resetBtn.id = 'rcb-reset-btn';
             resetBtn.textContent = 'リセット';
             resetBtn.className = 'rcb-btn-save';
-            resetBtn.style.padding = '8px 16px';
+            resetBtn.style.padding = '4px 16px';
             resetBtn.style.fontSize = '12px';
             resetBtn.style.backgroundColor = '#95a5a6';
             
@@ -2560,7 +2560,7 @@
             deleteBtn.id = 'rcb-delete-btn';
             deleteBtn.textContent = '不正レコード削除';
             deleteBtn.className = 'rcb-btn-save';
-            deleteBtn.style.padding = '8px 16px';
+            deleteBtn.style.padding = '4px 16px';
             deleteBtn.style.fontSize = '12px';
             deleteBtn.style.backgroundColor = '#c0392b'; // 警告を促す濃い赤
             deleteBtn.style.marginLeft = '10px';
@@ -2576,7 +2576,7 @@
                     });
                     // 削除成功時は一覧画面へリダイレクト
                     alert('レコードを削除しました。\n一覧画面へ戻ります。');
-                    window.location.href = `https://${location.hostname}/k/${kintone.app.getId()}/`;
+                    window.location.href = 'https://w60013hke2ct.cybozu.com/k/guest/11/142/';
                 } catch (e) {
                     console.error('Delete error:', e);
                     alert('削除に失敗しました。権限がない可能性があります。');
@@ -2735,10 +2735,19 @@
                 if (titlebar) {
                     const btnDashboard = document.createElement('button');
                     btnDashboard.id = 'custom-dashboard-btn-142';
-                    btnDashboard.textContent = 'Dashboard';
-                    btnDashboard.style.backgroundColor = 'rgba(248, 75, 31, 0.83)';
-                    btnDashboard.style.color = 'white';
-                    btnDashboard.style.border = '1px solid transparent';
+                    const isDetail = event.type && event.type.indexOf('detail') !== -1;
+                    btnDashboard.textContent = isDetail ? '予約チケット一覧表' : 'Dashboard';
+                    
+                    if (isDetail) {
+                        btnDashboard.style.backgroundColor = '#1b4f72'; // 濃い青
+                        btnDashboard.style.color = 'white';
+                        btnDashboard.style.border = '1px solid transparent';
+                    } else {
+                        btnDashboard.style.backgroundColor = 'rgba(248, 75, 31, 0.83)';
+                        btnDashboard.style.color = 'white';
+                        btnDashboard.style.border = '1px solid transparent';
+                    }
+                    
                     btnDashboard.style.borderRadius = '4px';
                     btnDashboard.style.padding = '0 15px';
                     btnDashboard.style.height = '35px';
@@ -2746,18 +2755,21 @@
                     btnDashboard.style.fontWeight = 'bold';
                     btnDashboard.style.cursor = 'pointer';
                     btnDashboard.style.marginLeft = 'auto';
-                    btnDashboard.style.marginRight = '20px';
+                    btnDashboard.style.marginRight = isDetail ? '70px' : '20px';
                     btnDashboard.style.whiteSpace = 'nowrap';
                     btnDashboard.style.flexShrink = '0';
                     
                     btnDashboard.onmouseover = () => btnDashboard.style.opacity = '0.8';
                     btnDashboard.onmouseout = () => btnDashboard.style.opacity = '1';
                     
-                    // メインアプリ(App 156)のDashboardへ遷移
                     btnDashboard.onclick = () => {
-                        const appId = kintone.app.getId();
-                        const mainAppPath = location.pathname.replace(new RegExp('/' + appId + '(/.*)?$'), '/156/');
-                        location.href = mainAppPath + '?view_mode=dashboard';
+                        if (isDetail) {
+                            location.href = 'https://w60013hke2ct.cybozu.com/k/guest/11/142/';
+                        } else {
+                            const appId = kintone.app.getId();
+                            const mainAppPath = location.pathname.replace(new RegExp('/' + appId + '(/.*)?$'), '/156/');
+                            location.href = mainAppPath + '?view_mode=dashboard';
+                        }
                     };
 
                     titlebar.style.display = 'flex';
@@ -2832,6 +2844,150 @@
       const resetSpace = kintone.app.record.getSpaceElement(CONFIG.RESET_SPACE_ID);
       if (resetSpace) {
           renderActionButtons(resetSpace, kintone.app.record.getId(), event.record);
+
+          // 指定された行（管理番号、作成日時、ボタン等が含まれる row-gaia）をヘッダーメニュー領域へ移動する
+          setTimeout(() => {
+              const rowEl = resetSpace.closest('.row-gaia');
+              const targetMenu = document.querySelector('.gaia-argoui-app-toolbar-statusmenu');
+              
+              if (rowEl && targetMenu) {
+                  // 移動先でのレイアウト調整
+                  rowEl.style.display = 'flex';
+                  rowEl.style.alignItems = 'center';
+                  rowEl.style.gap = '15px';
+                  rowEl.style.paddingLeft = '20px';
+                  rowEl.style.margin = '0';
+                  
+                  // 行内の不要な余白をリセット
+                  const spacers = rowEl.querySelectorAll('.control-spacer-field-gaia, .control-gaia');
+                  spacers.forEach(el => {
+                      el.style.minHeight = 'auto';
+                      el.style.marginBottom = '0';
+                  });
+
+                  // コロンを表示するためのCSSをヘッダーに動的に追加
+                  if (!document.getElementById('rcb-toolbar-custom-style')) {
+                      const style = document.createElement('style');
+                      style.id = 'rcb-toolbar-custom-style';
+                      document.head.appendChild(style);
+                  }
+                  document.getElementById('rcb-toolbar-custom-style').innerHTML = `
+                      .gaia-argoui-app-toolbar-statusmenu .control-label-text-gaia::after {
+                          content: ""; /* 電球アイコンとの位置ズレを防ぐためコロンは非表示 */
+                      }
+                      .gaia-argoui-app-toolbar-statusmenu .css-u7qklg button {
+                          vertical-align: middle !important;
+                          margin-left: 2px !important;
+                          line-height: 1 !important;
+                          height: 16px !important;
+                          width: 16px !important;
+                          padding: 0 !important;
+                      }
+                      /* アクションボタンをフラットなモダンカプセル型に刷新 */
+                      .gaia-argoui-app-toolbar-statusmenu #rcb-action-container button {
+                          height: 28px !important;
+                          padding: 0 16px !important;
+                          border: none !important;
+                          border-radius: 14px !important;
+                          font-size: 11px !important;
+                          font-weight: bold !important;
+                          box-shadow: none !important;
+                          transform: none !important;
+                          margin: 0 !important;
+                          display: inline-flex !important;
+                          align-items: center !important;
+                          justify-content: center !important;
+                          cursor: pointer !important;
+                          transition: background-color 0.2s ease, opacity 0.2s ease !important;
+                      }
+                      .gaia-argoui-app-toolbar-statusmenu #rcb-action-container button:hover {
+                          opacity: 0.9 !important;
+                          filter: brightness(0.95) !important;
+                          transform: none !important;
+                          border-bottom: none !important;
+                          margin-bottom: 0 !important;
+                      }
+                      .gaia-argoui-app-toolbar-statusmenu #rcb-action-container button:active {
+                          opacity: 0.8 !important;
+                          transform: scale(0.96) !important;
+                          border-bottom: none !important;
+                          margin-bottom: 0 !important;
+                      }
+                      /* リセットボタン内の💡ヘルプアイコン位置調整 */
+                      .gaia-argoui-app-toolbar-statusmenu #rcb-action-container button .custom-tooltip-icon {
+                          margin-left: 4px !important;
+                          font-size: 13px !important;
+                          vertical-align: middle !important;
+                          line-height: 1 !important;
+                      }
+                  `;
+
+                  // 各フィールド의 コンテナをカプセル型のフラットバッジにする
+                  rowEl.querySelectorAll('.control-gaia').forEach(el => {
+                      el.style.display = 'inline-flex';
+                      el.style.alignItems = 'center';
+                      el.style.backgroundColor = '#f1f3f5'; // 上品な薄いグレー
+                      el.style.border = '1px solid #e9ecef';
+                      el.style.borderRadius = '14px'; // 完全に丸い角
+                      el.style.height = '28px';
+                      el.style.padding = '0 12px'; // 左右の余白
+                      el.style.boxSizing = 'border-box';
+                      el.style.setProperty('width', 'auto', 'important'); // 幅固定を解除
+                      el.style.setProperty('min-width', 'auto', 'important');
+                  });
+
+                  // ラベルの背景を透過にし、フォントカラーとマージンを調整
+                  rowEl.querySelectorAll('.control-label-gaia').forEach(el => {
+                      el.style.backgroundColor = 'transparent';
+                      el.style.padding = '0';
+                      el.style.margin = '0';
+                      el.style.fontSize = '11px';
+                      el.style.fontWeight = 'bold';
+                      el.style.color = '#495057';
+                      el.style.height = 'auto';
+                      el.style.display = 'inline-flex';
+                      el.style.alignItems = 'center';
+                      el.style.marginRight = '6px'; // 値との間隔
+                      el.style.border = 'none';
+                      el.style.borderRadius = '0';
+                  });
+                  rowEl.querySelectorAll('.control-value-gaia').forEach(el => {
+                      el.style.backgroundColor = 'transparent';
+                      el.style.padding = '0';
+                      el.style.margin = '0';
+                      el.style.minWidth = 'auto';
+                      el.style.height = 'auto';
+                      el.style.display = 'inline-flex';
+                      el.style.alignItems = 'center';
+                      el.style.fontSize = '12px';
+                      el.style.color = '#212529';
+                      el.style.fontWeight = '500';
+                      el.style.border = 'none';
+                      el.style.borderRadius = '0';
+                  });
+
+                  // MyTicketスペーサーがあれば非表示にして、ボタンを作成日時のすぐ右横に詰める
+                  const myTicketEl = rowEl.querySelector('#user-js-MyTicket');
+                  if (myTicketEl) {
+                      const parentSpacer = myTicketEl.closest('.control-spacer-field-gaia');
+                      if (parentSpacer) {
+                          parentSpacer.style.display = 'none';
+                      }
+                  }
+
+                  // ボタンコンテナの上マージンをリセットしてヘッダー内での上下位置を揃える
+                  const actContainer = rowEl.querySelector('#rcb-action-container');
+                  if (actContainer) {
+                      actContainer.style.marginTop = '0';
+                  }
+
+                  // ステータスメニューをflex化して横並びにする
+                  targetMenu.style.display = 'flex';
+                  targetMenu.style.alignItems = 'center';
+                  
+                  targetMenu.appendChild(rowEl);
+              }
+          }, 100); // 描画完了を少し待つ
       }
 
       // ポーリング開始
