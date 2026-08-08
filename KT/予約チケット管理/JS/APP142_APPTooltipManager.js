@@ -1,4 +1,4 @@
-﻿/*
+/*
  * TooltipManager.js
  * 指定された要素の横にツールチップ付きのアイコンを動的に追加します。
  */
@@ -95,11 +95,11 @@
     },
     {
       match: (el) => el.id === 'rcb-reset-btn',
-      text: '詳しくはツールバーにある【管理状況凡例】の説明を参照してください。',
+      text: '患者から予約依頼のチケットが到着した直後の状態に戻します。\n担当者は「未設定」に、管理状態は「未着手」になります。\n予約日時などのデータや経過情報なども消去されます。\nただし、患者に送信済みのメールは取り戻せませんので\nこの操作による影響を十分考慮の上で行ってください。',
       position: 'inside' // ボタンの内部に配置
     },
     {
-      match: (el) => el.classList && el.classList.contains('custom-ticket-text') && el.textContent.includes('チケット情報'),
+      match: (el) => el.classList && (el.classList.contains('custom-ticket-text') || el.classList.contains('group-label-gaia')) && el.textContent.includes('チケット情報'),
       text: 'このチケットの詳細情報を表示します。',
       position: 'inside' // テキストの内部（右横）に配置
     },

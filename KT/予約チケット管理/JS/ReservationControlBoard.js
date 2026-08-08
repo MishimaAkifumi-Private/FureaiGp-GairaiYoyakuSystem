@@ -19,7 +19,6 @@
     const {
         CONFIG,
         applyStyles,
-        styleGroupLabels,
         showSpinner,
         hideSpinner,
         showDialog,
@@ -270,82 +269,74 @@
       // --- 2. コンテンツ分岐 ---
       const isAssignedToMe = staffName && staffName === currentStaff;
 
-      if (!isAssignedToMe) {
-          // === 担当者以外の場合 ===
-          // 未着手ならアサインボタンを表示
-          if (currentStatus === '未着手') {
-              // ★追加: 多重チケット自動担当設定チェック
-              const chartNo = record['カルテNo']?.value;
-              if (chartNo) {
-                  const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
-                  const query = `カルテNo = "${chartNo}" and 管理状況 not in ${activeStatuses} and $id != "${recordId}" and 管理状況 not in ("未着手") order by 作成日時 desc limit 1`;
-                  try {
-                      const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
-                          app: kintone.app.getId(),
-                          query: query,
-                          fields: ['担当者']
-                      });
-                      if (resp.records.length > 0 && resp.records[0]['担当者']?.value) {
-                          const autoStaff = resp.records[0]['担当者'].value;
-                          const payload = {
-                              [CONFIG.FIELDS.STAFF]: { value: autoStaff },
-                              [CONFIG.FIELDS.STATUS]: { value: '担当設定' }
-                          };
-                          await updateRecord(recordId, payload, [], false, false, '多重チケットのため担当者を自動設定');
-                          location.reload();
-                          return;
-                      }
-                  } catch (e) {
-                      console.error('Auto assign check failed', e);
-                  }
-              }
-
-              const assignBtn = document.createElement('button');
-              assignBtn.id = 'rcb-assign-staff-btn';
-              assignBtn.className = 'rcb-btn-save';
-              assignBtn.innerText = currentStaff ? `私（${currentStaff}）がこのチケットを担当する` : '担当者設定が必要です';
-              assignBtn.style.animation = 'rcb-btn-blink-anim 1.5s infinite ease-in-out';
-              assignBtn.style.backgroundColor = '#2c3e50';
-              assignBtn.style.height = '45px';
-              assignBtn.style.display = 'flex';
-              assignBtn.style.alignItems = 'center';
-              assignBtn.style.justifyContent = 'center';
-
-              assignBtn.onclick = async () => {
-                  if (!currentStaff) {
-                      await showDialog('この端末には担当者が設定されていません。\nダッシュボード等で担当者を設定してください。', 'error');
+      if (!isAssignedToMe && currentStatus === '未着手') {
+          // 未着手なら担当者変更・アサインボタンを表示
+          const chartNo = record['カルテNo']?.value;
+          if (chartNo) {
+              const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+              const query = `カルテNo = "${chartNo}" and 管理状況 not in ${activeStatuses} and $id != "${recordId}" and 管理状況 not in ("未着手") order by 作成日時 desc limit 1`;
+              try {
+                  const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+                      app: kintone.app.getId(),
+                      query: query,
+                      fields: ['担当者']
+                  });
+                  if (resp.records.length > 0 && resp.records[0]['担当者']?.value) {
+                      const autoStaff = resp.records[0]['担当者'].value;
+                      const payload = {
+                          [CONFIG.FIELDS.STAFF]: { value: autoStaff },
+                          [CONFIG.FIELDS.STATUS]: { value: '担当設定' }
+                      };
+                      await updateRecord(recordId, payload, [], false, false, '多重チケットのため担当者を自動設定');
+                      location.reload();
                       return;
                   }
-                  
-                  assignBtn.disabled = true;
-                  assignBtn.textContent = '処理中...';
-                  
-                  const updatePayload = {
-                      [CONFIG.FIELDS.STAFF]: { value: currentStaff }
-                  };
-
-                  // 未着手から担当が設定された場合のみステータスを更新
-                  if (currentStatus === '未着手') {
-                      updatePayload[CONFIG.FIELDS.STATUS] = { value: '担当設定' };
-                  }
-
-                  const success = await updateRecord(recordId, updatePayload);
-                  if (success) {
-                      await updateAllDuplicateTicketsStaff(record['カルテNo']?.value, currentStaff, recordId);
-                      await showDialog(`担当者を「${currentStaff}」に設定しました。`, 'success');
-                      location.reload();
-                  } else {
-                      assignBtn.disabled = false;
-                      assignBtn.textContent = '担当する';
-                  }
-              };
-              
-              methodIconDiv.style.display = 'none';
-              methodIconDiv.insertAdjacentElement('afterend', assignBtn);
+              } catch (e) {
+                  console.error('Auto assign check failed', e);
+              }
           }
+
+          const assignBtn = document.createElement('button');
+          assignBtn.id = 'rcb-assign-staff-btn';
+          assignBtn.className = 'rcb-btn-save';
+          assignBtn.innerText = currentStaff ? `私（${currentStaff}）がこのチケットを担当する` : '担当者設定が必要です';
+          assignBtn.style.animation = 'rcb-btn-blink-anim 1.5s infinite ease-in-out';
+          assignBtn.style.backgroundColor = '#2c3e50';
+          assignBtn.style.height = '45px';
+          assignBtn.style.display = 'flex';
+          assignBtn.style.alignItems = 'center';
+          assignBtn.style.justifyContent = 'center';
+
+          assignBtn.onclick = async () => {
+              if (!currentStaff) {
+                  await showDialog('この端末には担当者が設定されていません。\nダッシュボード等で担当者を設定してください。', 'error');
+                  return;
+              }
+              
+              assignBtn.disabled = true;
+              assignBtn.textContent = '処理中...';
+              
+              const updatePayload = {
+                  [CONFIG.FIELDS.STAFF]: { value: currentStaff }
+              };
+
+              if (currentStatus === '未着手') {
+                  updatePayload[CONFIG.FIELDS.STATUS] = { value: '担当設定' };
+              }
+
+              const success = await updateRecord(recordId, updatePayload);
+              if (success) {
+                  await updateAllDuplicateTicketsStaff(record['カルテNo']?.value, currentStaff, recordId);
+                  await showDialog(`担当者を「${currentStaff}」に設定しました。`, 'success');
+                  location.reload();
+              } else {
+                  assignBtn.disabled = false;
+                  assignBtn.textContent = '担当する';
+              }
+          };
           
-          spaceElement.appendChild(container);
-          return; // ここで終了（メイン機能は表示しない）
+          methodIconDiv.style.display = 'none';
+          methodIconDiv.insertAdjacentElement('afterend', assignBtn);
       }
 
       // === 担当者本人の場合 ===
@@ -2696,7 +2687,6 @@
     // スタイル適用イベント (一覧・詳細共通)
     kintone.events.on(['app.record.index.show', 'app.record.detail.show'], function(event) {
         applyStyles();
-        styleGroupLabels();
 
         // ★追加: Dashboardボタンをタイトルバー右端に設置 (遅延再試行付き)
         const insertDashboardBtn = () => {

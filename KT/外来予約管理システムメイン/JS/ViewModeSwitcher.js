@@ -401,7 +401,7 @@
                     toolbar.style.paddingBottom = '0px';
                 }
 
-                // ★ ヘッダー領域の左側に「🧑‍⚕️ 診療スケジュール編集」タイトルを配置 (右側の操作ボタン群は右寄せを保持)
+                // ★ ヘッダー領域の左側に「🧑‍⚕️ 診療予定編集」タイトルを配置 (右側の操作ボタン群は右寄せを保持)
                 const headerSpace = kintone.app.getHeaderMenuSpaceElement();
                 if (headerSpace) {
                     headerSpace.style.display = 'flex';
@@ -410,7 +410,7 @@
                     if (!titleEl) {
                         titleEl = document.createElement('div');
                         titleEl.id = 'custom-input-title';
-                        titleEl.innerHTML = '<span style="font-size: 32px; margin-right: 6px; line-height: 1; vertical-align: middle;">🧑‍⚕️</span><span style="vertical-align: middle;">診療スケジュール編集</span>';
+                        titleEl.innerHTML = '<span style="font-size: 32px; margin-right: 6px; line-height: 1; vertical-align: middle;">🧑‍⚕️</span><span style="vertical-align: middle;">診療予定編集</span>';
                         titleEl.style.cssText = 'font-size: 25px; font-weight: bold; color: #333; margin-left: 10px; margin-right: 20px; white-space: nowrap; flex-shrink: 0; line-height: 1; display: inline-flex; align-items: center;';
                     }
                     if (titleEl.parentNode !== headerSpace) {
@@ -861,7 +861,7 @@
                     }
                 }, desc: '患者様向けに公開されている外来Web予約フォームを開きます'
             },
-            { title: '診療スケジュール編集', icon: '🧑‍⚕️', iconSize: '68px', iconTop: '-10px', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療スケジュールや枠組みを一覧・一括編集します' },
+            { title: '診療予定編集', icon: '🧑‍⚕️', iconSize: '68px', iconTop: '-10px', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療予定や枠組みを一覧・一括編集します' },
             { title: '共通マスタ管理', icon: '🏢', iconTop: '-10px', textTop: '8px', action: () => showCenterRegistrationMenu(), desc: '予約センター基本設定や管轄施設などの管理を行います' },
             { title: '各種システム設定', icon: '🔐', iconTop: '-20px', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
         ];
@@ -2648,10 +2648,16 @@
         footerDiv.style.justifyContent = 'space-between';
         footerDiv.style.flexShrink = '0';
 
+        let isSaving = false;
+
         const closeBtn = document.createElement('button');
         closeBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
         closeBtn.textContent = '閉じる';
         closeBtn.onclick = () => {
+            if (isSaving) {
+                closeBtn.textContent = '保存中...';
+                return;
+            }
             document.body.removeChild(overlay);
             if (hasChanges) location.reload();
         };
@@ -2669,6 +2675,7 @@
         // --- データ取得と描画 ---
         let descriptions = {};
         let labelSettings = {}; // ★追加
+        let labelVisibility = {}; // ★追加
         let fieldGroups = new Map(); // 診療分野 -> 診療科リスト
         let fieldOrderMap = new Map(); // 診療分野 -> 最小表示順
         let deptOrderMap = new Map();  // 診療科 -> 最小表示順
@@ -2676,7 +2683,8 @@
         if (window.ShinryoApp.ConfigManager) {
             const data = await window.ShinryoApp.ConfigManager.fetchPublishedData();
             descriptions = data.descriptions || {};
-            labelSettings = data.labelSettings || {}; // ★追加
+            labelSettings = data.labelSettings || {};
+            labelVisibility = data.labelVisibility || {}; // ★追加
 
             const records = data.records || [];
             records.forEach(r => {
@@ -2713,7 +2721,7 @@
         };
 
         // サイドバー項目作成ヘルパー
-        const createSidebarItem = (id, text, isHeader = false, isIndent = false) => {
+        const createSidebarItem = (key, id, text, isHeader = false, isIndent = false) => {
             const item = document.createElement('div');
             if (isHeader) {
                 item.textContent = text;
@@ -2725,7 +2733,43 @@
                 item.style.marginTop = '0';
                 item.style.marginBottom = '5px';
             } else {
-                item.textContent = text;
+                const labelDiv = document.createElement('div');
+                labelDiv.style.position = 'relative';
+                labelDiv.style.display = 'flex';
+                labelDiv.style.alignItems = 'center';
+                
+                const textSpan = document.createElement('span');
+                textSpan.textContent = text;
+                textSpan.style.display = 'inline-block';
+                textSpan.style.maxWidth = '100%';
+                labelDiv.appendChild(textSpan);
+                
+                if (key) {
+                    const isConfigured = !!(descriptions[key] && stripHtml(descriptions[key]).trim());
+                    const isVisible = labelVisibility[key] !== false;
+                    const badge = document.createElement('span');
+                    badge.setAttribute('data-key', key);
+                    badge.style.position = 'absolute';
+                    badge.style.right = '0';
+                    badge.style.top = '50%';
+                    badge.style.transform = 'translateY(-50%)';
+                    badge.style.fontSize = '9px';
+                    badge.style.padding = '2px 4px';
+                    badge.style.borderRadius = '4px';
+                    badge.style.color = '#fff';
+                    badge.style.zIndex = '1';
+                    
+                    if (!isConfigured) {
+                        badge.textContent = '未設定';
+                        badge.style.backgroundColor = '#ccc';
+                    } else {
+                        badge.textContent = isVisible ? '表示' : '非表示';
+                        badge.style.backgroundColor = isVisible ? '#28a745' : '#6c757d';
+                    }
+                    labelDiv.appendChild(badge);
+                }
+                item.appendChild(labelDiv);
+
                 item.style.padding = isIndent ? '8px 15px 8px 35px' : '8px 20px';
                 item.style.fontSize = isIndent ? '12px' : '13px';
                 item.style.cursor = 'pointer';
@@ -2739,7 +2783,6 @@
                     const target = document.getElementById(id);
                     if (target) {
                         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        // ハイライトエフェクト
                         const originalBg = target.style.backgroundColor;
                         target.style.transition = 'background-color 0.5s';
                         target.style.backgroundColor = '#fff3cd';
@@ -2776,16 +2819,6 @@
             titleText.style.color = '#333';
             titleDiv.appendChild(titleText);
 
-            const badge = document.createElement('span');
-            badge.textContent = isDept ? '診療科' : '共通';
-            badge.style.fontSize = '11px';
-            badge.style.color = '#fff';
-            badge.style.backgroundColor = isDept ? '#28a745' : '#007bff';
-            badge.style.padding = '2px 8px';
-            badge.style.borderRadius = '10px';
-            badge.style.marginLeft = '10px';
-            titleDiv.appendChild(badge);
-
             let settingBadge = null;
 
             // ★追加: 診療科の場合、用件別制御の設定状況を表示
@@ -2813,7 +2846,104 @@
                 titleDiv.appendChild(settingBadge);
             }
 
-            header.appendChild(titleDiv);
+            header.appendChild(titleDiv); // ★ 復元: タイトルを表示
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.style.display = 'flex';
+            actionsDiv.style.alignItems = 'center';
+
+            // ★追加: 表示/非表示トグルスイッチ (iOS風・小型)
+            const isConfigured = !!(descriptions[key] && stripHtml(descriptions[key]).trim());
+            const isVisible = labelVisibility[key] !== false;
+
+            const toggleContainer = document.createElement('div');
+            toggleContainer.style.display = 'flex';
+            toggleContainer.style.alignItems = 'center';
+            toggleContainer.style.marginRight = '15px';
+
+            const toggleLabel = document.createElement('span');
+            toggleLabel.textContent = isConfigured ? (isVisible ? '表示する' : '表示しない') : '未設定';
+            toggleLabel.style.fontSize = '12px';
+            toggleLabel.style.marginRight = '8px';
+            toggleLabel.style.color = isConfigured ? (isVisible ? '#28a745' : '#6c757d') : '#ccc';
+            toggleLabel.style.fontWeight = 'bold';
+            
+            const toggleSwitch = document.createElement('label');
+            toggleSwitch.style.position = 'relative';
+            toggleSwitch.style.display = 'inline-block';
+            toggleSwitch.style.width = '34px';
+            toggleSwitch.style.height = '18px';
+
+            const toggleInput = document.createElement('input');
+            toggleInput.type = 'checkbox';
+            toggleInput.checked = isVisible;
+            toggleInput.style.opacity = '0';
+            toggleInput.style.width = '0';
+            toggleInput.style.height = '0';
+            toggleInput.disabled = !isConfigured;
+
+            const toggleSlider = document.createElement('span');
+            toggleSlider.style.position = 'absolute';
+            toggleSlider.style.cursor = isConfigured ? 'pointer' : 'not-allowed';
+            toggleSlider.style.top = '0';
+            toggleSlider.style.left = '0';
+            toggleSlider.style.right = '0';
+            toggleSlider.style.bottom = '0';
+            toggleSlider.style.backgroundColor = isConfigured ? (isVisible ? '#28a745' : '#ccc') : '#eee';
+            toggleSlider.style.transition = '.3s';
+            toggleSlider.style.borderRadius = '18px';
+
+            const toggleKnob = document.createElement('span');
+            toggleKnob.style.position = 'absolute';
+            toggleKnob.style.content = '""';
+            toggleKnob.style.height = '14px';
+            toggleKnob.style.width = '14px';
+            toggleKnob.style.left = isVisible ? '18px' : '2px';
+            toggleKnob.style.bottom = '2px';
+            toggleKnob.style.backgroundColor = 'white';
+            toggleKnob.style.transition = '.3s';
+            toggleKnob.style.borderRadius = '50%';
+            
+            toggleSlider.appendChild(toggleKnob);
+            toggleSwitch.appendChild(toggleInput);
+            toggleSwitch.appendChild(toggleSlider);
+
+            toggleInput.onchange = async () => {
+                const newVisible = toggleInput.checked;
+                toggleInput.disabled = true; // 保存中ロック
+                labelVisibility[key] = newVisible;
+                
+                toggleLabel.textContent = newVisible ? '表示する' : '表示しない';
+                toggleLabel.style.color = newVisible ? '#28a745' : '#6c757d';
+                toggleSlider.style.backgroundColor = newVisible ? '#28a745' : '#ccc';
+                toggleKnob.style.left = newVisible ? '18px' : '2px';
+                
+                const previewDiv = card.querySelector('.preview-content');
+                if (previewDiv) {
+                    previewDiv.style.opacity = newVisible ? '1' : '0.4';
+                }
+                
+                const sbBadge = document.querySelector(`span[data-key="${key}"]`);
+                if(sbBadge) {
+                    sbBadge.textContent = newVisible ? '表示' : '非表示';
+                    sbBadge.style.backgroundColor = newVisible ? '#28a745' : '#6c757d';
+                }
+                
+                hasChanges = true;
+                isSaving = true;
+                try {
+                    await window.ShinryoApp.ConfigManager.updateLabelVisibility(key, newVisible);
+                } catch (e) {
+                    console.error("保存エラー", e);
+                } finally {
+                    toggleInput.disabled = false;
+                    isSaving = false;
+                }
+            };
+
+            toggleContainer.appendChild(toggleLabel);
+            toggleContainer.appendChild(toggleSwitch);
+            actionsDiv.appendChild(toggleContainer);
 
             const editBtn = document.createElement('button');
             editBtn.className = 'custom-modal-btn';
@@ -2827,25 +2957,58 @@
             editBtn.onclick = () => {
                 window.ShinryoApp.Viewer.showLabelEditor(key, descriptions[key] || '', labelSettings[key], () => {
                     hasChanges = true;
-                    // 保存後のコールバック: データを再取得して表示更新
                     window.ShinryoApp.ConfigManager.fetchPublishedData().then(newData => {
                         descriptions = newData.descriptions || {};
                         labelSettings = newData.labelSettings || {};
+                        labelVisibility = newData.labelVisibility || {};
+                        
                         const newHtml = descriptions[key] || '';
                         const previewDiv = card.querySelector('.preview-content');
+                        const isNowConfigured = !!(newHtml && stripHtml(newHtml).trim());
+                        const nowVisible = labelVisibility[key] !== false;
+
                         if (previewDiv) {
-                            if (newHtml && stripHtml(newHtml).trim()) {
+                            if (isNowConfigured) {
                                 previewDiv.innerHTML = newHtml;
                                 previewDiv.style.display = 'block';
+                                previewDiv.style.opacity = nowVisible ? '1' : '0.4';
                             } else {
                                 previewDiv.innerHTML = '<span style="color:#ccc;">(未設定)</span>';
                                 previewDiv.style.display = 'flex';
                                 previewDiv.style.alignItems = 'center';
                                 previewDiv.style.justifyContent = 'center';
+                                previewDiv.style.opacity = '1';
                             }
                         }
 
-                        // ★追加: バッジの表示更新
+                        toggleInput.disabled = !isNowConfigured;
+                        toggleInput.checked = nowVisible;
+                        
+                        if (!isNowConfigured) {
+                            toggleLabel.textContent = '未設定';
+                            toggleLabel.style.color = '#ccc';
+                            toggleSlider.style.cursor = 'not-allowed';
+                            toggleSlider.style.backgroundColor = '#eee';
+                            toggleKnob.style.left = '2px';
+                        } else {
+                            toggleLabel.textContent = nowVisible ? '表示する' : '表示しない';
+                            toggleLabel.style.color = nowVisible ? '#28a745' : '#6c757d';
+                            toggleSlider.style.cursor = 'pointer';
+                            toggleSlider.style.backgroundColor = nowVisible ? '#28a745' : '#ccc';
+                            toggleKnob.style.left = nowVisible ? '18px' : '2px';
+                        }
+
+                        const sbBadge = document.querySelector(`span[data-key="${key}"]`);
+                        if(sbBadge) {
+                            if (!isNowConfigured) {
+                                sbBadge.textContent = '未設定';
+                                sbBadge.style.backgroundColor = '#ccc';
+                            } else {
+                                sbBadge.textContent = nowVisible ? '表示' : '非表示';
+                                sbBadge.style.backgroundColor = nowVisible ? '#28a745' : '#6c757d';
+                            }
+                        }
+
                         if (settingBadge) {
                             const newSetting = labelSettings[key] || 'both';
                             let newText = '初診・変更';
@@ -2864,7 +3027,8 @@
                     });
                 }, label);
             };
-            header.appendChild(editBtn);
+            actionsDiv.appendChild(editBtn);
+            header.appendChild(actionsDiv);
             card.appendChild(header);
 
             if (desc) {
@@ -2892,7 +3056,8 @@
 
             const currentHtml = descriptions[key];
             if (currentHtml && stripHtml(currentHtml).trim()) {
-                preview.innerHTML = currentHtml; // 簡易プレビュー
+                preview.innerHTML = currentHtml;
+                preview.style.opacity = labelVisibility[key] !== false ? '1' : '0.4';
             } else {
                 preview.innerHTML = '<span style="color:#ccc;">(未設定)</span>';
                 preview.style.display = 'flex';
@@ -2907,15 +3072,15 @@
         // --- 描画実行 ---
 
         // 1. 共通ラベル
-        createSidebarItem(null, '共通ラベル', true);
+        createSidebarItem(null, null, '共通ラベル', true);
         globalLabels.forEach(item => {
-            createSidebarItem(`global-${item.key}`, item.label);
+            createSidebarItem(item.key, `global-${item.key}`, item.label);
             createCard(item.key, item.label, item.desc);
         });
 
         // 2. 診療科ラベル
         if (fieldGroups.size > 0) {
-            createSidebarItem(null, '診療科別ラベル', true);
+            createSidebarItem(null, null, '診療科別ラベル', true);
 
             const divider = document.createElement('div');
             divider.style.borderTop = '2px dashed #eee';
@@ -2957,7 +3122,7 @@
                 });
 
                 depts.forEach(dept => {
-                    createSidebarItem(`dept-${dept}`, dept, false, true); // インデントあり
+                    createSidebarItem(dept, `dept-${dept}`, dept, false, true); // インデントあり
                     createCard(dept, dept, `「${dept}」を選択した際に表示される案内文です。`, true);
                 });
             });
