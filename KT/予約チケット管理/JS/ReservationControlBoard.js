@@ -413,13 +413,13 @@
                               let otherMemo = resp.record['人物メモ']?.value || '';
                               if (!otherMemo.includes(`[複数の用件を短期間に依頼:${recordId}]`)) {
                                   otherMemo = otherMemo ? otherMemo + `\n[複数の用件を短期間に依頼:${recordId}]` : `[複数の用件を短期間に依頼:${recordId}]`;
-                                  await updateRecord(dupId, { '人物メモ': { value: otherMemo } }, ['多重チケット解消'], false, true, `用件として有効化\n比較対象チケットID:${recordId} ${appRoot}show#record=${recordId}`);
+                                  await updateRecord(dupId, { '人物メモ': { value: otherMemo } }, ['多重チケット解消'], false, true, `用件として有効化\n比較対象チケットID:${recordId}`);
                               }
                           } catch (e) {
                               console.error('Failed to update the other duplicate ticket', e);
                           }
 
-                          const success = await updateRecord(recordId, { '人物メモ': { value: newMemo } }, ['多重チケット解消'], false, true, `用件として有効化\n比較対象チケットID:${dupId} ${appRoot}show#record=${dupId}`);
+                          const success = await updateRecord(recordId, { '人物メモ': { value: newMemo } }, ['多重チケット解消'], false, true, `用件として有効化\n比較対象チケットID:${dupId}`);
                           if (success) location.reload();
                       }
                   };
@@ -442,9 +442,9 @@
                       mergeBtn.onclick = async () => {
                           const isOk = await showDialog(`このチケットは他の進行中チケット（番号: ${dupIds.join(', ')}）にて扱うため取下げて強制終了としますか？\n※この操作は元に戻せません。`, 'confirm');
                           if (isOk) {
-                              const dupUrlsText = dupIds.map(id => `ID:${id} ${appRoot}show#record=${id}`).join('\n');
+                              const dupUrlsText = dupIds.map(id => `ID:${id}`).join('\n');
                               const reason = `重複依頼と思われるため、以下のチケットにて扱うものとして本チケットは取下げる\n${dupUrlsText}`;
-                              const memoAdd = `多重チケットによる取下げ\n関連チケットID:${dupIds}`;
+                              const memoAdd = `多重チケットによる取下げ\n関連チケットID:${dupIds.join(', ')}`;
                               const newMemo = currentMemoStr ? currentMemoStr + '\n' + memoAdd : memoAdd;
                               
                               const payload = {
@@ -454,10 +454,15 @@
                                   '人物メモ': { value: newMemo }
                               };
                               
-                              // 統合先（残された側）のチケットにも「解消」の履歴を記録する
+                              // 統合先（残された側）のチケットに履歴を記録する（完全解消時のみ「多重チケット解消」アクションを記録）
                               try {
+                                  const isFullyResolved = (dupIds.length === 1);
+                                  const targetActionNames = isFullyResolved ? ['多重チケット解消'] : [];
                                   for (const dId of dupIds) {
-                                      await updateRecord(dId, {}, ['多重チケット解消'], false, true, `以下の重複チケットが取下げられたため、本チケットを有効化\nID:${recordId} ${appRoot}show#record=${recordId}`);
+                                      const logReason = isFullyResolved
+                                          ? `以下の重複チケットが取下げられたため、本チケットの多重状態が解消されました\nID:${recordId}`
+                                          : `以下の重複チケットが取下げられました（※他重複チケット進行中）\nID:${recordId}`;
+                                      await updateRecord(dId, {}, targetActionNames, false, true, logReason);
                                   }
                               } catch (e) {
                                   console.error('Failed to update merged target tickets', e);
@@ -2155,7 +2160,6 @@
                     { label: '24時間', min: 1440 },
                     { label: '48時間', min: 2880 }
                 ];
-                
                 const endOfBusiness = new Date(now);
                 endOfBusiness.setHours(17, 0, 0, 0); // 17:00
                 
@@ -2546,6 +2550,39 @@
                 if (success) location.reload();
             };
             btnContainer.appendChild(resetBtn);
+        }
+
+        // --- 不正レコード削除ボタン ---
+        // 認証の境界を越えていない（本物として処理が進んだ実績のない）ステータスでのみ表示する
+        const allowDeleteStatuses = ['未着手', 'スタッフ取下', '強制終了', 'URL取下', 'WEB取下'];
+        if (allowDeleteStatuses.includes(currentStatus)) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.id = 'rcb-delete-btn';
+            deleteBtn.textContent = '不正レコード削除';
+            deleteBtn.className = 'rcb-btn-save';
+            deleteBtn.style.padding = '8px 16px';
+            deleteBtn.style.fontSize = '12px';
+            deleteBtn.style.backgroundColor = '#c0392b'; // 警告を促す濃い赤
+            deleteBtn.style.marginLeft = '10px';
+            
+            deleteBtn.onclick = async () => {
+                const isDeleteOk = await showDialog('【警告】\nこのレコードを完全に削除します。復元はできません。\n本当によろしいですか？', 'confirm', 'レコード削除');
+                if (!isDeleteOk) return;
+                
+                try {
+                    await kintone.api(kintone.api.url('/k/v1/records', true), 'DELETE', {
+                        app: kintone.app.getId(),
+                        ids: [recordId]
+                    });
+                    // 削除成功時は一覧画面へリダイレクト
+                    alert('レコードを削除しました。\n一覧画面へ戻ります。');
+                    window.location.href = `https://${location.hostname}/k/${kintone.app.getId()}/`;
+                } catch (e) {
+                    console.error('Delete error:', e);
+                    alert('削除に失敗しました。権限がない可能性があります。');
+                }
+            };
+            btnContainer.appendChild(deleteBtn);
         }
 
         spaceElement.appendChild(btnContainer);

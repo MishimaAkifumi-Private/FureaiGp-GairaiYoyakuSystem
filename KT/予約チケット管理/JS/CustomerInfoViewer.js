@@ -248,14 +248,29 @@
     }
   };
 
-  // URLの自動ハイパーリンク化ヘルパー (別タブ target="_blank" で開く)
+  // URLおよびチケットIDの自動ハイパーリンク化ヘルパー (別タブ target="_blank" で開く)
   const linkify = (text) => {
     if (!text || !text.trim()) return '<span class="ci-empty-val">-</span>';
-    const escaped = escapeHtml(text);
+    let escaped = escapeHtml(text);
+    
+    // 1. URLの自動ハイパーリンク化
     const urlRegex = /(https?:\/\/[^\s<]+)/g;
-    return escaped.replace(urlRegex, (url) => {
+    escaped = escaped.replace(urlRegex, (url) => {
       return `<a href="${url}" target="_blank" class="ci-link" rel="noopener noreferrer">${url}</a>`;
-    }).replace(/\n/g, '<br>');
+    });
+
+    // 2. チケットID (例: ID:82, ID: 82, 83, 比較対象チケットID:82, [複数の用件を短期間に依頼:82]) の自動ハイパーリンク化
+    const appBaseUrl = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+    const ticketBlockRegex = /(ID[:：\s]*|チケットID[:：\s]*|[:：])([\d\s,]+)/gi;
+    escaped = escaped.replace(ticketBlockRegex, (match, prefix, idListStr) => {
+      const linkedIds = idListStr.replace(/\b(\d+)\b/g, (id) => {
+        const url = `${appBaseUrl}show#record=${id}`;
+        return `<a href="${url}" target="_blank" class="ci-link" rel="noopener noreferrer" style="color:#3b82f6; text-decoration:underline; font-weight:bold;">${id}</a>`;
+      });
+      return prefix + linkedIds;
+    });
+
+    return escaped.replace(/\n/g, '<br>');
   };
 
   // Kintoneイベント登録
@@ -391,7 +406,7 @@
             const checkCancel1 = hasValue(r, '共通評価', '直前に受診キャンセル') ? '🔴' : '';
             const checkCancel2 = hasValue(r, '共通評価', '無断で受診キャンセル') ? '🔴' : '';
 
-            const memo = escapeHtml(r['人物メモ']?.value).replace(/\n/g, '<br>');
+            const memo = linkify(r['人物メモ']?.value);
 
             return `
               <tr${rowStyle}>
@@ -615,6 +630,29 @@
     `;
 
     spaceEl.innerHTML = html;
+
+    // kintone標準サブテーブル（経過情報など）のテキスト要素に対してもチケットIDのハイパーリンク化を適用
+    setTimeout(() => {
+      const appBaseUrl = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+      const cells = document.querySelectorAll('.subtable-gaia td');
+      cells.forEach(td => {
+        const text = td.innerText || td.textContent;
+        if (text && (text.includes('ID:') || text.includes('ID：') || text.includes('比較対象チケットID') || text.includes('関連チケットID') || text.includes('複数の用件を短期間に依頼'))) {
+          if (!td.querySelector('a')) {
+            const ticketBlockRegex = /(ID[:：\s]*|チケットID[:：\s]*|[:：])([\d\s,]+)/gi;
+            const html = text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(ticketBlockRegex, (match, prefix, idListStr) => {
+              const linkedIds = idListStr.replace(/\b(\d+)\b/g, (id) => {
+                const url = `${appBaseUrl}show#record=${id}`;
+                return `<a href="${url}" target="_blank" style="color:#3b82f6; text-decoration:underline; font-weight:bold;">${id}</a>`;
+              });
+              return prefix + linkedIds;
+            }).replace(/\n/g, '<br>');
+            td.innerHTML = html;
+          }
+        }
+      });
+    }, 600);
+
     return event;
   });
 })();
