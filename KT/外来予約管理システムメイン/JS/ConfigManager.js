@@ -25,6 +25,8 @@ window.ShinryoApp = window.ShinryoApp || {};
   let lastJsonLength = 0;
   let isDataOldFormat = false;
   let isProductionDiff = false; // ★追加: 本番環境との差分有無
+  let cachedProductionJsonStr = null; // ★追加: 本番データのキャッシュ（更新ラグ対策用）
+  let cachedDraftData = null; // ★追加: 最新下書きデータのメモリキャッシュ（更新ラグ対策用）
   
   let updateQueue = Promise.resolve(); // ★追加: 非同期更新の直列化用キュー
   function enqueueUpdate(updateFn) {
@@ -192,22 +194,41 @@ window.ShinryoApp = window.ShinryoApp || {};
 
         // ★変更: 本番環境(設定情報)とプレビュー環境(設定情報2)の差分チェック (オブジェクト正規化比較)
         const prodJsonStr = resp.records[0]['設定情報']?.value || null;
+        cachedProductionJsonStr = prodJsonStr; // キャッシュに保持 (更新遅延対策)
         let prodData = {};
         try { prodData = JSON.parse(prodJsonStr || '{}'); } catch(e) { console.warn('Prod JSON parse error', e); }
         
         // ★追加: labelVisibility内のtrueは未設定と同義として扱うため、比較前に除去
         const cleanVisibility = (d) => {
-            if (d.labelVisibility) {
+            if (d && d.labelVisibility) {
                 Object.keys(d.labelVisibility).forEach(k => {
                     if (d.labelVisibility[k] === true) delete d.labelVisibility[k];
                 });
             }
         };
-        cleanVisibility(data);
-        cleanVisibility(prodData);
 
-        const norm1 = JSON.stringify(canonicalize(data));
-        const norm2 = JSON.stringify(canonicalize(prodData));
+        // ★更新ラグ対策: メモリ上の最新下書き(cachedDraftData)と比較して、KintoneのGETデータが古い場合はメモリ上のデータを使用する
+        let draftData = data;
+        if (cachedDraftData) {
+            const normGet = JSON.stringify(canonicalize(data));
+            const normCache = JSON.stringify(canonicalize(cachedDraftData));
+            if (normGet !== normCache) {
+                console.log('ConfigManager: Kintone GET data is older than memory cache (replication lag detected). Using cached draft data for diff comparison.');
+                draftData = cachedDraftData;
+            } else {
+                cachedDraftData = data; // GETが追いついたので同期
+            }
+        } else {
+            cachedDraftData = data; // 初期化
+        }
+
+        const compareDraft = JSON.parse(JSON.stringify(draftData));
+        const compareProd = JSON.parse(JSON.stringify(prodData));
+        cleanVisibility(compareDraft);
+        cleanVisibility(compareProd);
+
+        const norm1 = JSON.stringify(canonicalize(compareDraft));
+        const norm2 = JSON.stringify(canonicalize(compareProd));
         isProductionDiff = (norm1 !== norm2);
         
         // ★★★ デバッグ用ログ出力（取得データ） ★★★
@@ -404,6 +425,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       labelSettings: labelSettings,
       labelVisibility: labelVisibility
     };
+    cachedDraftData = data; // ★メモリキャッシュに保存 (更新ラグ対策用)
     const jsonStr = JSON.stringify(data);
     lastJsonLength = jsonStr.length;
 
@@ -476,10 +498,45 @@ window.ShinryoApp = window.ShinryoApp || {};
       // ★追加: 保存成功時に最終更新日時を現在時刻で更新
       lastPublishedAt = new Date().toISOString();
       
-      console.log('ConfigManager: Config saved successfully. Refreshing published data to update diff status...');
+      console.log('ConfigManager: Config saved successfully. Calculating production diff locally (anti-lag)...');
       
-      // ★追加: 保存直後に最新のデータを再取得し、本番環境(設定情報)との差分(isProductionDiff)を正確に再計算する
+      // ★修正: kintoneのGET更新ラグに対応するため、自分が今保存したばかりの最新下書きデータ(data)と
+      // キャッシュされている本番データを使って isProductionDiff をローカルで正確に計算する
+      let prodData = {};
+      try {
+          if (cachedProductionJsonStr) {
+              prodData = JSON.parse(cachedProductionJsonStr);
+          }
+      } catch(e) {
+          console.warn('ConfigManager: Failed to parse cached production JSON', e);
+      }
+
+      const cleanVisibility = (d) => {
+          if (d && d.labelVisibility) {
+              Object.keys(d.labelVisibility).forEach(k => {
+                  if (d.labelVisibility[k] === true) delete d.labelVisibility[k];
+              });
+          }
+      };
+
+      const compareData = JSON.parse(JSON.stringify(data));
+      const compareProdData = JSON.parse(JSON.stringify(prodData));
+      cleanVisibility(compareData);
+      cleanVisibility(compareProdData);
+
+      const norm1 = JSON.stringify(canonicalize(compareData));
+      const norm2 = JSON.stringify(canonicalize(compareProdData));
+      const calculatedDiff = (norm1 !== norm2);
+
+      console.log('[[ConfigManager saveConfig Anti-Lag Debug]]');
+      console.log('  norm1 (draft):', norm1);
+      console.log('  norm2 (prod):', norm2);
+      console.log('  calculatedDiff:', calculatedDiff);
+
+      // 最新キャッシュ取得処理（インデックス反映ラグによる上書きを考慮し、ローカルの計算値を優先）
       await fetchPublishedData();
+      isProductionDiff = calculatedDiff;
+      console.log('  Final isProductionDiff after fetch:', isProductionDiff);
     } catch (e) {
       console.error('ConfigManager: Failed to save config.', e);
       throw e;
@@ -524,6 +581,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       if (putStatus !== 200) throw new Error(`Update failed. Status: ${putStatus}`);
       
       console.log('ConfigManager: Deployed to Production successfully.');
+      cachedDraftData = null; // キャッシュリセット
     } catch (e) {
       console.error('ConfigManager: Deploy failed.', e);
       throw e;
@@ -596,6 +654,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       );
       
       console.log('ConfigManager: Reverted from Production successfully.');
+      cachedDraftData = null; // キャッシュリセット
     } catch (e) {
       console.error('ConfigManager: Revert failed.', e);
       throw e;

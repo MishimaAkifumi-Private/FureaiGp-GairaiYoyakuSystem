@@ -1711,15 +1711,18 @@ window.ShinryoApp = window.ShinryoApp || {};
               previewBtn.classList.remove('btn-disabled');
               previewBtn.style.pointerEvents = 'auto';
               previewBtn.style.cursor = 'pointer';
+              previewBtn.style.backgroundColor = '#e74c3c';
               previewBtn.onclick = openPreview;
               
               if (revertBtn) {
                   revertBtn.classList.remove('btn-disabled');
                   revertBtn.style.pointerEvents = 'auto';
+                  revertBtn.style.backgroundColor = '#6c757d';
               }
               if (publishBtn) {
                   publishBtn.classList.remove('btn-disabled');
                   publishBtn.style.pointerEvents = 'auto';
+                  publishBtn.style.backgroundColor = '#28a745';
               }
           } else {
               // 差分なし: 無効化

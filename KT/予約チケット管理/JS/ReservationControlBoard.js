@@ -2844,7 +2844,7 @@
           
           // タイトルバー
           const titleBar = document.createElement('div');
-          titleBar.style.cssText = 'font-weight: bold; padding: 6px 12px; background-color: #2c3e50; color: #ffffff; font-size: 13px; letter-spacing: 0.5px;';
+          titleBar.style.cssText = 'font-weight: bold; padding: 8px 14px; background-color: #2c3e50; color: #ffffff; font-size: 14px; letter-spacing: 0.5px;';
           titleBar.textContent = '業務連絡';
           msgContainer.appendChild(titleBar);
           
