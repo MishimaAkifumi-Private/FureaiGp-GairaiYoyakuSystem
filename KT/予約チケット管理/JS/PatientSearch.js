@@ -15,15 +15,15 @@
         const headerSpace = kintone.app.getHeaderMenuSpaceElement();
         if (!headerSpace) return event;
 
-        // コンテナの構築
+        // コンテナの構築 (コンパクト化)
         const container = document.createElement('div');
         container.id = 'custom-patient-search-container';
-        container.style.cssText = 'display: inline-flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 40px; padding: 4px 15px; margin-left: 15px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); height: 48px; box-sizing: border-box; visibility: hidden;';
+        container.style.cssText = 'display: inline-flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 30px; padding: 2px 10px; margin-left: 10px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); height: 38px; box-sizing: border-box; visibility: hidden;';
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = 'カルテNo・名前で検索';
-        searchInput.style.cssText = 'border: none; outline: none; font-size: 15px; width: 160px; background: transparent; color: #333; margin-right: 5px;';
+        searchInput.placeholder = 'No・名前で検索';
+        searchInput.style.cssText = 'border: none; outline: none; font-size: 13px; width: 110px; background: transparent; color: #333; margin-right: 5px;';
 
         const currentSearch = sessionStorage.getItem(STORAGE_KEY_SEARCH) || '';
         searchInput.value = currentSearch;
@@ -31,14 +31,14 @@
         const clearBtn = document.createElement('button');
         clearBtn.textContent = '✖';
         clearBtn.title = '検索クリア';
-        clearBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 5px; color: #aaa; display: ' + (currentSearch ? 'block' : 'none') + '; margin-right: 5px; transition: color 0.2s;';
+        clearBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; font-size: 12px; padding: 3px; color: #aaa; display: ' + (currentSearch ? 'block' : 'none') + '; margin-right: 5px; transition: color 0.2s;';
         clearBtn.onmouseover = () => clearBtn.style.color = '#e74c3c';
         clearBtn.onmouseout = () => clearBtn.style.color = '#aaa';
 
         const searchBtn = document.createElement('button');
         searchBtn.id = 'rcb-search-btn';
-        searchBtn.textContent = '🔍 検索';
-        searchBtn.style.cssText = 'background: #3498db; color: #fff; border: none; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: bold; padding: 6px 15px; transition: background 0.2s;';
+        searchBtn.textContent = '🔍';
+        searchBtn.style.cssText = 'background: #3498db; color: #fff; border: none; border-radius: 15px; cursor: pointer; font-size: 12px; font-weight: bold; padding: 4px 10px; transition: background 0.2s;';
         searchBtn.onmouseover = () => searchBtn.style.background = '#2980b9';
         searchBtn.onmouseout = () => searchBtn.style.background = '#3498db';
 

@@ -467,28 +467,13 @@
     wrapper.style.display = 'inline-flex';
     wrapper.style.alignItems = 'center';
 
-    const titleLabel = document.createElement('div');
-    titleLabel.style.cssText = 'display: flex; align-items: center; gap: 4px; font-weight: bold; color: rgb(51, 51, 51); margin-left: 0; margin-right: 20px;';
-    
-    const iconSpan = document.createElement('span');
-    iconSpan.textContent = '🎫';
-    iconSpan.style.fontSize = '45px'; // ★絵文字のフォントサイズ
-    
-    const textSpan = document.createElement('span');
-    textSpan.textContent = '予約チケット管理';
-    textSpan.style.fontSize = '23px'; // ★テキストのフォントサイズ
-
-    titleLabel.appendChild(iconSpan);
-    titleLabel.appendChild(textSpan);
-    wrapper.appendChild(titleLabel);
-
     const displayName = staffName;
     const nameColor = '#ffffff';
 
     const container = document.createElement('div');
     container.id = 'staff-display-badge';
-    // 指定されたスタイル + 配置調整(inline-flex)
-    container.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-left: 20px; vertical-align: middle; background: linear-gradient(145deg, #3a6161, #243d3d); border: 1px solid #1d3131; border-radius: 40px; padding: 6px 8px 6px 16px; box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3), inset -1px -1px 2px rgba(0,0,0,0.4), 0 2px 5px rgba(0,0,0,0.3); cursor: pointer; transition: all 0.2s; position: relative; top: -2px;';
+    // 指定されたスタイル + 配置調整(inline-flex) - マージン調整
+    container.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-left: 0; margin-right: 20px; vertical-align: middle; background: linear-gradient(145deg, #3a6161, #243d3d); border: 1px solid #1d3131; border-radius: 40px; padding: 6px 8px 6px 16px; box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3), inset -1px -1px 2px rgba(0,0,0,0.4), 0 2px 5px rgba(0,0,0,0.3); cursor: pointer; transition: all 0.2s; position: relative; top: -2px;';
     container.onclick = showStaffRegistrationDialog; // ★修正: 担当者登録機能へ戻す
     
     // ホバーエフェクト
@@ -510,16 +495,73 @@
         </div>
     `;
 
+    // 担当者バッジを先に配置
     wrapper.appendChild(container);
+
+    const titleLabel = document.createElement('div');
+    titleLabel.style.cssText = 'display: flex; align-items: center; gap: 4px; font-weight: bold; color: rgb(51, 51, 51); margin-left: 0; margin-right: 20px;';
+    
+    const textSpan = document.createElement('span');
+    textSpan.textContent = '予約チケット管理';
+    textSpan.style.fontSize = '23px'; // ★テキストのフォントサイズ
+
+    titleLabel.appendChild(textSpan);
+    
+    // タイトルラベルを後から配置
+    wrapper.appendChild(titleLabel);
+
     targetSpace.appendChild(wrapper);
   };
 
   kintone.events.on('app.record.index.show', (event) => {
     loadFontAwesome();
+
+    // チラつき防止用の初期非表示スタイルを追加
+    if (!document.getElementById('custom-header-fade-style')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'custom-header-fade-style';
+      styleEl.innerHTML = `
+        #staff-badge-wrapper, 
+        #custom-status-toggle-container, 
+        #custom-patient-search-container {
+            opacity: 0 !important;
+            transition: opacity 0.15s ease-in-out;
+        }
+        #staff-badge-wrapper.show-custom-header, 
+        #custom-status-toggle-container.show-custom-header, 
+        #custom-patient-search-container.show-custom-header {
+            opacity: 1 !important;
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
     renderStaffBadge(); // 即時実行 (他ボタンの並び順決定用)
-    setTimeout(renderStaffBadge, 100);
-    setTimeout(renderStaffBadge, 500);
-    setTimeout(renderStaffBadge, 1200);
+    
+    setTimeout(() => {
+        renderStaffBadge();
+    }, 100);
+
+    // 400ms後に並び替えが落ち着いた段階で一斉表示
+    setTimeout(() => {
+        renderStaffBadge();
+        const ids = ['staff-badge-wrapper', 'custom-status-toggle-container', 'custom-patient-search-container'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('show-custom-header');
+        });
+    }, 400);
+
+    // 1200ms後に念押し
+    setTimeout(() => {
+        renderStaffBadge();
+        const ids = ['staff-badge-wrapper', 'custom-status-toggle-container', 'custom-patient-search-container'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('show-custom-header');
+        });
+    }, 1200);
+
     return event;
   });
 

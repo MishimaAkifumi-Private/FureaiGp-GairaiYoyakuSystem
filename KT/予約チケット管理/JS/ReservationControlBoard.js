@@ -259,6 +259,7 @@
 
       if (purposeLabel) {
           const purposeBadge = document.createElement('div');
+          purposeBadge.id = 'rcb-purpose-badge';
           purposeBadge.textContent = purposeLabel;
           purposeBadge.style.cssText = `margin-left: auto; background-color: ${purposeBg}; color: #fff; padding: 6px 16px; border-radius: 4px; font-size: 16px; font-weight: bold; box-shadow: none; border: 1px solid rgba(0,0,0,0.1); cursor: default;`;
           header.appendChild(purposeBadge);
@@ -2832,11 +2833,189 @@
           }
       };
       
+      // 業務連絡スペースの描画と、標準の「業務連絡」フィールドの非表示化
+      kintone.app.record.setFieldShown('業務連絡', false);
+      const messageSpace = kintone.app.record.getSpaceElement('message');
+      if (messageSpace) {
+          messageSpace.innerHTML = '';
+          
+          const msgContainer = document.createElement('div');
+          msgContainer.style.cssText = 'background: #fff; border-radius: 6px; overflow: hidden; border: 1px solid #dcdfe6; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 10px;';
+          
+          // タイトルバー
+          const titleBar = document.createElement('div');
+          titleBar.style.cssText = 'font-weight: bold; padding: 6px 12px; background-color: #2c3e50; color: #ffffff; font-size: 13px; letter-spacing: 0.5px;';
+          titleBar.textContent = '業務連絡';
+          msgContainer.appendChild(titleBar);
+          
+          // スレッド一覧エリア (固定高120px・縦スクロール)
+          const threadList = document.createElement('div');
+          threadList.style.cssText = 'padding: 8px 12px; height: 120px; overflow-y: auto; background: #fafbfc; border-bottom: 1px solid #eee; box-sizing: border-box;';
+          
+          const msgValue = event.record['業務連絡']?.value || '';
+          
+          // スレッドのパース
+          const parseThread = (text) => {
+              if (!text) return [];
+              const posts = [];
+              const regex = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?)\s+([^\]]+)\]\n([\s\S]*?)(?=\n---\n|\n?\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}|$)/g;
+              let match;
+              const cleanText = text.replace(/\r\n/g, '\n');
+              while ((match = regex.exec(cleanText)) !== null) {
+                  posts.push({
+                      date: match[1],
+                      user: match[2],
+                      content: match[3].trim()
+                  });
+              }
+              if (posts.length === 0 && text.trim()) {
+                  posts.push({
+                      date: '過去の登録',
+                      user: '管理者/システム',
+                      content: text.trim()
+                  });
+              }
+              return posts;
+          };
+          
+          const posts = parseThread(msgValue);
+          
+          if (posts.length === 0) {
+              threadList.innerHTML = '<div style="font-size: 12px; color: #7f8c8d; text-align: center; padding: 10px 0;">（業務連絡はありません）</div>';
+          } else {
+              posts.forEach(post => {
+                  const postDiv = document.createElement('div');
+                  postDiv.style.cssText = 'display: flex; gap: 8px; font-size: 12px; line-height: 20px; border-bottom: 1px dashed #f0f2f5; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-items: center; box-sizing: border-box;';
+                  postDiv.title = `[${post.date} ${post.user}]\n${post.content}`; // ホバー時に全文表示
+                  
+                  const dateSpan = document.createElement('span');
+                  dateSpan.style.cssText = 'color: #7f8c8d; font-family: monospace; flex-shrink: 0;';
+                  dateSpan.textContent = post.date;
+                  
+                  const userSpan = document.createElement('span');
+                  userSpan.style.cssText = 'font-weight: bold; color: #34495e; min-width: 50px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;';
+                  userSpan.textContent = post.user;
+                  
+                  const contentSpan = document.createElement('span');
+                  contentSpan.style.cssText = 'color: #2c3e50; overflow: hidden; text-overflow: ellipsis; flex-grow: 1;';
+                  contentSpan.textContent = post.content;
+                  
+                  postDiv.appendChild(dateSpan);
+                  postDiv.appendChild(userSpan);
+                  postDiv.appendChild(contentSpan);
+                  threadList.appendChild(postDiv);
+              });
+          }
+          msgContainer.appendChild(threadList);
+          
+          // 入力・書き込みフォームエリア (1行で省スペース化)
+          const inputArea = document.createElement('div');
+          inputArea.style.cssText = 'padding: 6px 12px; display: flex; gap: 8px; background: #fff; align-items: center; box-sizing: border-box;';
+          
+          const textInput = document.createElement('input');
+          textInput.type = 'text';
+          textInput.placeholder = '業務連絡を入力...';
+          textInput.style.cssText = 'flex: 1; height: 28px; padding: 0 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-family: inherit;';
+          
+          const submitBtn = document.createElement('button');
+          submitBtn.textContent = '書き込む';
+          submitBtn.style.cssText = 'background: #1b4f72; color: #fff; border: none; border-radius: 4px; height: 28px; padding: 0 12px; font-weight: bold; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; white-space: nowrap; transition: background 0.2s;';
+          
+          submitBtn.onmouseover = () => submitBtn.style.background = '#153d58';
+          submitBtn.onmouseout = () => submitBtn.style.background = '#1b4f72';
+          
+          submitBtn.onclick = async () => {
+              const text = textInput.value.trim();
+              if (!text) return;
+              
+              submitBtn.disabled = true;
+              submitBtn.textContent = '保存中...';
+              
+              const author = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey') || kintone.getLoginUser().name;
+              const now = new Date();
+              const pad = (n) => n.toString().padStart(2, '0');
+              const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+              const newPostText = `[${dateStr} ${author}]\n${text}\n---`;
+              
+              const currentVal = event.record['業務連絡']?.value || '';
+              const updatedVal = currentVal ? `${newPostText}\n${currentVal}` : newPostText;
+              
+              try {
+                  await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', {
+                      app: kintone.app.getId(),
+                      id: kintone.app.record.getId(),
+                      record: {
+                          '業務連絡': { value: updatedVal }
+                      }
+                  });
+                  location.reload();
+              } catch (e) {
+                  console.error('Failed to post message:', e);
+                  alert('業務連絡の書き込みに失敗しました。');
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = '書き込む';
+              }
+          };
+          
+          inputArea.appendChild(textInput);
+          inputArea.appendChild(submitBtn);
+          msgContainer.appendChild(inputArea);
+          
+          messageSpace.appendChild(msgContainer);
+      }
+
       if (spaceElement) {
         // ★修正: 取得完了を待ってから描画する
         spaceElement.innerHTML = '<div style="text-align:center; padding: 20px;">読込中...</div>';
         fetchCenterInfo().then(() => {
-            renderBoard(spaceElement, event.record);
+            renderBoard(spaceElement, event.record).then(() => {
+                // コントロールパネルのラッピングと「コントロールパネル」タイトルバーの追加
+                setTimeout(() => {
+                    const rcbContent = spaceElement.querySelector('.rcb-content');
+                    if (rcbContent && !rcbContent.querySelector('.rcb-titlebar')) {
+                        const titleBar = document.createElement('div');
+                        titleBar.className = 'rcb-titlebar';
+                        titleBar.style.cssText = 'font-weight: bold; padding: 8px 14px; background-color: #2c3e50; color: #ffffff; font-size: 14px; letter-spacing: 0.5px;';
+                        titleBar.textContent = 'コントロールパネル';
+                        
+                        const rcbBody = document.createElement('div');
+                        rcbBody.style.padding = '20px';
+                        
+                        while (rcbContent.firstChild) {
+                            rcbBody.appendChild(rcbContent.firstChild);
+                        }
+                        
+                        rcbContent.style.padding = '0';
+                        rcbContent.style.overflow = 'hidden';
+                        rcbContent.style.border = '1px solid #dcdfe6';
+                        
+                        rcbContent.appendChild(titleBar);
+                        rcbContent.appendChild(rcbBody);
+                    }
+
+                    // ★確実なタイミングで用件バッジ（初診予約など）をヘッダーメニューの左端に配置
+                    const purposeBadge = document.getElementById('rcb-purpose-badge');
+                    const resetSpace = kintone.app.record.getSpaceElement(CONFIG.RESET_SPACE_ID);
+                    if (purposeBadge && resetSpace) {
+                        const rowEl = resetSpace.closest('.row-gaia');
+                        if (rowEl) {
+                            purposeBadge.style.margin = '0 10px 0 0';
+                            purposeBadge.style.fontSize = '15px';
+                            purposeBadge.style.padding = '0 16px';
+                            purposeBadge.style.height = '35px';
+                            purposeBadge.style.display = 'inline-flex';
+                            purposeBadge.style.alignItems = 'center';
+                            purposeBadge.style.justifyContent = 'center';
+                            purposeBadge.style.borderRadius = '6px';
+                            purposeBadge.style.boxShadow = 'none';
+                            purposeBadge.style.border = 'none';
+                            purposeBadge.style.cursor = 'default';
+                            
+                            rowEl.insertBefore(purposeBadge, rowEl.firstChild);
+                        }
+                    }
+                }, 100);
+            });
         });
       }
       
@@ -2855,8 +3034,8 @@
                   rowEl.style.display = 'flex';
                   rowEl.style.alignItems = 'center';
                   rowEl.style.gap = '15px';
-                  rowEl.style.paddingLeft = '20px';
-                  rowEl.style.margin = '0';
+                  rowEl.style.paddingLeft = '0px';
+                  rowEl.style.marginLeft = '-5px';
                   
                   // 行内の不要な余白をリセット
                   const spacers = rowEl.querySelectorAll('.control-spacer-field-gaia, .control-gaia');

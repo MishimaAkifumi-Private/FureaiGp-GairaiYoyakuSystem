@@ -41,16 +41,16 @@
         // --- トグルUIの構築 ---
         const container = document.createElement('div');
         container.id = 'custom-status-toggle-container';
-        // スタッフバッジの高さ(48px)に合わせ、背景を少し濃くしてボタンを目立たせる
-        container.style.cssText = 'display: inline-flex; align-items: center; background: #dce1e6; border-radius: 40px; padding: 4px; margin-left: 100px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 2px 6px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.9); height: 48px; box-sizing: border-box; visibility: hidden;';
+        // スタッフバッジの高さ(48px)に合わせ、背景を少し濃くしてボタンを目立たせる (コンパクト化)
+        container.style.cssText = 'display: inline-flex; align-items: center; background: #dce1e6; border-radius: 30px; padding: 3px; margin-left: 20px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 2px 6px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.9); height: 38px; box-sizing: border-box; visibility: hidden;';
 
-        const btnStyle = 'height: 100%; padding: 0 24px; font-size: 15px; font-weight: bold; border: none; border-radius: 36px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none; margin: 0; display: flex; align-items: center; justify-content: center; letter-spacing: 0.5px; ';
+        const btnStyle = 'height: 100%; padding: 0 16px; font-size: 13px; font-weight: bold; border: none; border-radius: 26px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none; margin: 0; display: flex; align-items: center; justify-content: center; letter-spacing: 0.5px; ';
 
         const activeBtn = document.createElement('button');
-        activeBtn.textContent = '有効チケット';
+        activeBtn.textContent = '進行中';
 
         const finishedBtn = document.createElement('button');
-        finishedBtn.textContent = '終了チケット';
+        finishedBtn.textContent = '終了';
 
         // 状態に応じたスタイル更新
         const updateButtonStyles = (mode) => {
