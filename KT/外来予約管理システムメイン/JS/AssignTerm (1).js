@@ -6,6 +6,11 @@
     let dropdownCounts = {};
     let isProcessing = false;
 
+    // ★追加: 月めくりカレンダー状態と共通設定キャッシュ
+    let selectedYear = new Date().getFullYear();
+    let selectedMonth = new Date().getMonth() + 1; // 1-indexed (1〜12)
+    let commonSettingsCache = null;
+
     // スケジュールフィールドの定義
     const days = ['月', '火', '水', '木', '金', '土'];
     const weeks = ['1', '2', '3', '4', '5'];
@@ -44,7 +49,7 @@
     const stripHtml = (html) => { const t = document.createElement('div'); t.innerHTML = html || ''; return t.textContent || t.innerText || ''; };
 
     // ShinryoViewer.js と同等のHTML生成関数
-    const createScheduleTableHtml = (rec, isMerged = false, commonSettings = null) => {
+    const createScheduleTableHtml = (rec, isMerged = false, commonSettings = null, targetYear = null, targetMonth = null) => {
         const days = ['月','火','水','木','金','土'];
         
         // 案内文の収集
@@ -56,6 +61,19 @@
                     if (rec._scheduleInfo[field]) {
                         const infoList = rec._scheduleInfo[field];
                         infoList.forEach(item => {
+                            // 着任日・離任日によるフィルタリング
+                            if (targetYear && targetMonth) {
+                                const monthFirstDay = new Date(targetYear, targetMonth - 1, 1);
+                                const monthLastDay = new Date(targetYear, targetMonth, 0);
+                                if (item.start) {
+                                    const startD = new Date(item.start);
+                                    if (startD > monthLastDay) return; // まだ着任していない
+                                }
+                                if (item.end) {
+                                    const endD = new Date(item.end);
+                                    if (endD < monthFirstDay) return; // 既に離任している
+                                }
+                            }
                             if (item.guidance && stripHtml(item.guidance).trim() !== '') {
                                 uniqueGuidances.add(item.guidance);
                             }
@@ -103,6 +121,19 @@
                         const pmParts = [];
                         
                         infoList.forEach(sch => {
+                            // 着任日・離任日によるフィルタリング
+                            if (targetYear && targetMonth) {
+                                const monthFirstDay = new Date(targetYear, targetMonth - 1, 1);
+                                const monthLastDay = new Date(targetYear, targetMonth, 0);
+                                if (sch.start) {
+                                    const startD = new Date(sch.start);
+                                    if (startD > monthLastDay) return; // まだ着任していない
+                                }
+                                if (sch.end) {
+                                    const endD = new Date(sch.end);
+                                    if (endD < monthFirstDay) return; // 既に離任している
+                                }
+                            }
                             const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
                             const facObj = facilities.find(f => f.name === sch.facility);
                             let symbolHtml = '';
@@ -183,7 +214,10 @@
                     times: val,
                     facility: facName,
                     selection: rec['診療選択']?.value || '',
-                    guidance: rec['留意案内']?.value || ''
+                    guidance: rec['留意案内']?.value || '',
+                    start: rec['着任日']?.value || '',
+                    end: rec['離任日']?.value || '',
+                    ngDates: rec['直近NG日指定']?.value || ''
                 }];
             }
         });
@@ -407,7 +441,7 @@
                             // ツールチップ表示用に _scheduleInfo を構築
                             fullRecord._scheduleInfo = buildScheduleInfo(fullRecord, commonSettings ? commonSettings.facilities : []);
                             const tip = getTooltipElement();
-                            tip.innerHTML = createScheduleTableHtml(fullRecord, false, commonSettings);
+                            tip.innerHTML = createScheduleTableHtml(fullRecord, false, commonSettings, selectedYear, selectedMonth);
                             tip.style.display = 'block';
                             tip.style.top = (e.pageY + 15) + 'px';
                             tip.style.left = (e.pageX + 15) + 'px';
@@ -496,6 +530,7 @@
     const renderMergedSchedule = (records, commonSettings) => {
         const containerId = 'merged-schedule-container';
         let container = document.getElementById(containerId);
+        commonSettingsCache = commonSettings;
         
         // レコードがない、または医師名が一意でない場合は非表示にして終了
         if (!records || records.length === 0) {
@@ -559,7 +594,10 @@
                         times: val,
                         facility: facName,
                         selection: r['診療選択']?.value || '',
-                        guidance: r['留意案内']?.value || ''
+                        guidance: r['留意案内']?.value || '',
+                        start: r['着任日']?.value || '',
+                        end: r['離任日']?.value || '',
+                        ngDates: r['直近NG日指定']?.value || ''
                     });
                 }
                 val.forEach(v => values.add(v));
@@ -570,20 +608,62 @@
             mergedRec[field] = { value: Array.from(values) };
         });
 
-        // タイトル
+        // タイトル & 月めくりコンテナ (Flexレイアウト)
+        const headerRow = document.createElement('div');
+        headerRow.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #3498db; padding-bottom: 10px; width: 100%; box-sizing: border-box;";
+
         const title = document.createElement('h3');
         title.textContent = `${doctorName} 医師の月間診療曜日パターン`;
-        title.style.margin = '0 0 15px 0';
-        title.style.fontSize = '16px';
-        title.style.color = '#333';
-        title.style.borderBottom = '2px solid #3498db';
-        title.style.paddingBottom = '5px';
-        title.style.display = 'inline-block';
-        container.appendChild(title);
+        title.style.cssText = "margin: 0; font-size: 16px; color: #333; font-weight: bold;";
+        headerRow.appendChild(title);
+
+        const monthSelector = document.createElement('div');
+        monthSelector.style.cssText = "display: inline-flex; align-items: center; gap: 10px; user-select: none;";
+
+        const prevBtn = document.createElement('button');
+        prevBtn.textContent = '◀ 前月';
+        prevBtn.title = '前月へ';
+        prevBtn.style.cssText = "background: #3498db; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; font-weight: bold; cursor: pointer; font-size: 13px; height: 28px; transition: background-color 0.2s;";
+        prevBtn.onmouseover = () => prevBtn.style.background = '#2980b9';
+        prevBtn.onmouseout = () => prevBtn.style.background = '#3498db';
+        prevBtn.onclick = () => {
+            selectedMonth--;
+            if (selectedMonth < 1) {
+                selectedMonth = 12;
+                selectedYear--;
+            }
+            renderMergedSchedule(cachedRecords, commonSettingsCache);
+        };
+
+        const monthDisplay = document.createElement('span');
+        monthDisplay.textContent = `${selectedYear}年 ${selectedMonth}月`;
+        monthDisplay.style.cssText = "font-size: 15px; font-weight: bold; color: #333; min-width: 90px; text-align: center;";
+
+        const nextBtn = document.createElement('button');
+        nextBtn.textContent = '翌月 ▶';
+        nextBtn.title = '翌月へ';
+        nextBtn.style.cssText = "background: #3498db; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; font-weight: bold; cursor: pointer; font-size: 13px; height: 28px; transition: background-color 0.2s;";
+        nextBtn.onmouseover = () => nextBtn.style.background = '#2980b9';
+        nextBtn.onmouseout = () => nextBtn.style.background = '#3498db';
+        nextBtn.onclick = () => {
+            selectedMonth++;
+            if (selectedMonth > 12) {
+                selectedMonth = 1;
+                selectedYear++;
+            }
+            renderMergedSchedule(cachedRecords, commonSettingsCache);
+        };
+
+        monthSelector.appendChild(prevBtn);
+        monthSelector.appendChild(monthDisplay);
+        monthSelector.appendChild(nextBtn);
+        headerRow.appendChild(monthSelector);
+
+        container.appendChild(headerRow);
 
         // スケジュール表
         const content = document.createElement('div');
-        content.innerHTML = createScheduleTableHtml(mergedRec, true, commonSettings);
+        content.innerHTML = createScheduleTableHtml(mergedRec, true, commonSettings, selectedYear, selectedMonth);
         // 背景色を白にして見やすく
         const table = content.querySelector('table');
         if (table) table.style.backgroundColor = '#fff';

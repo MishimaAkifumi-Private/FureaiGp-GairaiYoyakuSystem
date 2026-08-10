@@ -209,7 +209,7 @@
 
   // 編集・詳細・追加・再利用画面の処理（タイトル横に💡アイコンを挿入してホバー）
   const attachFormTooltips = () => {
-    const labelEls = document.querySelectorAll('.control-label-gaia, .subtable-row-label-gaia, [class*="label-"]');
+    const labelEls = document.querySelectorAll('.control-label-gaia, .subtable-row-label-gaia, .subtable-label-gaia');
     labelEls.forEach(labelEl => {
       if (labelEl.querySelector('.custom-tooltip-bulb-icon')) return;
 

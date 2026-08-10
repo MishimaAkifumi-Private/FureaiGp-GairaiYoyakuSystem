@@ -7,6 +7,7 @@
     console.log('ViewModeSwitcher.js: Loading...');
 
     const APP_VERSION = '0.92'; // システムのバージョン番号
+    let isRecordView = false; // レコード詳細・編集・作成画面かどうか
 
     function getUrlParam(name) {
         const url = window.location.href;
@@ -224,6 +225,7 @@
     }
 
     kintone.events.on('app.record.index.show', async function (event) {
+        isRecordView = false;
         console.log('ViewModeSwitcher.js: app.record.index.show triggered.');
 
         // ShinryoViewerが読み込まれているかチェック (他アプリへ誤登録された場合は安全にスキップ)
@@ -735,9 +737,14 @@
         let navContainer = document.getElementById('custom-infobar-nav-buttons');
 
         // 📅予約待ち受け制御画面(overview) または ダッシュボード画面(dashboard) 表示時はボタン群を非表示にする
-        if (currentMode === 'overview' || currentMode === 'dashboard') {
+        // ただし、レコード詳細・編集・作成画面のときは表示する
+        if (!isRecordView && (currentMode === 'overview' || currentMode === 'dashboard')) {
             if (navContainer) navContainer.style.display = 'none';
             return;
+        }
+
+        if (navContainer) {
+            navContainer.style.display = 'inline-flex';
         }
 
         const wrapper = document.querySelector('.gaia-argoui-app-infobar-breadcrumb-iconlist');
@@ -753,6 +760,8 @@
             navContainer = document.createElement('div');
             navContainer.id = 'custom-infobar-nav-buttons';
 
+            const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+
             // 📅 予約待ち受け制御 ボタン
             const btnOverview = document.createElement('button');
             btnOverview.textContent = '📅 予約待ち受け制御';
@@ -760,7 +769,7 @@
             btnOverview.style.cssText = 'background: #4a6572; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; font-size: 13px; font-weight: bold; cursor: pointer; transition: background 0.2s; height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1;';
             btnOverview.onmouseover = () => { btnOverview.style.background = '#34495e'; };
             btnOverview.onmouseout = () => { btnOverview.style.background = '#4a6572'; };
-            btnOverview.onclick = () => location.href = '?view_mode=overview';
+            btnOverview.onclick = () => window.location.href = appRoot + '?view_mode=overview';
 
             // Dashboard ボタン
             const btnDashboard = document.createElement('button');
@@ -769,7 +778,7 @@
             btnDashboard.style.cssText = 'background: rgba(248, 75, 31, 0.88); color: #fff; border: none; border-radius: 4px; padding: 4px 14px; font-size: 13px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; margin-right: 55px;';
             btnDashboard.onmouseover = () => { btnDashboard.style.opacity = '0.85'; };
             btnDashboard.onmouseout = () => { btnDashboard.style.opacity = '1'; };
-            btnDashboard.onclick = () => location.href = '?view_mode=dashboard';
+            btnDashboard.onclick = () => window.location.href = appRoot + '?view_mode=dashboard';
 
             navContainer.appendChild(btnOverview);
             navContainer.appendChild(btnDashboard);
@@ -3146,100 +3155,21 @@
         return event;
     });
 
-    // ★追加: 編集画面のカスタマイズ (ボタン追加とキャンセル制御)
+    // ★追加: 編集画面のカスタマイズ (パンくずバーへのボタン配置とキャンセル制御)
     kintone.events.on(['app.record.edit.show', 'app.record.create.show'], function (event) {
-        // スクロール時に追従する固定メニュー（ツールバー）にボタンを挿入する
-        const insertButtons = () => {
-            if (document.getElementById('custom-nav-buttons')) return;
-
-            const editButtons = document.querySelector('.gaia-argoui-app-edit-buttons');
-
-            let targetSpace = editButtons || kintone.app.record.getHeaderMenuSpaceElement();
-            let insertBeforeNode = editButtons ? editButtons.firstChild : null;
-
-            if (targetSpace) {
-                const container = document.createElement('div');
-                container.id = 'custom-nav-buttons';
-
-                if (editButtons) {
-                    // ツールバー内に配置する際のスタイル（追従メニューに馴染むように調整）
-                    container.style.cssText = "display: inline-flex; vertical-align: top; gap: 15px; margin-left: 15px; margin-right: 20px; align-items: center; position: relative; z-index: 1000;";
-                } else {
-                    // フォールバック時のスタイル
-                    container.style.cssText = "float: left; display: flex; gap: 10px; margin-left: 10px; align-items: center; margin-top: 15px; margin-right: 40px; position: relative; z-index: 1000;";
-                }
-
-                // ★修正: アプリルートURLを動的に生成 (絶対パス化して確実に遷移させる)
-                const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
-
-                const btnDashboard = document.createElement('i');
-                btnDashboard.className = 'fa-solid fa-hospital';
-                btnDashboard.title = 'Dashboard';
-                btnDashboard.style.cssText = "font-size: 45px; color: rgb(60, 147, 225); cursor: pointer; margin: 0; line-height: 1;";
-                // 詳細・編集画面(show/edit)からは階層を一つ上がって一覧へ遷移
-                btnDashboard.onclick = () => window.location.href = appRoot + '?view_mode=dashboard';
-
-                const btnOverview = document.createElement('span');
-                btnOverview.className = 'material-symbols-outlined';
-                btnOverview.textContent = '📅';
-                btnOverview.title = '予約待ち受け制御';
-                btnOverview.style.cssText = "font-size: 45px; color: rgb(102, 102, 102); cursor: pointer; margin: 0; line-height: 1; position: relative; top: -5px;";
-                btnOverview.onclick = () => window.location.href = appRoot + '?view_mode=overview';
-
-                container.appendChild(btnDashboard);
-                container.appendChild(btnOverview);
-
-                if (insertBeforeNode) {
-                    targetSpace.insertBefore(container, insertBeforeNode);
-                } else {
-                    targetSpace.appendChild(container);
-                }
-            }
-        };
-
-        // DOM構築タイミングのズレに対応するため、直後と少し遅延させて実行する
-        insertButtons();
-        setTimeout(insertButtons, 200);
-
+        isRecordView = true;
+        setupInfobarNavButtons();
+        setTimeout(setupInfobarNavButtons, 200);
+        setTimeout(setupInfobarNavButtons, 600);
         return event;
     });
-    // ★追加: 個別編集画面へのナビゲーションボタン追加
+
+    // ★追加: 個別詳細・編集画面へのナビゲーションボタン追加
     kintone.events.on(['app.record.detail.show', 'app.record.edit.show'], function (event) {
-        const insertButtons = () => {
-            const headerSpace = kintone.app.record.getHeaderMenuSpaceElement();
-            if (headerSpace && !document.getElementById('custom-nav-buttons')) {
-                const container = document.createElement('div');
-                container.id = 'custom-nav-buttons';
-                // ★修正: z-indexを追加してクリック可能にする (ヘッダー領域外へのはみ出し対策)
-                container.style.cssText = "float: left; display: flex; gap: 10px; margin-left: 10px; align-items: center; margin-top: 15px; margin-right: 40px; position: relative; z-index: 1000;";
-
-                const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
-
-                const btnDashboard = document.createElement('i');
-                btnDashboard.className = 'fa-solid fa-hospital';
-                btnDashboard.title = 'Dashboard';
-                btnDashboard.style.cssText = "font-size: 35px; color: rgb(60, 147, 225); cursor: pointer; margin-right:0px; margin-left: 0px; margin-bottom: 5px;"; // ★変更: 指定色
-                // 個別編集画面(show/edit)からは階層を一つ上がって一覧へ遷移
-                btnDashboard.onclick = () => window.location.href = appRoot + '?view_mode=dashboard';
-
-                const btnOverview = document.createElement('span');
-                btnOverview.className = 'material-symbols-outlined';
-                btnOverview.textContent = '📅';
-                btnOverview.title = '予約待ち受け制御';
-                btnOverview.style.cssText = "font-size: 35px; color: rgb(102, 102, 102); cursor: pointer; margin: 0; line-height: 1; position: relative; top: -2px;";
-                btnOverview.onclick = () => window.location.href = appRoot + '?view_mode=overview';
-
-                container.appendChild(btnDashboard);
-                container.appendChild(btnOverview);
-
-                headerSpace.appendChild(container);
-            }
-        };
-
-        // DOM構築タイミングのズレに対応するため、直後と少し遅延させて実行する
-        insertButtons();
-        setTimeout(insertButtons, 200);
-
+        isRecordView = true;
+        setupInfobarNavButtons();
+        setTimeout(setupInfobarNavButtons, 200);
+        setTimeout(setupInfobarNavButtons, 600);
         return event;
     });
 
