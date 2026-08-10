@@ -403,7 +403,7 @@
                     toolbar.style.paddingBottom = '0px';
                 }
 
-                // ★ ヘッダー領域の左側に「🧑‍⚕️ 診療予定編集」タイトルを配置 (右側の操作ボタン群は右寄せを保持)
+                // ★ ヘッダー領域の左側に「🩺 診療予定編集」タイトルを配置 (右側の操作ボタン群は右寄せを保持)
                 const headerSpace = kintone.app.getHeaderMenuSpaceElement();
                 if (headerSpace) {
                     headerSpace.style.display = 'flex';
@@ -412,7 +412,7 @@
                     if (!titleEl) {
                         titleEl = document.createElement('div');
                         titleEl.id = 'custom-input-title';
-                        titleEl.innerHTML = '<span style="font-size: 32px; margin-right: 6px; line-height: 1; vertical-align: middle;">🧑‍⚕️</span><span style="vertical-align: middle;">診療予定編集</span>';
+                        titleEl.innerHTML = '<span style="font-size: 32px; margin-right: 6px; line-height: 1; vertical-align: middle;">🩺</span><span style="vertical-align: middle;">診療予定編集</span>';
                         titleEl.style.cssText = 'font-size: 25px; font-weight: bold; color: #333; margin-left: 10px; margin-right: 20px; white-space: nowrap; flex-shrink: 0; line-height: 1; display: inline-flex; align-items: center;';
                     }
                     if (titleEl.parentNode !== headerSpace) {
@@ -870,7 +870,7 @@
                     }
                 }, desc: '患者様向けに公開されている外来Web予約フォームを開きます'
             },
-            { title: '診療予定編集', icon: '🧑‍⚕️', iconSize: '68px', iconTop: '-10px', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療予定や枠組みを一覧・一括編集します' },
+            { title: '診療予定編集', icon: '🩺', iconSize: '68px', iconTop: '-10px', url: '?view_mode=input', target: '_self', desc: '全診療科・医師の診療予定や枠組みを一覧・一括編集します' },
             { title: '共通マスタ管理', icon: '🏢', iconTop: '-10px', textTop: '8px', action: () => showCenterRegistrationMenu(), desc: '予約センター基本設定や管轄施設などの管理を行います' },
             { title: '各種システム設定', icon: '🔐', iconTop: '-20px', action: () => showAdminPasswordDialog(), desc: 'システム管理者専用' }
         ];
