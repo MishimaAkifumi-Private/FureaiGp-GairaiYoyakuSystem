@@ -180,7 +180,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
         subject = "【予約取消】診療予約の取り消しについて";
         htmlBody = `
           ${headerHtml}
-          <p>以下のご予約を取消しさせていただきました。</p>
+          <p>以下の通り、ご予約を取消しさせていただきました。</p>
           <p><strong>取り消したご予約:</strong></p>
           <ul>
             <li>日時: ${resDate} ${resTime}</li>
@@ -190,7 +190,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
           <p>本メールは手続き完了の通知のみとなります。\n\n別途お手続きは不要です。\n\nお大事になさってください。</p>
           ${footerHtml}
         `;
-        textBody = `${headerText}\n以下のご予約を取消しさせていただきました。\n\n[取り消したご予約]\n日時: ${resDate} ${resTime}\n診療科: ${resDept}${resMessageText}\n\n通知のみとなりますので、URLのクリックは不要です。${footerText}`;
+        textBody = `${headerText}\n以下の通り、ご予約を取消しさせていただきました。\n\n[取り消したご予約]\n日時: ${resDate} ${resTime}\n診療科: ${resDept}${resMessageText}\n\n通知のみとなりますので、URLのクリックは不要です。${footerText}`;
         break;
 
       default:

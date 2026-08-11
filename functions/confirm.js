@@ -158,7 +158,7 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
         subject = "【予約取消】診療予約の取り消しについて";
         htmlBody = `
           ${headerHtml}
-          <p>以下のご予約を取消しさせていただきました。</p>
+          <p>以下の通り、ご予約を取消しさせていただきました。</p>
           <p><strong>取り消したご予約:</strong></p>
           <ul>
             <li>日時: ${resDate} ${resTime}</li>

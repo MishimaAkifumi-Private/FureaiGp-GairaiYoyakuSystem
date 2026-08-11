@@ -394,7 +394,7 @@
             } else if (rawMethodLower.includes('メール') || rawMethodLower.includes('email') || (status && status.includes('メール'))) {
               methodEmoji = '<span title="メール対応" style="font-size:14px;">✉️</span>';
             } else if (rawMethodLower.includes('staff') || rawMethodLower.includes('スタッフ')) {
-              methodEmoji = '<span title="スタッフ対応" style="font-size:14px;">🧑‍⚕️</span>';
+              methodEmoji = '<span title="スタッフ対応" style="display:inline-flex; align-items:center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" style="fill: #000000; vertical-align: middle;"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></span>';
             } else if (rawMethod) {
               methodEmoji = escapeHtml(rawMethod);
             }

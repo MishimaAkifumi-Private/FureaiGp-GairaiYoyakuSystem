@@ -366,9 +366,12 @@
             html += createSummaryRow('現在の予約日時', rec[config.fbFields.FIXED_DATETIME]);
           }
 
-          if (requirement !== '取消') {
-            const combinedShinryo = rec[config.fbFields.DEPARTMENT_COMBINED] || '';
+          const combinedShinryo = rec[config.fbFields.DEPARTMENT_COMBINED] || '';
+          if (combinedShinryo) {
             html += createSummaryRow('診療科', combinedShinryo);
+          }
+
+          if (requirement !== '取消') {
             html += createSummaryRow('担当医師', rec[config.fbFields.DOCTOR]);
             
             const yoyakuMethod = rec[config.fbFields.YOYAKU_METHOD] || '';
@@ -828,15 +831,19 @@
                       createMultiStageSelectSection();
                   }
               } else if (currentReq === '変更') {
-                  toggleSection(config.uiIds.FIXED_DATE_AREA, true);
                   toggleSection(config.uiIds.NEW_RESERVATION_AREA, true);
-                  if (!document.getElementById('fixed_date_month_select')) {
-                      createFixedResvPullDown();
-                  }
                   if (!document.getElementById('bunya-select')) {
                       createMultiStageSelectSection();
                   }
+                  toggleSection(config.uiIds.FIXED_DATE_AREA, true);
+                  if (!document.getElementById('fixed_date_month_select')) {
+                      createFixedResvPullDown();
+                  }
               } else if (currentReq === '取消') {
+                  toggleSection(config.uiIds.NEW_RESERVATION_AREA, true);
+                  if (!document.getElementById('bunya-select')) {
+                      createMultiStageSelectSection();
+                  }
                   toggleSection(config.uiIds.FIXED_DATE_AREA, true);
                   if (!document.getElementById('fixed_date_month_select')) {
                       createFixedResvPullDown();
@@ -900,20 +907,8 @@
               return false;
           }
 
-          // 5. 変更・取消の場合の確定予約日時
-          if (req === '変更' || req === '取消') {
-              const monthSel = document.getElementById('fixed_date_month_select');
-              const daySel = document.getElementById('fixed_date_day_select');
-              const timeSel = document.getElementById('fixed_date_time_select');
-              if (!monthSel || !monthSel.value || !daySel || !daySel.value || !timeSel || !timeSel.value) {
-                  const fixedArea = document.getElementById(config.uiIds.FIXED_DATE_AREA);
-                  scrollToAndHighlight(fixedArea, '現在確定している予約日時（月・日・時刻）をすべて選択してください。');
-                  return false;
-              }
-          }
-
-          // 6. 診療内容（初診、または変更で確定日時入力済みの場合）
-          if (req === '初診' || req === '変更') {
+          // 5. 診療内容（初診、変更、または取消の場合）
+          if (req === '初診' || req === '変更' || req === '取消') {
               const bunyaSel = document.getElementById('bunya-select');
               if (bunyaSel && !bunyaSel.value) {
                   scrollToAndHighlight(bunyaSel, '「診療分野」を選択してください。');
@@ -930,6 +925,18 @@
               const finalWrapper = finalSel ? finalSel.parentElement : null;
               if (finalSel && finalWrapper && finalWrapper.style.display !== 'none' && !finalSel.disabled && !finalSel.value) {
                   scrollToAndHighlight(finalSel, '「診療選択」を選択してください。');
+                  return false;
+              }
+          }
+
+          // 6. 変更・取消の場合の確定予約日時
+          if (req === '変更' || req === '取消') {
+              const monthSel = document.getElementById('fixed_date_month_select');
+              const daySel = document.getElementById('fixed_date_day_select');
+              const timeSel = document.getElementById('fixed_date_time_select');
+              if (!monthSel || !monthSel.value || !daySel || !daySel.value || !timeSel || !timeSel.value) {
+                  const fixedArea = document.getElementById(config.uiIds.FIXED_DATE_AREA);
+                  scrollToAndHighlight(fixedArea, '現在確定している予約日時（月・日・時刻）をすべて選択してください。');
                   return false;
               }
           }
@@ -1354,11 +1361,13 @@
                   toggleSection(config.uiIds.NEW_RESERVATION_AREA, true);
                   createMultiStageSelectSection();
               } else if (value === '変更') {
-                  toggleSection(config.uiIds.FIXED_DATE_AREA, true);
-                  createFixedResvPullDown();
                   toggleSection(config.uiIds.NEW_RESERVATION_AREA, true);
                   createMultiStageSelectSection();
+                  toggleSection(config.uiIds.FIXED_DATE_AREA, true);
+                  createFixedResvPullDown();
               } else if (value === '取消') {
+                  toggleSection(config.uiIds.NEW_RESERVATION_AREA, true);
+                  createMultiStageSelectSection();
                   toggleSection(config.uiIds.FIXED_DATE_AREA, true);
                   createFixedResvPullDown();
               }
@@ -1771,6 +1780,18 @@
 
       function updateDoctorOptions() {
           const area = document.getElementById(config.uiIds.DOCTOR_AREA);
+
+          if (config.state.requirement === '取消') {
+              config.state.selectedDoctor = null;
+              updateFbField(config.fbFields.DOCTOR, '');
+              if (area) area.innerHTML = '';
+              toggleSection(config.uiIds.DOCTOR_AREA, false);
+              toggleSection(config.uiIds.METHOD_AREA, false);
+              toggleSection(config.uiIds.WISH_DATES_AREA, false);
+              toggleSection(config.uiIds.OMAKASE_TIME_AREA, false);
+              updateDoctorGuidance();
+              return;
+          }
 
           let isScheduleLinkOn = true;
           if (config.state.selectedDepartment && config.state.descriptions) {
@@ -2359,7 +2380,7 @@
                   updateFbField(config.fbFields.FIXED_DATETIME, '');
               }
               
-              if (config.state.requirement === '変更') {
+              if (config.state.requirement === '変更' || config.state.requirement === '取消') {
                   const hasValue = !!config.state.submitData[config.fbFields.FIXED_DATETIME];
                   toggleSection(config.uiIds.NEW_RESERVATION_AREA, hasValue);
                   if (hasValue && !document.getElementById('bunya-select')) {
@@ -2452,13 +2473,11 @@
               ${createFormSection('gemini-section-email', createFormGroup('メールアドレス', `<input type="email" id="${config.uiIds.EMAIL}" class="g-form-control" placeholder="例: example@fureai-g.or.jp" required>`, '', true))}
               ${createFormSection('gemini-section-email-confirm', createFormGroup('メールアドレス（確認用）', `<input type="email" id="${config.uiIds.EMAIL_CONFIRM}" class="g-form-control" required autocomplete="new-password">`, '入力いただいたメール宛てに申し込み控えメールが届きます。', true))}
               
-              <!-- 確定日時選択（変更・取消時） -->
-              ${createFormSection('gemini-section-fixed-date', `<div id="${config.uiIds.FIXED_DATE_AREA}" style="display: none; margin-top: 35px; margin-bottom: 35px;"></div>`)}
-
-              <!-- 診療分野・診療科・診療選択・希望日時エリア（初診・変更時） -->
+              <!-- 診療分野・診療科・確定日時・希望日時エリア（初診・変更・取消時） -->
               ${createFormSection('gemini-section-new-reservation', `
                 <div id="${config.uiIds.NEW_RESERVATION_AREA}" style="display: none; margin-top: 35px; margin-bottom: 35px;">
                     <div id="${config.uiIds.MULTI_STAGE_AREA}"></div>
+                    <div id="${config.uiIds.FIXED_DATE_AREA}" style="display: none; margin-top: 35px; margin-bottom: 35px;"></div>
                     <div id="${config.uiIds.METHOD_AREA}" style="display: none; margin-top: 20px;"></div>
                     <div id="${config.uiIds.WISH_DATES_AREA}" style="display: none; margin-top: 20px;"></div>
                     <div id="${config.uiIds.OMAKASE_TIME_AREA}" style="display: none; margin-top: 20px;"></div>

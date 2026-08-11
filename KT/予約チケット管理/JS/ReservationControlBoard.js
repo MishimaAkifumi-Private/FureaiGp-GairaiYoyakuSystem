@@ -31,6 +31,7 @@
 
     // 予約センター情報を動的に反映するためのオブジェクト
     let centerInfo = { centerName: 'ふれあいグループ 湘南東部病院予約センター', phoneNumber: '' };
+    let deptMasterRecords = [];
 
     // no-replyフッターの共通HTML生成関数
     const getNoReplyFooterHtml = () => {
@@ -139,7 +140,7 @@
 
       // URL生成ヘルパー (無効後の理由欄記録用)
       const getConfirmUrlString = (prefix = 'URL: ') => {
-          if (!urlToken) return '';
+          if (!urlToken || purpose === '取消' || isWebWithdrawn || isUrlWithdrawn) return '';
           let url = `${CONFIG.CONFIRM_BASE_URL}?token=${urlToken}`;
           if (currentMethod === 'phone') url += '&mode=phone';
           return `${prefix}${url}`;
@@ -691,21 +692,26 @@
               return;
           }
 
+          const defaultCancelMsg = '以下の通り、ご予約を取消しさせていただきました。';
+          const finalMsg = (message || '').trim() || defaultCancelMsg;
+
           // メール本文プレビューの構築
           const mailBody = `
             ${fullName} 様<br>
             <br>
             当病院をご利用いただきありがとうございます。<br>
             <br>
-            以下のご予約を取消しさせていただきました。<br>
+            ${finalMsg.replace(/\n/g, '<br>')}<br>
             <br>
             取り消したご予約:<br>
             <br>
             日時: ${formatToJapaneseDate(targetDate)} ${targetTime}<br>
             診療科: ${dept}<br>
-            ${message ? `<br>${message.replace(/\n/g, '<br>')}<br>` : ''}
             <br>
-            本メールは手続き完了の通知のみとなります。\n\n別途お手続きは不要です。\n\nお大事になさってください。
+            本メールは手続き完了の通知のみとなります。<br>
+            別途お手続きは不要です。<br>
+            <br>
+            お大事になさってください。
             ${getNoReplyFooterHtml()}
           `;
 
@@ -742,7 +748,7 @@
               reservationTime: targetTime,
               department: dept,
               url: '',
-              message: message,
+              message: finalMsg,
               centerName: centerInfo.centerName,
               phoneNumber: centerInfo.phoneNumber
             };
@@ -754,11 +760,11 @@
 
             const updateData = { 
                 [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_WEB_WITHDRAWN_VALUE },
-                [CONFIG.FIELDS.SEND_DATE]: { value: new Date().toISOString() }
-                ,'WEB取下メッセージ': { value: message || '' },
+                [CONFIG.FIELDS.SEND_DATE]: { value: new Date().toISOString() },
+                'WEB取下メッセージ': { value: finalMsg || '' },
                 'WEB取下診療科': { value: dept || '' },
                 'WEB取下修正予約日時': { value: `${targetDate} ${targetTime}` },
-                'ReserveLock': { value: 'unlock' }, // ★追加: WEB取下時はunlock
+                'ReserveLock': { value: 'unlock' },
                 '共通評価': { value: updatedCommonEval },
                 '人物メモ': { value: currentMemo }
             };
@@ -767,8 +773,11 @@
                 updateData[CONFIG.FIELDS.DEPT] = { value: dept };
             }
             
-            // メール送信先と確認用URLを理由欄に記録
-            const reasonText = email ? `${email}\n${getConfirmUrlString()}` : getConfirmUrlString();
+            // メール送信先とカスタムメッセージがあれば理由欄に記録（取消はURL不要）
+            let reasonText = email || '';
+            if (finalMsg && finalMsg !== defaultCancelMsg) {
+                reasonText = reasonText ? `${reasonText}\n【カスタムメッセージ】\n${finalMsg}` : `【カスタムメッセージ】\n${finalMsg}`;
+            }
             const success = await updateRecord(recordId, updateData, [], false, false, reasonText);
 
             if (success) {
@@ -1456,9 +1465,6 @@
         dateTimeDisplay.style.marginBottom = '20px';
         dateTimeDisplay.style.display = 'flex';
         dateTimeDisplay.style.alignItems = 'center';
-        dateTimeDisplay.style.justifyContent = 'center';
-        dateTimeDisplay.style.gap = '15px';
-        
         // 表示・送信用日時（取消の場合はチケットの予約日情報を優先）
         let displayDateVal = currentDate;
         let displayTimeVal = currentTime;
@@ -1543,15 +1549,6 @@
                 cancelContainer.appendChild(cdGroup);
             }
 
-            // 4. メッセージ (WEB取下の場合)
-            if (isWebWithdrawn) {
-                const msgGroup = document.createElement('div');
-                msgGroup.className = 'rcb-form-group';
-                const msgContent = savedMsg ? savedMsg.replace(/\n/g, '<br>') : '（なし）';
-                msgGroup.innerHTML = `<div class="rcb-label" style="color:#c0392b;">メッセージ</div><div style="font-size:14px; padding:10px; background:#fff; border:1px solid #ffcccc; border-radius:4px; color:#555;">${msgContent}</div>`;
-                cancelContainer.appendChild(msgGroup);
-            }
-
             // 5. 確認チェックと終了ボタン
             const checkContainer = document.createElement('div');
             checkContainer.style.cssText = 'margin-top: 30px; padding: 20px; background: #fff; border: 2px dashed #e74c3c; border-radius: 6px; text-align: center;';
@@ -1599,7 +1596,7 @@
                     '共通評価': { value: updatedCommonEval },
                     '人物メモ': { value: currentMemo }
                 };
-                const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
+                const success = await updateRecord(recordId, payload, [], false, false, 'WEB取下対応完了');
                 if (success) location.reload();
             };
             
@@ -1621,14 +1618,11 @@
             
             if (valDateTime) {
                 let dt = new Date(valDateTime);
-                // 日付解析の強化 (日本語フォーマット対応)
                 if (isNaN(dt.getTime())) {
-                    // 例: "4月 18日 (土) 14:00" -> 月, 日, 時, 分
                     const match = valDateTime.match(/(\d+)\s*月\s*(\d+)\s*日.*?(\d{1,2})\s*:\s*(\d{2})/);
                     if (match) {
                         const now = new Date();
                         let year = now.getFullYear();
-                        // 年が含まれているか確認
                         const yearMatch = valDateTime.match(/(\d{4})\s*年/);
                         if (yearMatch) year = parseInt(yearMatch[1], 10);
                         
@@ -1639,7 +1633,6 @@
                         
                         dt = new Date(year, month - 1, day, hour, minute);
                         
-                        // 過去日付補正 (現在より1ヶ月以上前なら来年と推測)
                         if (!yearMatch && dt < new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)) {
                             dt.setFullYear(year + 1);
                         }
@@ -1648,210 +1641,581 @@
 
                 if (!isNaN(dt.getTime())) {
                     initDate = formatDateISO(dt);
-                    initTime = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-                    // 時刻フォーマット (9:00形式に合わせる)
                     const h = dt.getHours();
                     const m = String(dt.getMinutes()).padStart(2, '0');
                     initTime = `${h}:${m}`;
                 }
             }
-            // 解析できなければフォールバック
             if (!initDate && record['予約日']?.value) initDate = record['予約日'].value;
             if (!initTime && record['予約時刻']?.value) initTime = record['予約時刻'].value;
 
             displayDateVal = initDate;
             displayTimeVal = initTime;
 
-            // コンテナスタイルのリセットと適用 (デザイン改善)
+            // コンテナスタイルのリセットと適用
             confirmedContainer.style.backgroundColor = 'transparent';
             confirmedContainer.style.border = 'none';
             confirmedContainer.style.padding = '0';
             confirmedContainer.innerHTML = ''; // クリア
 
-            const cancelContainer = document.createElement('div');
-            cancelContainer.className = 'rcb-cancel-container';
-
-            // --- 編集モード ---
-            // 1. お名前表示
-            const nameGroup = document.createElement('div');
-            nameGroup.className = 'rcb-form-group';
-            nameGroup.innerHTML = `<div class="rcb-label">お名前</div><div style="font-size:16px; padding-left:5px; color:#333;">${ticketName}</div>`;
-            cancelContainer.appendChild(nameGroup);
-
-            // 2. 診療科入力
-            const deptGroup = document.createElement('div');
-            deptGroup.className = 'rcb-form-group';
-            
-            const deptLabel = document.createElement('label');
-            deptLabel.className = 'rcb-label';
-            deptLabel.textContent = '診療科 (必須)';
-            deptGroup.appendChild(deptLabel);
-
-            const deptInput = document.createElement('input');
-            deptInput.type = 'text';
-            deptInput.className = 'rcb-input-text';
-            deptInput.value = currentDeptInput;
-            deptInput.placeholder = '例: 内科';
-            deptInput.oninput = (e) => { currentDeptInput = e.target.value; };
-            deptGroup.appendChild(deptInput);
-            cancelContainer.appendChild(deptGroup);
-
-            // 3. 日時設定
-            const dateGroup = document.createElement('div');
-            dateGroup.className = 'rcb-form-group';
-            
-            const dateLabel = document.createElement('label');
-            dateLabel.className = 'rcb-label';
-            dateLabel.textContent = '取消対象日時 (必須)';
-            dateGroup.appendChild(dateLabel);
-
-            // 申込者入力値の表示
-            const infoBlock = document.createElement('div');
-            infoBlock.className = 'rcb-info-block';
-            infoBlock.style.display = 'flex';
-            infoBlock.style.justifyContent = 'space-between';
-            infoBlock.style.alignItems = 'flex-start';
-
-            const infoText = document.createElement('div');
-            infoText.innerHTML = `<strong>申込者入力値:</strong> ${valDateTime || '（未入力）'}`;
-            infoBlock.appendChild(infoText);
-
-            dateGroup.appendChild(infoBlock);
-
-            // 編集エリア
-            const editArea = document.createElement('div');
-            editArea.style.cssText = 'background-color: #fafafa; padding: 15px; border: 1px solid #eee; border-radius: 6px;';
-            
-            // 日時が未設定かどうか
-            const isDateSet = !!(displayDateVal && displayTimeVal);
-            
-            // 入力要素作成
-            cancelDateInput = document.createElement('input');
-            cancelDateInput.type = 'date';
-            cancelDateInput.className = 'rcb-date-input';
-            // 入力欄のどこをクリックしてもカレンダーを表示する
-            cancelDateInput.addEventListener('click', function() {
-                try { if (typeof this.showPicker === 'function') this.showPicker(); } catch(e) {}
-            });
-            cancelDateInput.value = displayDateVal;
-            cancelDateInput.addEventListener('change', () => {
-                if (cancelDateInput.value) cancelDateInput.classList.add('selected');
-                else cancelDateInput.classList.remove('selected');
-            });
-            if (displayDateVal) cancelDateInput.classList.add('selected');
-            
-            cancelTimeInput = document.createElement('select');
-            cancelTimeInput.className = 'rcb-date-input';
-            
-            // 時刻選択肢 (30分刻み + 現在の値)
-            let timeFound = false;
-            CONFIG.ALLOWED_TIMES.forEach(time => {
-                const opt = document.createElement('option');
-                opt.value = time;
-                opt.textContent = time;
-                if (time === displayTimeVal) {
-                    opt.selected = true;
-                    timeFound = true;
-                }
-                cancelTimeInput.appendChild(opt);
-            });
-            if (displayTimeVal && !timeFound) {
-                const opt = document.createElement('option');
-                opt.value = displayTimeVal;
-                opt.textContent = displayTimeVal;
-                opt.selected = true;
-                cancelTimeInput.insertBefore(opt, cancelTimeInput.firstChild);
-            } else if (!displayTimeVal) {
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = '時刻を選択';
-                placeholder.selected = true;
-                placeholder.disabled = true;
-                cancelTimeInput.insertBefore(placeholder, cancelTimeInput.firstChild);
-            }
-
-            // フォーム表示ロジック
-            const formDiv = document.createElement('div');
-            formDiv.style.display = 'flex';
-            formDiv.style.gap = '10px';
-            formDiv.style.alignItems = 'center';
-            formDiv.appendChild(cancelDateInput);
-            formDiv.appendChild(cancelTimeInput);
-
-            if (!isDateSet) {
-                // 未設定なら最初からフォームを表示
-                editArea.appendChild(formDiv);
+            // ★担当者が未設定（または未着手）の場合は下部エリア（案内ボックス・フォーム・ボタン）を表示しない
+            if (!staffName || currentStatus === '未着手') {
+                // 上部の「私（○○）がこのチケットを担当する」ボタンのみを表示し、下部ダイアログは非表示にする
             } else {
-                // 設定済みなら表示＋修正ボタン
-                const displayDiv = document.createElement('div');
-                displayDiv.style.display = 'flex';
-                displayDiv.style.alignItems = 'center';
-                displayDiv.style.gap = '15px';
-                
-                // 和暦(日本語)フォーマット変換
-                const d = new Date(displayDateVal);
-                const dateJp = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-                
-                displayDiv.innerHTML = `
-                    <div style="display:flex; flex-direction:column; align-items:flex-start;">
-                        <span style="font-size:11px; color:#888; font-weight:bold;">取消実行日時</span>
-                        <span style="font-size:16px; font-weight:bold; color:#2c3e50;">${dateJp} ${displayTimeVal}</span>
-                    </div>
-                `;
-                
-                const editBtn = document.createElement('button');
-                editBtn.textContent = '修正';
-                editBtn.style.cssText = 'padding: 6px 12px; font-size: 12px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 4px; color: #555; align-self: center;';
-                
-                formDiv.style.display = 'none'; // 初期は隠す
+                const cancelContainer = document.createElement('div');
+                cancelContainer.className = 'rcb-cancel-container';
 
-                editBtn.onclick = () => {
-                    if (formDiv.style.display === 'none') {
-                        formDiv.style.display = 'flex';
-                        displayDiv.style.display = 'none';
-                        editBtn.textContent = 'キャンセル';
+                // --- 編集モード ---
+                // 1. お名前表示
+                const nameGroup = document.createElement('div');
+                nameGroup.className = 'rcb-form-group';
+                nameGroup.innerHTML = `<div class="rcb-label">お名前</div><div style="font-size:16px; padding-left:5px; color:#333;">${ticketName}</div>`;
+                cancelContainer.appendChild(nameGroup);
+
+                // 2. 診療科 (必須)
+                const deptGroup = document.createElement('div');
+                deptGroup.className = 'rcb-form-group';
+                
+                const deptLabel = document.createElement('label');
+                deptLabel.className = 'rcb-label';
+                deptLabel.textContent = '診療科 (必須)';
+                deptGroup.appendChild(deptLabel);
+
+                // 申込者の入力内容の表示ブロック（編集不可）
+                const patientDeptVal = record[CONFIG.FIELDS.DEPT]?.value || record['WEB取下診療科']?.value || currentDeptInput || '（未設定）';
+                const deptInfoBlock = document.createElement('div');
+                deptInfoBlock.className = 'rcb-info-block';
+                deptInfoBlock.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;';
+                deptInfoBlock.innerHTML = `<div><strong>申込者の入力内容:</strong> ${patientDeptVal}</div>`;
+                deptGroup.appendChild(deptInfoBlock);
+
+                // チェックボックス「☐ 訂正する」
+                const deptCheckWrapper = document.createElement('div');
+                deptCheckWrapper.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px;';
+                
+                const deptCorrectCheckbox = document.createElement('input');
+                deptCorrectCheckbox.type = 'checkbox';
+                deptCorrectCheckbox.id = 'rcb-dept-correct-checkbox';
+                deptCorrectCheckbox.checked = false;
+                
+                const deptCorrectLabel = document.createElement('label');
+                deptCorrectLabel.htmlFor = 'rcb-dept-correct-checkbox';
+                deptCorrectLabel.style.cssText = 'cursor: pointer; font-size: 13px; font-weight: bold; color: #333; margin: 0;';
+                deptCorrectLabel.textContent = '訂正する';
+
+                const deptNoteSpan = document.createElement('span');
+                deptNoteSpan.style.cssText = 'font-size: 11px; color: #888;';
+                deptNoteSpan.textContent = '※申込者選択値に間違いがある場合';
+
+                deptCheckWrapper.appendChild(deptCorrectCheckbox);
+                deptCheckWrapper.appendChild(deptCorrectLabel);
+                deptCheckWrapper.appendChild(deptNoteSpan);
+                deptGroup.appendChild(deptCheckWrapper);
+
+                // 訂正用フォームエリア (初期非表示・薄いピンク背景)
+                const deptEditArea = document.createElement('div');
+                deptEditArea.style.cssText = 'background-color: #fff0f3; padding: 15px; border: 1px solid #ffccd5; border-radius: 6px; display: none; margin-top: 10px;';
+
+                const getDeptVal = (rec, key) => {
+                    if (!rec) return '';
+                    const val = rec[key];
+                    if (val === undefined || val === null) return '';
+                    if (typeof val === 'object' && 'value' in val) return String(val.value || '');
+                    return String(val);
+                };
+
+                const buildDeptSelectForm = (container) => {
+                    container.innerHTML = '';
+                    
+                    const multistageDiv = document.createElement('div');
+                    multistageDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 10px; align-items: center;';
+
+                    const bunyaSelect = document.createElement('select');
+                    bunyaSelect.style.cssText = 'min-width: 140px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background-color: #ffffff !important; color: #333; opacity: 1 !important;';
+                    
+                    const deptSelect = document.createElement('select');
+                    deptSelect.style.cssText = 'min-width: 140px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background-color: #ffffff !important; color: #333; opacity: 1 !important;';
+                    deptSelect.disabled = true;
+
+                    const finalSelect = document.createElement('select');
+                    finalSelect.style.cssText = 'min-width: 140px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; display: none; background-color: #ffffff !important; color: #333; opacity: 1 !important;';
+                    finalSelect.disabled = true;
+
+                    const addOpt = (sel, val, text, isPlaceholder = false) => {
+                        const opt = document.createElement('option');
+                        opt.value = val;
+                        opt.textContent = text;
+                        if (isPlaceholder) { opt.disabled = true; opt.selected = true; }
+                        sel.appendChild(opt);
+                    };
+
+                    addOpt(bunyaSelect, '', '診療分野を選択', true);
+                    addOpt(deptSelect, '', '診療科を選択', true);
+
+                    const records = deptMasterRecords || [];
+                    const uniqueBunya = [...new Set(records.map(r => getDeptVal(r, '診療分野') || getDeptVal(r, 'BUNYA')).filter(Boolean))];
+
+                    if (uniqueBunya.length > 0) {
+                        uniqueBunya.forEach(b => addOpt(bunyaSelect, b, b));
                     } else {
-                        formDiv.style.display = 'none';
-                        displayDiv.style.display = 'flex';
-                        editBtn.textContent = '修正';
-                        cancelDateInput.value = displayDateVal;
+                        // フォールバック: フリーテキスト入力
+                        const textInput = document.createElement('input');
+                        textInput.type = 'text';
+                        textInput.className = 'rcb-input-text';
+                        textInput.placeholder = '例: 内科';
+                        textInput.value = currentDeptInput;
+                        textInput.style.backgroundColor = '#ffffff';
+                        textInput.oninput = (e) => { currentDeptInput = e.target.value; };
+                        container.appendChild(textInput);
+                        return;
+                    }
+
+                    let selBunya = '', selDept = '', selTokutei = '';
+                    let initBunya = '', initDept = '', initTokutei = '';
+
+                    // ★患者の選択値を出発点（初期選択値）として解析
+                    if (patientDeptVal) {
+                        const parts = patientDeptVal.split(' / ').map(s => s.trim());
+                        if (parts.length >= 2) {
+                            initBunya = parts[0];
+                            initDept = parts[1];
+                            if (parts.length >= 3) initTokutei = parts[2];
+                        } else if (parts.length === 1) {
+                            const matchRec = records.find(r => 
+                                (getDeptVal(r, '診療科') || getDeptVal(r, 'DEPARTMENT')) === parts[0] ||
+                                (getDeptVal(r, '診療分野') || getDeptVal(r, 'BUNYA')) === parts[0]
+                            );
+                            if (matchRec) {
+                                initBunya = getDeptVal(matchRec, '診療分野') || getDeptVal(matchRec, 'BUNYA') || parts[0];
+                                initDept = getDeptVal(matchRec, '診療科') || getDeptVal(matchRec, 'DEPARTMENT') || parts[0];
+                            }
+                        }
+                    }
+
+                    // 変更部分（患者の元入力値と異なる箇所）を赤文字・太字にするチェック関数
+                    const checkHighlight = () => {
+                        if (bunyaSelect.value && initBunya && bunyaSelect.value !== initBunya) {
+                            bunyaSelect.style.setProperty('color', '#dc3545', 'important');
+                            bunyaSelect.style.fontWeight = 'bold';
+                        } else {
+                            bunyaSelect.style.setProperty('color', '#333333', 'important');
+                            bunyaSelect.style.fontWeight = 'normal';
+                        }
+
+                        if (deptSelect.value && initDept && deptSelect.value !== initDept) {
+                            deptSelect.style.setProperty('color', '#dc3545', 'important');
+                            deptSelect.style.fontWeight = 'bold';
+                        } else {
+                            deptSelect.style.setProperty('color', '#333333', 'important');
+                            deptSelect.style.fontWeight = 'normal';
+                        }
+
+                        if (finalSelect.style.display !== 'none' && finalSelect.value && finalSelect.value !== '__GENERAL__') {
+                            const cleanVal = finalSelect.value;
+                            const cleanInitTok = initTokutei ? (initTokutei.match(/（(.+?)）/)?.[1] || initTokutei) : '';
+                            if (cleanInitTok && cleanVal !== cleanInitTok) {
+                                finalSelect.style.setProperty('color', '#dc3545', 'important');
+                                finalSelect.style.fontWeight = 'bold';
+                            } else {
+                                finalSelect.style.setProperty('color', '#333333', 'important');
+                                finalSelect.style.fontWeight = 'normal';
+                            }
+                        } else {
+                            finalSelect.style.setProperty('color', '#333333', 'important');
+                            finalSelect.style.fontWeight = 'normal';
+                        }
+                    };
+
+                    const updateDeptValue = () => {
+                        let finalVal = selTokutei;
+                        if (finalSelect.style.display !== 'none' && finalSelect.value === '__GENERAL__') {
+                            finalVal = `${selDept}（全般）`;
+                        }
+                        const parts = [selBunya, selDept, finalVal].filter(Boolean);
+                        currentDeptInput = parts.join(' / ');
+                        checkHighlight();
+                    };
+
+                    bunyaSelect.addEventListener('change', (e) => {
+                        selBunya = e.target.value;
+                        selDept = '';
+                        selTokutei = '';
+                        deptSelect.innerHTML = '';
+                        addOpt(deptSelect, '', '診療科を選択', true);
+                        finalSelect.style.display = 'none';
+                        finalSelect.disabled = true;
+                        finalSelect.innerHTML = '';
+
+                        if (!selBunya) {
+                            deptSelect.disabled = true;
+                            updateDeptValue();
+                            return;
+                        }
+
+                        const bunyaRecs = records.filter(r => (getDeptVal(r, '診療分野') || getDeptVal(r, 'BUNYA')) === selBunya);
+                        const uniqueDepts = [...new Set(bunyaRecs.map(r => getDeptVal(r, '診療科') || getDeptVal(r, 'DEPARTMENT')).filter(Boolean))];
+                        uniqueDepts.forEach(d => addOpt(deptSelect, d, d));
+                        deptSelect.disabled = false;
+                        updateDeptValue();
+                    });
+
+                    deptSelect.addEventListener('change', (e) => {
+                        selDept = e.target.value;
+                        selTokutei = '';
+                        finalSelect.innerHTML = '';
+                        finalSelect.style.display = 'none';
+                        finalSelect.disabled = true;
+
+                        if (!selDept) {
+                            updateDeptValue();
+                            return;
+                        }
+
+                        const deptRecs = records.filter(r => (getDeptVal(r, '診療分野') || getDeptVal(r, 'BUNYA')) === selBunya && (getDeptVal(r, '診療科') || getDeptVal(r, 'DEPARTMENT')) === selDept);
+                        const tokuteiOptions = [...new Set(deptRecs.map(r => getDeptVal(r, '診療選択') || getDeptVal(r, 'TOKUTEI_SHINRYO')).filter(Boolean))];
+
+                        if (tokuteiOptions.length > 0) {
+                            finalSelect.style.display = 'inline-block';
+                            finalSelect.disabled = false;
+                            addOpt(finalSelect, '', '診療選択', true);
+                            const hasGeneral = deptRecs.some(r => !(getDeptVal(r, '診療選択') || getDeptVal(r, 'TOKUTEI_SHINRYO')));
+                            if (hasGeneral) {
+                                addOpt(finalSelect, '__GENERAL__', `${selDept}（全般）`);
+                            }
+                            tokuteiOptions.forEach(t => addOpt(finalSelect, t, `${selDept}（${t}）`));
+                        }
+                        updateDeptValue();
+                    });
+
+                    finalSelect.addEventListener('change', (e) => {
+                        const val = e.target.value;
+                        selTokutei = (val === '__GENERAL__') ? '' : val;
+                        updateDeptValue();
+                    });
+
+                    // ★患者の選択値を出発点（初期選択値）として自動セット
+                    if (initBunya && uniqueBunya.includes(initBunya)) {
+                        bunyaSelect.value = initBunya;
+                        selBunya = initBunya;
+
+                        const bunyaRecs = records.filter(r => (getDeptVal(r, '診療分野') || getDeptVal(r, 'BUNYA')) === initBunya);
+                        const uniqueDepts = [...new Set(bunyaRecs.map(r => getDeptVal(r, '診療科') || getDeptVal(r, 'DEPARTMENT')).filter(Boolean))];
+                        
+                        deptSelect.innerHTML = '';
+                        addOpt(deptSelect, '', '診療科を選択', true);
+                        uniqueDepts.forEach(d => addOpt(deptSelect, d, d));
+                        deptSelect.disabled = false;
+
+                        if (initDept && uniqueDepts.includes(initDept)) {
+                            deptSelect.value = initDept;
+                            selDept = initDept;
+
+                            const deptRecs = bunyaRecs.filter(r => (getDeptVal(r, '診療科') || getDeptVal(r, 'DEPARTMENT')) === initDept);
+                            const tokuteiOptions = [...new Set(deptRecs.map(r => getDeptVal(r, '診療選択') || getDeptVal(r, 'TOKUTEI_SHINRYO')).filter(Boolean))];
+
+                            if (tokuteiOptions.length > 0) {
+                                finalSelect.style.display = 'inline-block';
+                                finalSelect.disabled = false;
+                                addOpt(finalSelect, '', '診療選択', true);
+                                const hasGeneral = deptRecs.some(r => !(getDeptVal(r, '診療選択') || getDeptVal(r, 'TOKUTEI_SHINRYO')));
+                                if (hasGeneral) {
+                                    addOpt(finalSelect, '__GENERAL__', `${initDept}（全般）`);
+                                }
+                                tokuteiOptions.forEach(t => addOpt(finalSelect, t, `${initDept}（${t}）`));
+
+                                if (initTokutei) {
+                                    if (initTokutei.includes('全般') || initTokutei === '__GENERAL__') {
+                                        finalSelect.value = '__GENERAL__';
+                                    } else {
+                                        const subMatch = initTokutei.match(/（(.+?)）/);
+                                        const cleanTok = subMatch ? subMatch[1] : initTokutei;
+                                        if (tokuteiOptions.includes(cleanTok)) {
+                                            finalSelect.value = cleanTok;
+                                            selTokutei = cleanTok;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        updateDeptValue();
+                    }
+
+                    multistageDiv.appendChild(bunyaSelect);
+                    multistageDiv.appendChild(deptSelect);
+                    multistageDiv.appendChild(finalSelect);
+                    container.appendChild(multistageDiv);
+                };
+
+                buildDeptSelectForm(deptEditArea);
+                deptGroup.appendChild(deptEditArea);
+
+                deptCorrectCheckbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        deptEditArea.style.display = 'block';
+                    } else {
+                        deptEditArea.style.display = 'none';
+                        currentDeptInput = patientDeptVal;
+                    }
+                });
+
+                cancelContainer.appendChild(deptGroup);
+
+                // 3. 日時設定 (必須)
+                const dateGroup = document.createElement('div');
+                dateGroup.className = 'rcb-form-group';
+                
+                const dateLabel = document.createElement('label');
+                dateLabel.className = 'rcb-label';
+                dateLabel.textContent = '取消対象日時 (必須)';
+                dateGroup.appendChild(dateLabel);
+
+                // 申込者の入力内容の表示ブロック（編集不可）
+                const dateInfoBlock = document.createElement('div');
+                dateInfoBlock.className = 'rcb-info-block';
+                dateInfoBlock.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;';
+                dateInfoBlock.innerHTML = `<div><strong>申込者の入力内容:</strong> ${valDateTime || '（未入力）'}</div>`;
+                dateGroup.appendChild(dateInfoBlock);
+
+                // チェックボックス「☐ 訂正する」
+                const dateCheckWrapper = document.createElement('div');
+                dateCheckWrapper.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px;';
+                
+                const dateCorrectCheckbox = document.createElement('input');
+                dateCorrectCheckbox.type = 'checkbox';
+                dateCorrectCheckbox.id = 'rcb-date-correct-checkbox';
+                dateCorrectCheckbox.checked = false;
+                
+                const dateCorrectLabel = document.createElement('label');
+                dateCorrectLabel.htmlFor = 'rcb-date-correct-checkbox';
+                dateCorrectLabel.style.cssText = 'cursor: pointer; font-size: 13px; font-weight: bold; color: #333; margin: 0;';
+                dateCorrectLabel.textContent = '訂正する';
+
+                const dateNoteSpan = document.createElement('span');
+                dateNoteSpan.style.cssText = 'font-size: 11px; color: #888;';
+                dateNoteSpan.textContent = '※申込者選択値に間違いがある場合';
+
+                dateCheckWrapper.appendChild(dateCorrectCheckbox);
+                dateCheckWrapper.appendChild(dateCorrectLabel);
+                dateCheckWrapper.appendChild(dateNoteSpan);
+                dateGroup.appendChild(dateCheckWrapper);
+
+                // 編集エリア (初期非表示・薄いピンク背景)
+                const editArea = document.createElement('div');
+                editArea.style.cssText = 'background-color: #fff0f3; padding: 15px; border: 1px solid #ffccd5; border-radius: 6px; display: none; margin-top: 10px;';
+                
+                // 入力要素作成
+                cancelDateInput = document.createElement('input');
+                cancelDateInput.type = 'date';
+                cancelDateInput.style.cssText = 'padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background-color: #ffffff; color: #333; color-scheme: light;';
+                // 入力欄のどこをクリックしてもカレンダーを表示する
+                cancelDateInput.addEventListener('click', function() {
+                    try { if (typeof this.showPicker === 'function') this.showPicker(); } catch(e) {}
+                });
+                cancelDateInput.value = displayDateVal;
+                
+                cancelTimeInput = document.createElement('select');
+                cancelTimeInput.style.cssText = 'padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background-color: #ffffff; color: #333; color-scheme: light;';
+                
+                // 時刻選択肢 (30分刻み + 現在の値)
+                let timeFound = false;
+                CONFIG.ALLOWED_TIMES.forEach(time => {
+                    const opt = document.createElement('option');
+                    opt.value = time;
+                    opt.textContent = time;
+                    if (time === displayTimeVal) {
+                        opt.selected = true;
+                        timeFound = true;
+                    }
+                    cancelTimeInput.appendChild(opt);
+                });
+                if (displayTimeVal && !timeFound) {
+                    const opt = document.createElement('option');
+                    opt.value = displayTimeVal;
+                    opt.textContent = displayTimeVal;
+                    opt.selected = true;
+                    cancelTimeInput.insertBefore(opt, cancelTimeInput.firstChild);
+                } else if (!displayTimeVal) {
+                    const placeholder = document.createElement('option');
+                    placeholder.value = '';
+                    placeholder.textContent = '時刻を選択';
+                    placeholder.selected = true;
+                    placeholder.disabled = true;
+                    cancelTimeInput.insertBefore(placeholder, cancelTimeInput.firstChild);
+                }
+
+                // 日時変更部分（元入力値と異なる場合）を赤文字・太字にするチェック関数
+                const checkDateTimeHighlight = () => {
+                    if (cancelDateInput.value && displayDateVal && cancelDateInput.value !== displayDateVal) {
+                        cancelDateInput.style.setProperty('color', '#dc3545', 'important');
+                        cancelDateInput.style.fontWeight = 'bold';
+                    } else {
+                        cancelDateInput.style.setProperty('color', '#333333', 'important');
+                        cancelDateInput.style.fontWeight = 'normal';
+                    }
+
+                    if (cancelTimeInput.value && displayTimeVal && cancelTimeInput.value !== displayTimeVal) {
+                        cancelTimeInput.style.setProperty('color', '#dc3545', 'important');
+                        cancelTimeInput.style.fontWeight = 'bold';
+                    } else {
+                        cancelTimeInput.style.setProperty('color', '#333333', 'important');
+                        cancelTimeInput.style.fontWeight = 'normal';
                     }
                 };
 
-                displayDiv.appendChild(editBtn);
+                cancelDateInput.addEventListener('change', checkDateTimeHighlight);
+                cancelDateInput.addEventListener('input', checkDateTimeHighlight);
+                cancelTimeInput.addEventListener('change', checkDateTimeHighlight);
+                cancelTimeInput.addEventListener('input', checkDateTimeHighlight);
 
-                const noteSpan = document.createElement('span');
-                noteSpan.style.cssText = 'font-size: 11px; color: #888;';
-                noteSpan.textContent = '※申込者入力値に間違いがある場合';
-                displayDiv.appendChild(noteSpan);
+                // フォーム表示ロジック
+                const formDiv = document.createElement('div');
+                formDiv.style.display = 'flex';
+                formDiv.style.gap = '10px';
+                formDiv.style.alignItems = 'center';
+                formDiv.appendChild(cancelDateInput);
+                formDiv.appendChild(cancelTimeInput);
 
-                editArea.appendChild(displayDiv);
                 editArea.appendChild(formDiv);
+                dateGroup.appendChild(editArea);
+
+                dateCorrectCheckbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        editArea.style.display = 'block';
+                        checkDateTimeHighlight();
+                    } else {
+                        editArea.style.display = 'none';
+                        cancelDateInput.value = displayDateVal;
+                        cancelTimeInput.value = displayTimeVal;
+                        checkDateTimeHighlight();
+                    }
+                });
+
+                cancelContainer.appendChild(dateGroup);
+
+                // コンテナにカード要素を追加
+                confirmedContainer.appendChild(cancelContainer);
+
+                // アクションエリア（メール本文メッセージ挿入内容 ＋ 取消完了メール送信ボタン：余白・間隔を十分に確保）
+                const actionContainer = document.createElement('div');
+                actionContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 30px; width: 100%; max-width: 500px; margin: 35px auto 50px auto; padding-bottom: 30px;';
+
+                if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus) {
+                    const msgWrapper = document.createElement('div');
+                    msgWrapper.style.cssText = 'width: 100%; border: 1px solid #ccc; border-radius: 4px; overflow: hidden;';
+
+                    const msgHeader = document.createElement('div');
+                    msgHeader.style.cssText = 'background-color: #123049; color: white; padding: 6px; font-size: 13px; font-weight: bold; text-align: center; letter-spacing: 1px;';
+                    msgHeader.textContent = 'メール本文メッセージ挿入内容';
+
+                    cancelMsgInput = document.createElement('textarea');
+                    cancelMsgInput.className = 'rcb-modal-textarea';
+                    cancelMsgInput.style.cssText = 'width: 100%; height: 80px; margin: 0; padding: 10px; border: none; border-radius: 0; resize: vertical; box-sizing: border-box; outline: none; box-shadow: none; font-size: 14px;';
+                    cancelMsgInput.value = '以下の通り、ご予約を取消しさせていただきました。';
+                    cancelMsgInput.placeholder = 'メッセージを入力してください';
+
+                    msgWrapper.appendChild(msgHeader);
+                    msgWrapper.appendChild(cancelMsgInput);
+                    actionContainer.appendChild(msgWrapper);
+                }
+
+                // メール送信ボタン
+                const sendMailBtn = document.createElement('button');
+                sendMailBtn.className = 'rcb-btn-save';
+                sendMailBtn.style.width = '100%';
+                sendMailBtn.style.maxWidth = '400px';
+                sendMailBtn.style.padding = '12px';
+                sendMailBtn.style.fontSize = '16px';
+                
+                if (isSent) {
+                    sendMailBtn.textContent = 'メール送信済み';
+                    sendMailBtn.style.backgroundColor = '#95a5a6';
+                    sendMailBtn.disabled = true;
+                } else if (isPhoneConfirmed) {
+                    sendMailBtn.textContent = '電話合意済み';
+                    sendMailBtn.style.backgroundColor = '#27ae60';
+                    sendMailBtn.disabled = true;
+                } else if (isWithdrawn) {
+                    sendMailBtn.textContent = '取下済み';
+                    sendMailBtn.style.backgroundColor = '#7f8c8d';
+                    sendMailBtn.disabled = true;
+                } else if (isWebWithdrawn || isUrlWithdrawn) {
+                    sendMailBtn.style.display = 'none';
+                } else if (isRead) {
+                    sendMailBtn.textContent = 'メール既読';
+                    sendMailBtn.style.backgroundColor = '#27ae60';
+                    sendMailBtn.disabled = true;
+                } else if (isTimeoutStatus) {
+                    sendMailBtn.style.display = 'none';
+                } else {
+                    sendMailBtn.textContent = '取消完了メールを送信する';
+                    sendMailBtn.style.backgroundColor = '#c0392b';
+                    sendMailBtn.onclick = () => processCancelMail(cancelDateInput.value, cancelTimeInput.value, currentDeptInput, cancelMsgInput.value);
+                }
+
+                actionContainer.appendChild(sendMailBtn);
+                confirmedContainer.appendChild(actionContainer);
+
+                // タイムアウト設定
+                let timeoutSelect = null;
+                if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && currentMethod !== 'phone' && purpose !== '取消') {
+                    const timeoutWrapper = document.createElement('div');
+                    timeoutWrapper.style.display = 'flex';
+                    timeoutWrapper.style.flexDirection = 'column';
+                    timeoutWrapper.style.alignItems = 'center';
+                    timeoutWrapper.style.gap = '5px';
+
+                    const inputRow = document.createElement('div');
+                    inputRow.style.display = 'flex';
+                    inputRow.style.alignItems = 'center';
+                    inputRow.style.gap = '5px';
+
+                    const iconDiv = document.createElement('div');
+                    iconDiv.style.color = '#555';
+                    iconDiv.style.display = 'flex';
+                    iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 72 72"><path fill="#fff" d="M35.498 37.967h1.017c7.624 0 13.814 6.19 13.814 13.815v6.458H22.001v-6.776c0-7.45 6.048-13.497 13.497-13.497m1.159-3.971h-1.016c-7.625 0-13.815-6.19-13.815-13.814v-6.458h28.328v6.775c0 7.45-6.048 13.497-13.497 13.497"/><path fill="#fff" d="M39.313 33.681s-2.823 2.018-.171 4.548c0 0-2.034-.556-6.387.07c0 0 2.756-2.098-.094-4.729z"/><path fill="#9b9b9a" d="M40.214 31.106q.006-.004.01-.003l.014-.005C45.893 29.613 48 23.308 48 19.682V18H24v1.682c0 3.626 2.107 9.931 7.762 11.416l.013.006l.011.002c1.792.486 3.1 1.536 3.75 2.894h.929c.65-1.358 1.957-2.408 3.749-2.894M47 55c-6.074 0-11-4.926-11-11c0 6.074-4.926 11-11 11h-1v4h24v-4z"/><path fill="#a57939" d="M55 11c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zm0 51c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2z"/><path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M31 34c-7.272-1.91-10-9.545-10-14.318V13m0 46v-6.682C21 47.546 23.728 39.91 31 38m0 0c1-.271 2-.894 2-2c0-1.104-1-1.728-2-2m10 0c7.273-1.91 10-9.545 10-14.318V13m0 46v-6.682C51 47.546 48.273 39.91 41 38m0 0c-1-.271-2-.894-2-2c0-1.104-1-1.728-2-2M25 55c6.074 0 11-4.926 11-11c0 6.074 4.926 11 11 11m8-44c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zm-8 7H25m30 44c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zM36 39v5"/></svg>`;
+                    
+                    timeoutSelect = document.createElement('select');
+                    timeoutSelect.id = 'rcb-timeout-select';
+                    timeoutSelect.style.padding = '5px';
+                    timeoutSelect.style.backgroundColor = 'rgb(245, 245, 225)';
+                    timeoutSelect.style.borderRadius = '4px';
+                    timeoutSelect.style.border = '1px solid rgb(204, 204, 204)';
+                    timeoutSelect.style.width = '115px';
+                    timeoutSelect.style.textAlign = 'center';
+                    timeoutSelect.style.cursor = 'pointer';
+                    
+                    const buildTimeoutOptions = () => {
+                        timeoutSelect.innerHTML = '';
+                        CONFIG.ALLOWED_TIMEOUTS.forEach(t => {
+                            const opt = document.createElement('option');
+                            opt.value = t.value;
+                            opt.textContent = t.label;
+                            if (t.value === timeoutVal) opt.selected = true;
+                            timeoutSelect.appendChild(opt);
+                        });
+                    };
+                    buildTimeoutOptions();
+
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = 'タイムアウト値';
+                    textSpan.style.fontSize = '14px';
+                    textSpan.style.color = '#333';
+                    textSpan.style.fontWeight = 'bold';
+                    textSpan.style.marginLeft = '5px';
+                    textSpan.style.marginRight = '5px';
+
+                    inputRow.appendChild(iconDiv);
+                    inputRow.appendChild(textSpan);
+                    inputRow.appendChild(timeoutSelect);
+                    timeoutWrapper.appendChild(inputRow);
+
+                    actionContainer.appendChild(timeoutWrapper);
+                }
+
+                actionContainer.appendChild(sendMailBtn);
+                confirmedContainer.appendChild(actionContainer);
             }
-            
-            dateGroup.appendChild(editArea);
-            cancelContainer.appendChild(dateGroup);
 
-            // 4. メッセージ
-            const msgGroup = document.createElement('div');
-            msgGroup.className = 'rcb-form-group';
-            
-            const msgLabel = document.createElement('label');
-            msgLabel.className = 'rcb-label';
-            msgLabel.textContent = 'メッセージ (任意)';
-            msgGroup.appendChild(msgLabel);
-            
-            cancelMsgInput = document.createElement('textarea');
-            cancelMsgInput.className = 'rcb-modal-textarea';
-            cancelMsgInput.style.marginTop = '0';
-            cancelMsgInput.placeholder = '必要に応じてメッセージを入力してください（例：予約日時の相違について等）';
-            msgGroup.appendChild(cancelMsgInput);
-            
-            cancelContainer.appendChild(msgGroup);
-
-            // コンテナに追加
-            confirmedContainer.appendChild(cancelContainer);
-            
             // dateTimeDisplay は使わないので非表示
             dateTimeDisplay.innerHTML = '';
             dateTimeDisplay.style.display = 'none';
@@ -2054,251 +2418,254 @@
         }
 
         // アクションエリア（メール送信ボタン + タイムアウト設定）
-        const actionContainer = document.createElement('div');
-        actionContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; max-width: 500px; margin: 0 auto;';
-        
-        const mainActionRow = document.createElement('div');
-        mainActionRow.style.cssText = 'display: flex; width: 100%; gap: 10px;';
-
-        // ★追加: 送信用メッセージ入力欄
-        let sendMsgInput = null;
-        if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && purpose !== '取消') {
-            const msgWrapper = document.createElement('div');
-            msgWrapper.style.cssText = 'width: 100%; border: 1px solid #ccc; border-radius: 4px; overflow: hidden;';
-
-            const msgHeader = document.createElement('div');
-            msgHeader.style.cssText = 'background-color: #123049; color: white; padding: 6px; font-size: 13px; font-weight: bold; text-align: center; letter-spacing: 1px;';
-            msgHeader.textContent = 'メール本文メッセージ挿入内容';
-
-            sendMsgInput = document.createElement('textarea');
-            sendMsgInput.className = 'rcb-modal-textarea';
-            sendMsgInput.style.cssText = 'width: 100%; height: 80px; margin: 0; padding: 10px; border: none; border-radius: 0; resize: vertical; box-sizing: border-box; outline: none; box-shadow: none; font-size: 14px;';
+        // ★担当者が未設定（または未着手）、あるいは用件が「取消」の場合はここからの送信ボタン表示を行わない（取消側で専用描画するため）
+        if (staffName && currentStatus !== '未着手' && purpose !== '取消') {
+            const actionContainer = document.createElement('div');
+            actionContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 30px; width: 100%; max-width: 500px; margin: 35px auto 50px auto; padding-bottom: 30px;';
             
-            if (purpose === '初診' || purpose === '再診') {
-                sendMsgInput.value = `診療のご予約（初診/再診）についてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
-            } else if (purpose === '変更') {
-                sendMsgInput.value = `診療のご予約（変更）につきましてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
-            } else {
-                sendMsgInput.value = `下記より内容をご確認ください。`;
-            }
-            sendMsgInput.placeholder = 'メッセージを入力してください';
-            
-            msgWrapper.appendChild(msgHeader);
-            msgWrapper.appendChild(sendMsgInput);
-            actionContainer.appendChild(msgWrapper);
-        }
+            const mainActionRow = document.createElement('div');
+            mainActionRow.style.cssText = 'display: flex; width: 100%; gap: 10px;';
 
-        // メール送信ボタン
-        const sendMailBtn = document.createElement('button');
-        sendMailBtn.className = 'rcb-btn-save';
-        sendMailBtn.style.width = '100%'; // 幅いっぱい
-        sendMailBtn.style.maxWidth = '400px'; // ただしボタンは広げすぎない
-        sendMailBtn.style.padding = '12px'; // 少し大きく
-        sendMailBtn.style.fontSize = '16px';
-        
-        if (isSent) {
-            sendMailBtn.textContent = 'メール送信済み';
-            sendMailBtn.style.backgroundColor = '#95a5a6'; // グレー
-            sendMailBtn.disabled = true;
-        } else if (isPhoneConfirmed) {
-            sendMailBtn.textContent = '電話合意済み';
-            sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
-            sendMailBtn.disabled = true;
-        } else if (isWithdrawn) {
-            sendMailBtn.textContent = '取下済み';
-            sendMailBtn.style.backgroundColor = '#7f8c8d';
-            sendMailBtn.disabled = true;
-        } else if (isWebWithdrawn || isUrlWithdrawn) {
-            sendMailBtn.style.display = 'none'; // 取下後のボタンはコンテナ内に集約したため非表示
-        } else if (isRead) {
-            sendMailBtn.textContent = 'メール既読';
-            sendMailBtn.style.backgroundColor = '#27ae60';
-            sendMailBtn.disabled = true;
-        } else if (isTimeoutStatus) {
-            sendMailBtn.style.display = 'none'; // ボタンを非表示にする
-        } else if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || (currentMethod === 'phone' && purpose !== '取消')) {
-            sendMailBtn.textContent = '電話対応を完了する';
-            sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
-            sendMailBtn.onclick = () => processSendMail(currentDate, currentTime, sendMsgInput ? sendMsgInput.value : '');
-        } else {
-            if (purpose === '取消') {
-                sendMailBtn.textContent = '取消完了メールを送信する';
-                sendMailBtn.style.backgroundColor = '#c0392b'; // 赤色
-                sendMailBtn.style.marginTop = '30px'; // ★追加: マージン確保
-                sendMailBtn.style.marginBottom = '20px'; // ★追加: 下部マージン
-                sendMailBtn.onclick = () => processCancelMail(cancelDateInput.value, cancelTimeInput.value, currentDeptInput, cancelMsgInput.value);
-            } else {
-                sendMailBtn.textContent = 'メールを送信する';
-                sendMailBtn.style.backgroundColor = '#e67e22'; // オレンジ色
-                sendMailBtn.onclick = () => processSendMail(currentDate, currentTime, sendMsgInput ? sendMsgInput.value : '');
-            }
-        }
+            // ★追加: 送信用メッセージ入力欄
+            let sendMsgInput = null;
+            if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && purpose !== '取消') {
+                const msgWrapper = document.createElement('div');
+                msgWrapper.style.cssText = 'width: 100%; border: 1px solid #ccc; border-radius: 4px; overflow: hidden;';
 
-        // タイムアウト設定 (送信前のみ、ボタンの上に表示)
-        let timeoutSelect = null;
-        // 用件が「取消」の場合はタイムアウト設定を表示しない
-        if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && currentMethod !== 'phone' && purpose !== '取消') {
-            const timeoutWrapper = document.createElement('div');
-            timeoutWrapper.style.display = 'flex';
-            timeoutWrapper.style.flexDirection = 'column';
-            timeoutWrapper.style.alignItems = 'center';
-            timeoutWrapper.style.gap = '5px';
+                const msgHeader = document.createElement('div');
+                msgHeader.style.cssText = 'background-color: #123049; color: white; padding: 6px; font-size: 13px; font-weight: bold; text-align: center; letter-spacing: 1px;';
+                msgHeader.textContent = 'メール本文メッセージ挿入内容';
 
-            const inputRow = document.createElement('div');
-            inputRow.style.display = 'flex';
-            inputRow.style.alignItems = 'center';
-            inputRow.style.gap = '5px';
-
-            // アイコン表示
-            const iconDiv = document.createElement('div');
-            iconDiv.style.color = '#555';
-            iconDiv.style.display = 'flex';
-            iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 72 72"><path fill="#fff" d="M35.498 37.967h1.017c7.624 0 13.814 6.19 13.814 13.815v6.458H22.001v-6.776c0-7.45 6.048-13.497 13.497-13.497m1.159-3.971h-1.016c-7.625 0-13.815-6.19-13.815-13.814v-6.458h28.328v6.775c0 7.45-6.048 13.497-13.497 13.497"/><path fill="#fff" d="M39.313 33.681s-2.823 2.018-.171 4.548c0 0-2.034-.556-6.387.07c0 0 2.756-2.098-.094-4.729z"/><path fill="#9b9b9a" d="M40.214 31.106q.006-.004.01-.003l.014-.005C45.893 29.613 48 23.308 48 19.682V18H24v1.682c0 3.626 2.107 9.931 7.762 11.416l.013.006l.011.002c1.792.486 3.1 1.536 3.75 2.894h.929c.65-1.358 1.957-2.408 3.749-2.894M47 55c-6.074 0-11-4.926-11-11c0 6.074-4.926 11-11 11h-1v4h24v-4z"/><path fill="#a57939" d="M55 11c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zm0 51c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2z"/><path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M31 34c-7.272-1.91-10-9.545-10-14.318V13m0 46v-6.682C21 47.546 23.728 39.91 31 38m0 0c1-.271 2-.894 2-2c0-1.104-1-1.728-2-2m10 0c7.273-1.91 10-9.545 10-14.318V13m0 46v-6.682C51 47.546 48.273 39.91 41 38m0 0c-1-.271-2-.894-2-2c0-1.104 1-1.728 2-2M25 55c6.074 0 11-4.926 11-11c0 6.074 4.926 11 11 11m8-44c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zm-8 7H25m30 44c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zM36 39v5"/></svg>`;
-            
-            // プルダウン
-            timeoutSelect = document.createElement('select');
-            timeoutSelect.id = 'rcb-timeout-select';
-            timeoutSelect.style.padding = '5px';
-            timeoutSelect.style.backgroundColor = 'rgb(245, 245, 225)';
-            timeoutSelect.style.borderRadius = '4px';
-            timeoutSelect.style.border = '1px solid rgb(204, 204, 204)';
-            timeoutSelect.style.width = '115px';
-            timeoutSelect.style.textAlign = 'center';
-            timeoutSelect.style.cursor = 'pointer';
-            
-            let lastUpdatedTime = 0;
-            let isDropdownOpen = false;
-
-            const buildTimeoutOptions = () => {
-                const now = new Date();
-                // 10秒以内の連続更新はスキップ（展開中の再描画による不具合を防止）
-                if (now.getTime() - lastUpdatedTime < 10000) return;
-                lastUpdatedTime = now.getTime();
-
-                const currentValue = timeoutSelect.value || null;
-                timeoutSelect.innerHTML = '';
+                sendMsgInput = document.createElement('textarea');
+                sendMsgInput.className = 'rcb-modal-textarea';
+                sendMsgInput.style.cssText = 'width: 100%; height: 80px; margin: 0; padding: 10px; border: none; border-radius: 0; resize: vertical; box-sizing: border-box; outline: none; box-shadow: none; font-size: 14px;';
                 
-                const allTimeOptions = [
-                    { label: '1分間', min: 1 },
-                    { label: '15分間', min: 15 },
-                    { label: '30分間', min: 30 },
-                    { label: '45分間', min: 45 },
-                    { label: '60分間', min: 60 },
-                    { label: '90分間', min: 90 },
-                    { label: '2時間', min: 120 },
-                    { label: '4時間', min: 240 },
-                    { label: '6時間', min: 360 },
-                    { label: '12時間', min: 720 },
-                    { label: '24時間', min: 1440 },
-                    { label: '48時間', min: 2880 }
-                ];
-                const endOfBusiness = new Date(now);
-                endOfBusiness.setHours(17, 0, 0, 0); // 17:00
-                
-                let remainingMinutes = (endOfBusiness.getTime() - now.getTime()) / (1000 * 60);
-                if (remainingMinutes < 0) remainingMinutes = 0; // 17時以降は時間指定を出さない
-                
-                const filteredOptions = allTimeOptions.filter(opt => opt.min <= remainingMinutes);
-                const fixedOptions = [
-                    { label: '今日中', min: null },
-                    { label: '明日午前中', min: null },
-                    { label: '明日中', min: null }
-                ];
-                const options = [...filteredOptions, ...fixedOptions];
-
-                const hasTwoHours = options.some(opt => opt.label === '2時間');
-
-                let defaultSelected = false;
-                options.forEach(optObj => {
-                    const optVal = optObj.label;
-                    let displayText = optVal;
-                    
-                    if (optObj.min !== null) {
-                        const targetTime = new Date(now.getTime() + optObj.min * 60 * 1000);
-                        const targetH = String(targetTime.getHours()).padStart(2, '0');
-                        const targetM = String(targetTime.getMinutes()).padStart(2, '0');
-                        displayText = `${optVal} (${targetH}:${targetM})`;
-                    }
-
-                    const opt = document.createElement('option');
-                    opt.value = optVal;
-                    opt.dataset.timeLabel = displayText;
-                    opt.textContent = isDropdownOpen ? displayText : optVal;
-                    
-                    if (currentValue) {
-                        if (optVal === currentValue) {
-                            opt.selected = true;
-                            defaultSelected = true;
-                        }
-                    } else {
-                        if (optVal === '2時間') {
-                            opt.selected = true;
-                            defaultSelected = true;
-                        } else if (!defaultSelected && optVal === '今日中' && !hasTwoHours) {
-                            opt.selected = true;
-                            defaultSelected = true;
-                        }
-                    }
-                    timeoutSelect.appendChild(opt);
-                });
-                
-                // 選択していた項目が17時を過ぎてリストから消えた場合のフォールバック
-                if (currentValue && !defaultSelected) {
-                    if (hasTwoHours) {
-                        timeoutSelect.value = '2時間';
-                    } else {
-                        timeoutSelect.value = '今日中';
-                    }
+                if (purpose === '初診' || purpose === '再診') {
+                    sendMsgInput.value = `診療のご予約（初診/再診）についてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
+                } else if (purpose === '変更') {
+                    sendMsgInput.value = `診療のご予約（変更）につきましてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
+                } else {
+                    sendMsgInput.value = `下記より内容をご確認ください。`;
                 }
-            };
+                sendMsgInput.placeholder = 'メッセージを入力してください';
+                
+                msgWrapper.appendChild(msgHeader);
+                msgWrapper.appendChild(sendMsgInput);
+                actionContainer.appendChild(msgWrapper);
+            }
+
+            // メール送信ボタン
+            const sendMailBtn = document.createElement('button');
+            sendMailBtn.className = 'rcb-btn-save';
+            sendMailBtn.style.width = '100%'; // 幅いっぱい
+            sendMailBtn.style.maxWidth = '400px'; // ただしボタンは広げすぎない
+            sendMailBtn.style.padding = '12px'; // 少し大きく
+            sendMailBtn.style.fontSize = '16px';
             
-            const showTimeLabels = () => {
-                isDropdownOpen = true;
+            if (isSent) {
+                sendMailBtn.textContent = 'メール送信済み';
+                sendMailBtn.style.backgroundColor = '#95a5a6'; // グレー
+                sendMailBtn.disabled = true;
+            } else if (isPhoneConfirmed) {
+                sendMailBtn.textContent = '電話合意済み';
+                sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
+                sendMailBtn.disabled = true;
+            } else if (isWithdrawn) {
+                sendMailBtn.textContent = '取下済み';
+                sendMailBtn.style.backgroundColor = '#7f8c8d';
+                sendMailBtn.disabled = true;
+            } else if (isWebWithdrawn || isUrlWithdrawn) {
+                sendMailBtn.style.display = 'none'; // 取下後のボタンはコンテナ内に集約したため非表示
+            } else if (isRead) {
+                sendMailBtn.textContent = 'メール既読';
+                sendMailBtn.style.backgroundColor = '#27ae60';
+                sendMailBtn.disabled = true;
+            } else if (isTimeoutStatus) {
+                sendMailBtn.style.display = 'none'; // ボタンを非表示にする
+            } else if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || (currentMethod === 'phone' && purpose !== '取消')) {
+                sendMailBtn.textContent = '電話対応を完了する';
+                sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
+                sendMailBtn.onclick = () => processSendMail(currentDate, currentTime, sendMsgInput ? sendMsgInput.value : '');
+            } else {
+                if (purpose === '取消') {
+                    sendMailBtn.textContent = '取消完了メールを送信する';
+                    sendMailBtn.style.backgroundColor = '#c0392b'; // 赤色
+                    sendMailBtn.style.marginTop = '30px'; // ★追加: マージン確保
+                    sendMailBtn.style.marginBottom = '20px'; // ★追加: 下部マージン
+                    sendMailBtn.onclick = () => processCancelMail(cancelDateInput.value, cancelTimeInput.value, currentDeptInput, cancelMsgInput.value);
+                } else {
+                    sendMailBtn.textContent = 'メールを送信する';
+                    sendMailBtn.style.backgroundColor = '#e67e22'; // オレンジ色
+                    sendMailBtn.onclick = () => processSendMail(currentDate, currentTime, sendMsgInput ? sendMsgInput.value : '');
+                }
+            }
+
+            // タイムアウト設定 (送信前のみ、ボタンの上に表示)
+            let timeoutSelect = null;
+            // 用件が「取消」の場合はタイムアウト設定を表示しない
+            if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && currentMethod !== 'phone' && purpose !== '取消') {
+                const timeoutWrapper = document.createElement('div');
+                timeoutWrapper.style.display = 'flex';
+                timeoutWrapper.style.flexDirection = 'column';
+                timeoutWrapper.style.alignItems = 'center';
+                timeoutWrapper.style.gap = '5px';
+
+                const inputRow = document.createElement('div');
+                inputRow.style.display = 'flex';
+                inputRow.style.alignItems = 'center';
+                inputRow.style.gap = '5px';
+
+                // アイコン表示
+                const iconDiv = document.createElement('div');
+                iconDiv.style.color = '#555';
+                iconDiv.style.display = 'flex';
+                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 72 72"><path fill="#fff" d="M35.498 37.967h1.017c7.624 0 13.814 6.19 13.814 13.815v6.458H22.001v-6.776c0-7.45 6.048-13.497 13.497-13.497m1.159-3.971h-1.016c-7.625 0-13.815-6.19-13.815-13.814v-6.458h28.328v6.775c0 7.45-6.048 13.497-13.497 13.497"/><path fill="#fff" d="M39.313 33.681s-2.823 2.018-.171 4.548c0 0-2.034-.556-6.387.07c0 0 2.756-2.098-.094-4.729z"/><path fill="#9b9b9a" d="M40.214 31.106q.006-.004.01-.003l.014-.005C45.893 29.613 48 23.308 48 19.682V18H24v1.682c0 3.626 2.107 9.931 7.762 11.416l.013.006l.011.002c1.792.486 3.1 1.536 3.75 2.894h.929c.65-1.358 1.957-2.408 3.749-2.894M47 55c-6.074 0-11-4.926-11-11c0 6.074-4.926 11-11 11h-1v4h24v-4z"/><path fill="#a57939" d="M55 11c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zm0 51c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2z"/><path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M31 34c-7.272-1.91-10-9.545-10-14.318V13m0 46v-6.682C21 47.546 23.728 39.91 31 38m0 0c1-.271 2-.894 2-2c0-1.104-1-1.728-2-2m10 0c7.273-1.91 10-9.545 10-14.318V13m0 46v-6.682C51 47.546 48.273 39.91 41 38m0 0c-1-.271-2-.894-2-2c0-1.104 1-1.728 2-2M25 55c6.074 0 11-4.926 11-11c0 6.074 4.926 11 11 11m8-44c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zm-8 7H25m30 44c0 1.1-.9 2-2 2H19c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h34c1.1 0 2 .9 2 2zM36 39v5"/></svg>`;
+                
+                // プルダウン
+                timeoutSelect = document.createElement('select');
+                timeoutSelect.id = 'rcb-timeout-select';
+                timeoutSelect.style.padding = '5px';
+                timeoutSelect.style.backgroundColor = 'rgb(245, 245, 225)';
+                timeoutSelect.style.borderRadius = '4px';
+                timeoutSelect.style.border = '1px solid rgb(204, 204, 204)';
+                timeoutSelect.style.width = '115px';
+                timeoutSelect.style.textAlign = 'center';
+                timeoutSelect.style.cursor = 'pointer';
+                
+                let lastUpdatedTime = 0;
+                let isDropdownOpen = false;
+
+                const buildTimeoutOptions = () => {
+                    const now = new Date();
+                    // 10秒以内の連続更新はスキップ（展開中の再描画による不具合を防止）
+                    if (now.getTime() - lastUpdatedTime < 10000) return;
+                    lastUpdatedTime = now.getTime();
+
+                    const currentValue = timeoutSelect.value || null;
+                    timeoutSelect.innerHTML = '';
+                    
+                    const allTimeOptions = [
+                        { label: '1分間', min: 1 },
+                        { label: '15分間', min: 15 },
+                        { label: '30分間', min: 30 },
+                        { label: '45分間', min: 45 },
+                        { label: '60分間', min: 60 },
+                        { label: '90分間', min: 90 },
+                        { label: '2時間', min: 120 },
+                        { label: '4時間', min: 240 },
+                        { label: '6時間', min: 360 },
+                        { label: '12時間', min: 720 },
+                        { label: '24時間', min: 1440 },
+                        { label: '48時間', min: 2880 }
+                    ];
+                    const endOfBusiness = new Date(now);
+                    endOfBusiness.setHours(17, 0, 0, 0); // 17:00
+                    
+                    let remainingMinutes = (endOfBusiness.getTime() - now.getTime()) / (1000 * 60);
+                    if (remainingMinutes < 0) remainingMinutes = 0; // 17時以降は時間指定を出さない
+                    
+                    const filteredOptions = allTimeOptions.filter(opt => opt.min <= remainingMinutes);
+                    const fixedOptions = [
+                        { label: '今日中', min: null },
+                        { label: '明日午前中', min: null },
+                        { label: '明日中', min: null }
+                    ];
+                    const options = [...filteredOptions, ...fixedOptions];
+
+                    const hasTwoHours = options.some(opt => opt.label === '2時間');
+
+                    let defaultSelected = false;
+                    options.forEach(optObj => {
+                        const optVal = optObj.label;
+                        let displayText = optVal;
+                        
+                        if (optObj.min !== null) {
+                            const targetTime = new Date(now.getTime() + optObj.min * 60 * 1000);
+                            const targetH = String(targetTime.getHours()).padStart(2, '0');
+                            const targetM = String(targetTime.getMinutes()).padStart(2, '0');
+                            displayText = `${optVal} (${targetH}:${targetM})`;
+                        }
+
+                        const opt = document.createElement('option');
+                        opt.value = optVal;
+                        opt.dataset.timeLabel = displayText;
+                        opt.textContent = isDropdownOpen ? displayText : optVal;
+                        
+                        if (currentValue) {
+                            if (optVal === currentValue) {
+                                opt.selected = true;
+                                defaultSelected = true;
+                            }
+                        } else {
+                            if (optVal === '2時間') {
+                                opt.selected = true;
+                                defaultSelected = true;
+                            } else if (!defaultSelected && optVal === '今日中' && !hasTwoHours) {
+                                opt.selected = true;
+                                defaultSelected = true;
+                            }
+                        }
+                        timeoutSelect.appendChild(opt);
+                    });
+                    
+                    // 選択していた項目が17時を過ぎてリストから消えた場合のフォールバック
+                    if (currentValue && !defaultSelected) {
+                        if (hasTwoHours) {
+                            timeoutSelect.value = '2時間';
+                        } else {
+                            timeoutSelect.value = '今日中';
+                        }
+                    }
+                };
+                
+                const showTimeLabels = () => {
+                    isDropdownOpen = true;
+                    buildTimeoutOptions();
+                    Array.from(timeoutSelect.options).forEach(opt => {
+                        if (opt.dataset.timeLabel) opt.textContent = opt.dataset.timeLabel;
+                    });
+                };
+
+                const hideTimeLabels = () => {
+                    isDropdownOpen = false;
+                    Array.from(timeoutSelect.options).forEach(opt => {
+                        opt.textContent = opt.value;
+                    });
+                };
+
+                // 初回生成
                 buildTimeoutOptions();
-                Array.from(timeoutSelect.options).forEach(opt => {
-                    if (opt.dataset.timeLabel) opt.textContent = opt.dataset.timeLabel;
-                });
-            };
+                
+                timeoutSelect.addEventListener('mouseenter', buildTimeoutOptions);
+                timeoutSelect.addEventListener('mousedown', showTimeLabels);
+                timeoutSelect.addEventListener('focus', showTimeLabels);
+                timeoutSelect.addEventListener('change', hideTimeLabels);
+                timeoutSelect.addEventListener('blur', hideTimeLabels);
 
-            const hideTimeLabels = () => {
-                isDropdownOpen = false;
-                Array.from(timeoutSelect.options).forEach(opt => {
-                    opt.textContent = opt.value;
-                });
-            };
+                // ★追加: タイムアウト値の文字ラベル (ここにツールチップを表示)
+                const textSpan = document.createElement('span');
+                textSpan.className = 'rcb-timeout-label';
+                textSpan.textContent = 'タイムアウト値';
+                textSpan.style.fontSize = '14px';
+                textSpan.style.color = '#333';
+                textSpan.style.fontWeight = 'bold';
+                textSpan.style.whiteSpace = 'nowrap';
+                textSpan.style.marginLeft = '5px';
+                textSpan.style.marginRight = '5px';
 
-            // 初回生成
-            buildTimeoutOptions();
-            
-            timeoutSelect.addEventListener('mouseenter', buildTimeoutOptions);
-            timeoutSelect.addEventListener('mousedown', showTimeLabels);
-            timeoutSelect.addEventListener('focus', showTimeLabels);
-            timeoutSelect.addEventListener('change', hideTimeLabels);
-            timeoutSelect.addEventListener('blur', hideTimeLabels);
+                inputRow.appendChild(iconDiv);
+                inputRow.appendChild(textSpan);
+                inputRow.appendChild(timeoutSelect);
+                timeoutWrapper.appendChild(inputRow);
 
-            // ★追加: タイムアウト値の文字ラベル (ここにツールチップを表示)
-            const textSpan = document.createElement('span');
-            textSpan.className = 'rcb-timeout-label';
-            textSpan.textContent = 'タイムアウト値';
-            textSpan.style.fontSize = '14px';
-            textSpan.style.color = '#333';
-            textSpan.style.fontWeight = 'bold';
-            textSpan.style.whiteSpace = 'nowrap';
-            textSpan.style.marginLeft = '5px';
-            textSpan.style.marginRight = '5px';
+                actionContainer.appendChild(timeoutWrapper);
+            }
 
-            inputRow.appendChild(iconDiv);
-            inputRow.appendChild(textSpan);
-            inputRow.appendChild(timeoutSelect);
-            timeoutWrapper.appendChild(inputRow);
+            // ★追加: メール送信ボタンをタイムアウト設定より下（後）に追加
+            actionContainer.appendChild(sendMailBtn);
 
-            actionContainer.appendChild(timeoutWrapper);
+            confirmedContainer.appendChild(actionContainer);
         }
-
-        // ★追加: メール送信ボタンをタイムアウト設定より下（後）に追加
-        actionContainer.appendChild(sendMailBtn);
-
-        confirmedContainer.appendChild(actionContainer);
 
         // 予約取下げボタン (送信済み、電話合意済み、または既読の場合に表示)
         if (isSent || isPhoneConfirmed || isRead) {
@@ -2867,6 +3234,9 @@
                       const jsonStr = resp.records[0]['設定情報']?.value || resp.records[0]['設定情報2']?.value;
                       if (jsonStr) {
                           const data = JSON.parse(jsonStr);
+                          if (data.records && Array.isArray(data.records)) {
+                              deptMasterRecords = data.records;
+                          }
                           if (data.commonSettings) {
                               if (data.commonSettings.centerName) centerInfo.centerName = data.commonSettings.centerName;
                               if (data.commonSettings.phoneNumber) centerInfo.phoneNumber = data.commonSettings.phoneNumber;

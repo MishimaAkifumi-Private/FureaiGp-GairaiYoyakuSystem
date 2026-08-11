@@ -395,6 +395,12 @@
         border-left: 4px solid #3498db;
         line-height: 1.5;
       }
+      .rcb-cancel-container select:disabled,
+      .rcb-cancel-container input:disabled {
+        background-color: #ffffff !important;
+        opacity: 1 !important;
+        color: #333333 !important;
+      }
       
       /* Modal Confirm Styles (New) */
       .rcb-confirm-msg {
