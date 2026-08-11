@@ -784,7 +784,7 @@
       };
 
       // メール送信処理 (共通関数)
-      const processSendMail = async (targetDate, targetTime) => {
+      const processSendMail = async (targetDate, targetTime, optionalMsg = '') => {
           // 対応方法の判定
           let effectiveMethod = currentMethod;
           const radio = container.querySelector('input[name="rcb-method-select"]:checked');
@@ -896,25 +896,17 @@
           `;
           if (purpose === '初診') {
               subject = '【予約確定】診療のご予約（初診）について';
-              bodyContent = `
-                  <p>診療のご予約（初診）についてお知らせします。<br>
-                  以下のボタンをクリックして内容をご確認ください。</p>
-                  ${btnHtml}
-              `;
           } else if (purpose === '変更') {
               subject = '【予約変更】診療予約の変更について';
-              bodyContent = `
-                  <p>診療のご予約（変更）につきましてお知らせします。<br>
-                  以下のボタンをクリックして内容をご確認ください。</p>
-                  ${btnHtml}
-              `;
           } else {
               subject = '【お知らせ】予約センターからのご連絡';
-              bodyContent = `
-                  <p>下記より内容をご確認ください。</p>
-                  ${btnHtml}
-              `;
           }
+
+          const formattedMsg = optionalMsg ? `<p>${optionalMsg.replace(/\n/g, '<br>')}</p>` : '';
+          bodyContent = `
+              ${formattedMsg}
+              ${btnHtml}
+          `;
 
           const mailBody = `
             ${fullName} 様<br>
@@ -990,7 +982,8 @@
             }
 
             // 送信成功後、ステータス等を更新 (メール送信先を理由欄に記録)
-            const success = await updateRecord(recordId, updatePayload, [], false, false, email);
+            const reasonText = optionalMsg ? `送信先: ${email}\n\n【送信メッセージ】\n${optionalMsg}` : `送信先: ${email}`;
+            const success = await updateRecord(recordId, updatePayload, [], false, false, reasonText);
 
             if (success) {
                 hideSpinner();
@@ -2051,15 +2044,37 @@
 
         // アクションエリア（メール送信ボタン + タイムアウト設定）
         const actionContainer = document.createElement('div');
-        actionContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; max-width: 400px; margin: 0 auto;';
+        actionContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; max-width: 500px; margin: 0 auto;';
         
         const mainActionRow = document.createElement('div');
         mainActionRow.style.cssText = 'display: flex; width: 100%; gap: 10px;';
+
+        // ★追加: 送信用メッセージ入力欄
+        let sendMsgInput = null;
+        if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && purpose !== '取消') {
+            sendMsgInput = document.createElement('textarea');
+            sendMsgInput.className = 'rcb-modal-textarea';
+            sendMsgInput.style.marginTop = '0';
+            sendMsgInput.style.marginBottom = '0px';
+            sendMsgInput.style.width = '100%';
+            sendMsgInput.style.height = '80px';
+            
+            if (purpose === '初診' || purpose === '再診') {
+                sendMsgInput.value = `診療のご予約（${purpose}）についてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
+            } else if (purpose === '変更') {
+                sendMsgInput.value = `診療のご予約（変更）につきましてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
+            } else {
+                sendMsgInput.value = `下記より内容をご確認ください。`;
+            }
+            sendMsgInput.placeholder = 'メッセージを入力してください';
+            actionContainer.appendChild(sendMsgInput);
+        }
 
         // メール送信ボタン
         const sendMailBtn = document.createElement('button');
         sendMailBtn.className = 'rcb-btn-save';
         sendMailBtn.style.width = '100%'; // 幅いっぱい
+        sendMailBtn.style.maxWidth = '400px'; // ただしボタンは広げすぎない
         sendMailBtn.style.padding = '12px'; // 少し大きく
         sendMailBtn.style.fontSize = '16px';
         
@@ -2086,7 +2101,7 @@
         } else if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || (currentMethod === 'phone' && purpose !== '取消')) {
             sendMailBtn.textContent = '電話対応を完了する';
             sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
-            sendMailBtn.onclick = () => processSendMail(currentDate, currentTime);
+            sendMailBtn.onclick = () => processSendMail(currentDate, currentTime, sendMsgInput ? sendMsgInput.value : '');
         } else {
             if (purpose === '取消') {
                 sendMailBtn.textContent = '取消完了メールを送信する';
@@ -2097,13 +2112,11 @@
             } else {
                 sendMailBtn.textContent = 'メールを送信する';
                 sendMailBtn.style.backgroundColor = '#e67e22'; // オレンジ色
-                sendMailBtn.onclick = () => processSendMail(currentDate, currentTime);
+                sendMailBtn.onclick = () => processSendMail(currentDate, currentTime, sendMsgInput ? sendMsgInput.value : '');
             }
         }
 
-        actionContainer.appendChild(sendMailBtn);
-
-        // タイムアウト設定 (送信前のみ、ボタンの右横に表示)
+        // タイムアウト設定 (送信前のみ、ボタンの上に表示)
         let timeoutSelect = null;
         // 用件が「取消」の場合はタイムアウト設定を表示しない
         if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && currentMethod !== 'phone' && purpose !== '取消') {
@@ -2245,12 +2258,27 @@
             timeoutSelect.addEventListener('change', hideTimeLabels);
             timeoutSelect.addEventListener('blur', hideTimeLabels);
 
+            // ★追加: タイムアウト値の文字ラベル (ここにツールチップを表示)
+            const textSpan = document.createElement('span');
+            textSpan.className = 'rcb-timeout-label';
+            textSpan.textContent = 'タイムアウト値';
+            textSpan.style.fontSize = '14px';
+            textSpan.style.color = '#333';
+            textSpan.style.fontWeight = 'bold';
+            textSpan.style.whiteSpace = 'nowrap';
+            textSpan.style.marginLeft = '5px';
+            textSpan.style.marginRight = '5px';
+
             inputRow.appendChild(iconDiv);
+            inputRow.appendChild(textSpan);
             inputRow.appendChild(timeoutSelect);
             timeoutWrapper.appendChild(inputRow);
 
             actionContainer.appendChild(timeoutWrapper);
         }
+
+        // ★追加: メール送信ボタンをタイムアウト設定より下（後）に追加
+        actionContainer.appendChild(sendMailBtn);
 
         confirmedContainer.appendChild(actionContainer);
 

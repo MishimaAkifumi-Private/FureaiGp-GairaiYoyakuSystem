@@ -333,7 +333,7 @@ window.ShinryoApp = window.ShinryoApp || {};
           background-color: #fff;
           height: 1px;
       }
-      .doctor-name-wrapper {
+      .doctor-name-wrapper, .updated-date-wrapper {
           background-color: #fff;
           padding: 6px 10px;
           display: flex;
@@ -342,6 +342,13 @@ window.ShinryoApp = window.ShinryoApp || {};
           border-bottom: 1px solid #eee;
           box-sizing: border-box;
           position: relative;
+      }
+      /* --- 診療分野（内科系など）のスクロール追従設定 --- */
+      .sticky-bunya {
+          position: sticky;
+          top: 130px;        /* 追従開始後の、ブラウザ画面上端からの固定位置（px） */
+          margin-top: 15px;  /* 初期状態（スクロール前）の、セル上端からの余白（px） */
+          z-index: 1;
       }
     `;
     const styleElement = document.createElement('style');
@@ -766,6 +773,9 @@ window.ShinryoApp = window.ShinryoApp || {};
             baseRec._facilities = new Set(); // 施設名を保持するSet
             if (rec['施設名']?.value) baseRec._facilities.add(rec['施設名'].value);
             
+            // ★追加: 最終更新日時の初期化
+            baseRec._latestUpdatedTime = rec['更新日時']?.value || rec['$updatedTime']?.value || '';
+
             // スケジュール詳細情報の初期化
             baseRec._scheduleInfo = {};
             scheduleFields.forEach(f => {
@@ -787,6 +797,12 @@ window.ShinryoApp = window.ShinryoApp || {};
         } else {
             const baseRec = map.get(key);
             baseRec._mergedIds.push(rec.$id.value);
+
+            // ★追加: 最終更新日時のマージ (最新のものを採用)
+            const curUpdated = rec['更新日時']?.value || rec['$updatedTime']?.value || '';
+            if (curUpdated && (!baseRec._latestUpdatedTime || curUpdated > baseRec._latestUpdatedTime)) {
+                baseRec._latestUpdatedTime = curUpdated;
+            }
 
             // 診療選択のマージ
             if (rec['診療選択']?.value) baseRec._selections.add(rec['診療選択'].value);
@@ -953,6 +969,22 @@ window.ShinryoApp = window.ShinryoApp || {};
 
   function renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings, sourceRecords) {
     container.innerHTML = '';
+
+    // ★追加: 最終更新日フォーマットヘルパー (日付のみ YYYY/MM/DD)
+    const formatUpdatedDate = (isoString) => {
+        if (!isoString) return '-';
+        try {
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return '-';
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}/${m}/${day}`;
+        } catch (e) {
+            return '-';
+        }
+    };
+
     records.sort((a, b) => {
         const oa = parseInt(a['表示順']?.value || 9999, 10);
         const ob = parseInt(b['表示順']?.value || 9999, 10);
@@ -974,12 +1006,13 @@ window.ShinryoApp = window.ShinryoApp || {};
     
     const columns = [
       { header: '診療分野', field: '診療分野', width: '8%', merge: true, cls: 'large-font-cell align-top', tooltip: '診療分野です' },
-      { header: '診療科', field: '診療科', width: '10%', merge: true, cls: 'large-font-cell', tooltip: '診療分野に属する個別の診療科です' },
+      { header: '診療科', field: '診療科', width: '12%', merge: true, cls: 'large-font-cell', tooltip: '診療分野に属する個別の診療科です' },
       { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: '診療科全体の予約を受け付け可否を設定します。例えば一時的に予約受付を停止する場合に使います。' },
-      { header: '予約受付期間', type: 'term_group', width: '10%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療受け付ける期間の設定になります。病院全体の期間とは異なる期間を設定する場合に指定します' },
-      { header: '診療予定連動', field: '診療科', type: 'schedule_link_toggle', width: '8%', merge: true, cls: 'large-font-cell', tooltip: 'OffにするとWebフォームで担当医師選択が非表示になり、希望日指定時に医師の診療予定に関係なく指定可能になります。' },
-      { header: '診療予定表', type: 'calendar_icon', width: '5%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
-      { header: '医師', field: '医師名', width: '10%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' }
+      { header: '予約受付期間', type: 'term_group', width: '12%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療受け付ける期間の設定になります。病院全体の期間とは異なる期間を設定する場合に指定します' },
+      { header: '診療予定連動', field: '診療科', type: 'schedule_link_toggle', width: '8%', merge: true, cls: 'large-font-cell', tooltip: 'OffにするとWebフォーム上では患者は担当医師を選択できません。また医師の診療予定外の希望日時でも受け付けるため、ミスマッチになりやすく、スタッフから患者への架電の頻度が高まります。' },
+      { header: '診療予定表', type: 'calendar_icon', width: '8%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
+      { header: '医師', field: '医師名', width: '24%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' },
+      { header: '更新日', type: 'updated_date', width: '12%', merge: true, mergeKey: '診療科', cls: 'updated-date-cell align-top', tooltip: '医師の診療予定レコードの最終更新日です（同一医師の複数レコードがある場合は最新の更新日を表示します）' }
     ];
 
     // ★追加: colgroupによる列幅制御
@@ -996,6 +1029,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     columns.forEach(col => {
         if (col.skipHeader) return; // ★追加: ヘッダー生成スキップ
         const th = document.createElement('th');
+        th.style.whiteSpace = 'nowrap';
         
         const headerContent = document.createElement('div');
         headerContent.style.display = 'flex';
@@ -1008,16 +1042,11 @@ window.ShinryoApp = window.ShinryoApp || {};
         headerContent.appendChild(headerText);
 
         if (col.tooltip) {
-            const iconSpan = document.createElement('span');
-            iconSpan.className = 'header-tooltip-icon';
-            iconSpan.textContent = '💡';
-            headerContent.appendChild(iconSpan);
-
-            // ★変更: グローバルツールチップ関数を呼び出すように修正
-            iconSpan.addEventListener('mouseover', (e) => {
+            th.style.cursor = 'help';
+            th.addEventListener('mouseover', (e) => {
                 window.ShinryoApp.Viewer.showTooltip(e, col.tooltip);
             });
-            iconSpan.addEventListener('mouseout', () => {
+            th.addEventListener('mouseout', () => {
                 window.ShinryoApp.Viewer.hideTooltip();
             });
         }
@@ -1132,6 +1161,10 @@ window.ShinryoApp = window.ShinryoApp || {};
         const deptStatus = descriptions['__status__' + currentDept];
         const isDeptStopped = deptStatus === '停止';
 
+        // ★追加: 診療予定連動がOffかどうか
+        const scheduleLinkStatus = descriptions['__schedule_link__' + currentDept] || 'On';
+        const isScheduleLinkOff = scheduleLinkStatus === 'Off';
+
         const currentField = rec['診療分野']?.value;
         const prevField = (idx > 0) ? records[idx-1]['診療分野']?.value : null;
         if (idx === 0 || currentField !== prevField) row.classList.add('field-group-start');
@@ -1173,6 +1206,11 @@ window.ShinryoApp = window.ShinryoApp || {};
             } else if (isSuspended) {
                 // 個別停止: 診療分野、診療科(toggle含む)、予定表は除外
                 if (col.field !== '診療分野' && col.field !== '診療科' && col.type !== 'calendar_icon') {
+                    cell.classList.add('gray-out-cell');
+                }
+            } else if (isScheduleLinkOff) {
+                // 診療予定連動がOffの場合: 診療予定表、医師、更新日 をグレーアウト
+                if (col.type === 'calendar_icon' || col.field === '医師名' || col.type === 'updated_date') {
                     cell.classList.add('gray-out-cell');
                 }
             }
@@ -1304,7 +1342,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 iconSpan.textContent = 'calendar_month';
                 iconSpan.style.cursor = 'pointer';
                 iconSpan.style.fontSize = '45px';
-                iconSpan.style.color = '#007bff';
+                iconSpan.style.color = (isDeptStopped || isScheduleLinkOff) ? '#ffffff' : '#007bff';
                 iconSpan.title = 'カレンダーを表示';
                 iconSpan.onclick = (e) => {
                     e.stopPropagation();
@@ -1382,8 +1420,8 @@ window.ShinryoApp = window.ShinryoApp || {};
                 // ★修正: 斜線背景クラスをTDにのみ適用
                 cell.classList.add('doctor-cell-filled');
 
-                // ★追加: 診療科停止時はセルの背景色を上書き
-                if (isDeptStopped) {
+                // ★追加: 診療科停止または予定連動Off時はセルの背景色を上書き
+                if (isDeptStopped || isScheduleLinkOff) {
                     cell.style.backgroundColor = '#888888';
                 }
 
@@ -1392,12 +1430,13 @@ window.ShinryoApp = window.ShinryoApp || {};
                 for (let i = 0; i < rowSpan; i++) {
                     const targetRec = records[idx + i];
                     const doctorName = targetRec['医師名']?.value || '';
+                    const displayName = doctorName || '＊';
                     
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'doctor-name-wrapper';
                     
-                    // ★追加: 診療科停止時はラッパーもグレーアウト
-                    if (isDeptStopped) {
+                    // ★追加: 診療科停止または予定連動Off時はラッパーもグレーアウト
+                    if (isDeptStopped || isScheduleLinkOff) {
                         containerDiv.classList.add('gray-out-cell');
                         containerDiv.style.backgroundColor = '#888888';
                         containerDiv.style.color = '#fff';
@@ -1419,7 +1458,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                     }
 
                     const textSpan = document.createElement('span');
-                    textSpan.textContent = doctorName;
+                    textSpan.textContent = displayName;
                     textSpan.style.flex = '1'; // 名前を中央に配置するために伸縮させる
                     textSpan.style.textAlign = 'center';
                     containerDiv.appendChild(textSpan);
@@ -1478,9 +1517,57 @@ window.ShinryoApp = window.ShinryoApp || {};
                     // containerDiv.onmouseleave = hideTooltip;
                     containerDiv.style.cursor = 'pointer'; // クリック可能であることを示す
                 }
+            } else if (col.type === 'updated_date') {
+                // ★修正: 斜線背景クラスをTDにのみ適用
+                cell.classList.add('doctor-cell-filled');
+
+                // ★追加: 診療科停止または予定連動Off時はセルの背景色を上書き
+                if (isDeptStopped || isScheduleLinkOff) {
+                    cell.style.backgroundColor = '#888888';
+                }
+
+                // ★追加: 更新日を表示（医師カラムと同期マージ）
+                const rowSpan = rec[`_rowspan_updated_date`] || 1;
+                for (let i = 0; i < rowSpan; i++) {
+                    const targetRec = records[idx + i];
+                    
+                    const containerDiv = document.createElement('div');
+                    containerDiv.className = 'updated-date-wrapper';
+                    
+                    // ★追加: 診療科停止または予定連動Off時はラッパーもグレーアウト
+                    if (isDeptStopped || isScheduleLinkOff) {
+                        containerDiv.classList.add('gray-out-cell');
+                        containerDiv.style.backgroundColor = '#888888';
+                        containerDiv.style.color = '#fff';
+                    }
+
+                    // ★追加: 1人の場合は高さを100%、複数人の場合はrowSpan分で等分する
+                    if (rowSpan === 1) {
+                        containerDiv.style.height = '100%';
+                        containerDiv.style.borderBottom = 'none';
+                    } else {
+                        containerDiv.style.height = `calc(100% / ${rowSpan})`;
+                    }
+
+                    const dateSpan = document.createElement('span');
+                    dateSpan.textContent = formatUpdatedDate(targetRec._latestUpdatedTime);
+                    dateSpan.style.flex = '1';
+                    dateSpan.style.textAlign = 'center';
+                    containerDiv.appendChild(dateSpan);
+
+                    cell.appendChild(containerDiv);
+                }
             } else {
                 if (col.field) {
-                    cell.textContent = rec[col.field]?.value || '';
+                    if (col.field === '診療分野') {
+                        const val = rec[col.field]?.value || '';
+                        const stickyDiv = document.createElement('div');
+                        stickyDiv.className = 'sticky-bunya';
+                        stickyDiv.textContent = val;
+                        cell.appendChild(stickyDiv);
+                    } else {
+                        cell.textContent = rec[col.field]?.value || '';
+                    }
                 }
             }
         });

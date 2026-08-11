@@ -11,17 +11,14 @@
     const style = document.createElement('style');
     style.id = 'custom-tooltip-style';
     style.textContent = `
-      .custom-tooltip-icon {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        margin-left: 8px;
+      .custom-tooltip-target {
+        position: relative !important;
+      }
+      span.custom-tooltip-target, div.custom-tooltip-target {
         cursor: help;
-        vertical-align: middle;
-        font-size: 20px; /* アイコンサイズ調整 */
       }
       /* ツールチップ吹き出し本体 */
-      .custom-tooltip-icon::after {
+      .custom-tooltip-target::after {
         content: attr(data-tooltip);
         position: absolute;
         bottom: 100%;
@@ -47,7 +44,7 @@
         text-align: left;
       }
       /* ツールチップの三角形（下向き矢印） */
-      .custom-tooltip-icon::before {
+      .custom-tooltip-target::before {
         content: '';
         position: absolute;
         bottom: 100%;
@@ -64,69 +61,48 @@
         z-index: 20000;
       }
       /* マウスオーバーで表示 */
-      .custom-tooltip-icon:hover::after,
-      .custom-tooltip-icon:hover::before {
+      .custom-tooltip-target:hover::after,
+      .custom-tooltip-target:hover::before {
         opacity: 1;
         visibility: visible;
-      }
-      .custom-tooltip-icon:hover {
-        opacity: 0.8;
       }
     `;
     document.head.appendChild(style);
   };
 
-  // アイコン生成関数
-  const createTooltipIcon = (tooltipText) => {
-    const span = document.createElement('span');
-    span.className = 'custom-tooltip-icon';
-    span.setAttribute('data-tooltip', tooltipText);
-    span.textContent = '💡';
-    return span;
-  };
-
   // ★ ツールチップを表示するターゲット要素と説明文の定義
-  // textの部分はお好きな説明文に変更してください。
   const targets = [
     {
-      match: (el) => el.id === 'rcb-timeout-select',
-      text: '仮予約状態を維持できる期限です',
-      position: 'after' // プルダウンの横に配置
+      match: (el) => el.classList && el.classList.contains('rcb-timeout-label'),
+      text: '仮予約状態を維持できる期限です'
     },
     {
       match: (el) => el.id === 'rcb-reset-btn',
-      text: '患者から予約依頼のチケットが到着した直後の状態に戻します。\n担当者は「未設定」に、管理状態は「未着手」になります。\n予約日時などのデータや経過情報なども消去されます。\nただし、患者に送信済みのメールは取り戻せませんので\nこの操作による影響を十分考慮の上で行ってください。',
-      position: 'inside' // ボタンの内部に配置
+      text: '患者から予約依頼のチケットが到着した直後の状態に戻します。\n担当者は「未設定」に、管理状態は「未着手」になります。\n予約日時などのデータや経過情報なども消去されます。\nただし、患者に送信済みのメールは取り戻せませんので\nこの操作による影響を十分考慮の上で行ってください。'
     },
     {
       match: (el) => el.classList && (el.classList.contains('custom-ticket-text') || el.classList.contains('group-label-gaia')) && el.textContent.includes('チケット情報'),
-      text: 'このチケットの詳細情報を表示します。',
-      position: 'inside' // テキストの内部（右横）に配置
+      text: 'このチケットの詳細情報を表示します。'
     },
     {
       match: (el) => el.classList && el.classList.contains('rcb-section-title') && el.textContent.includes('対応方法の選択'),
-      text: '依頼者への対応方法を、電話とするか、メールとするかを選択します。',
-      position: 'inside' // 見出しのdiv内部に配置
+      text: '依頼者への対応方法を、電話とするか、メールとするかを選択します。'
     },
     {
       match: (el) => el.classList && el.classList.contains('rcb-section-title') && el.textContent.includes('確定予約日時の設定'),
-      text: '依頼者に提示する仮の予約日と予約時刻を設定します。',
-      position: 'inside' // 見出しのdiv内部に配置
+      text: '依頼者に提示する仮の予約日と予約時刻を設定します。'
     },
     {
       match: (el) => el.tagName === 'BUTTON' && el.textContent.includes('再設定する'),
-      text: '対応方法や仮予約日時を再度設定し直します。',
-      position: 'inside' // 幅が広いボタンなどを想定してボタン内部に配置
+      text: '対応方法や仮予約日時を再度設定し直します。'
     },
     {
       match: (el) => el.parentNode && el.parentNode.id === 'staff-display-badge' && el.style.fontSize === '24px',
-      text: '現在この端末を操作している担当者です。\nクリックすると担当者を設定・変更できます。',
-      position: 'inside' // 名前の右横（ボタンの内側）に配置する
+      text: '現在この端末を操作している担当者です。\nクリックすると担当者を設定・変更できます。'
     },
     {
       match: (el) => el.classList && el.classList.contains('rcb-btn-save') && el.textContent.includes('メールを送信する'),
-      text: '仮予約日時など、設定した内容で依頼者にメールを送信します。',
-      position: 'inside' // ボタンの内部に配置
+      text: '仮予約日時など、設定した内容で依頼者にメールを送信します。'
     }
   ];
 
@@ -140,38 +116,8 @@
     for (const target of targets) {
       if (target.match(node)) {
         node.setAttribute('data-tooltip-added', 'true');
-        const icon = createTooltipIcon(target.text);
-
-        if (target.position === 'inside') {
-            node.appendChild(icon);
-            
-            // ツールチップ追加による右側のスペース空きすぎを防ぐため、親要素の右パディングを少し削る
-            const computedStyle = window.getComputedStyle(node);
-            const currentPaddingRight = parseInt(computedStyle.paddingRight, 10);
-            if (!isNaN(currentPaddingRight) && currentPaddingRight > 8) {
-                node.style.setProperty('padding-right', Math.max(4, currentPaddingRight - 8) + 'px', 'important');
-            }
-
-            // 要素が flex でない場合はレイアウトを整える
-            const style = window.getComputedStyle(node);
-            if (style.display !== 'flex' && style.display !== 'inline-flex') {
-                if (style.display === 'inline' || style.display === 'inline-block') {
-                    node.style.display = 'inline-flex';
-                } else {
-                    node.style.display = 'flex';
-                }
-                node.style.alignItems = 'center';
-                if (node.tagName === 'BUTTON') {
-                     node.style.justifyContent = 'center';
-                }
-            }
-        } else if (target.position === 'after') {
-            node.parentNode.insertBefore(icon, node.nextSibling);
-        }
-
-        if (target.onAdd) {
-            target.onAdd(node, icon);
-        }
+        node.setAttribute('data-tooltip', target.text);
+        node.classList.add('custom-tooltip-target');
       }
     }
 
