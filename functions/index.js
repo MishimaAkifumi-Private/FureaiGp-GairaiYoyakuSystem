@@ -146,15 +146,15 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
 
     switch (data.type) {
       case "初診":
-        subject = "【予約確定】診療のご予約（初診）について";
+        subject = "【予約確定】診療のご予約（初診/再診）について";
         htmlBody = `
-          ${headerHtml}
-          <p>診療のご予約（初診）についてお知らせします。<br>
+          ${headerHtml} 
+          <p>診療のご予約（初診/再診）についてお知らせします。<br>
           以下のボタンをクリックして内容をご確認ください。</p>
           ${btnHtml}
           ${footerHtml}
         `;
-        textBody = `${headerText}\n診療のご予約（初診）についてお知らせします。\n以下のURLより内容をご確認ください。\n\n${targetUrl}${footerText}`;
+        textBody = `${headerText}\n診療のご予約（初診/再診）についてお知らせします。\n以下のURLより内容をご確認ください。\n\n${targetUrl}${footerText}`;
         break;
 
       case "変更":

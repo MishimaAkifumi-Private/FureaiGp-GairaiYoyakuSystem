@@ -895,7 +895,7 @@
             <p style="font-size: 12px; color: #777;">※上記ボタンがクリックできない場合は、以下のURLをご確認ください。<br><a href="javascript:void(0);" onclick="${previewWindowScript}" style="color:#005a9e; cursor: pointer;">${targetUrlPreview}</a></p>
           `;
           if (purpose === '初診') {
-              subject = '【予約確定】診療のご予約（初診）について';
+              subject = '【予約確定】診療のご予約（初診/再診）について';
           } else if (purpose === '変更') {
               subject = '【予約変更】診療予約の変更について';
           } else {
@@ -982,7 +982,18 @@
             }
 
             // 送信成功後、ステータス等を更新 (メール送信先を理由欄に記録)
-            const reasonText = optionalMsg ? `送信先: ${email}\n\n【送信メッセージ】\n${optionalMsg}` : `送信先: ${email}`;
+            let defaultMsg = `下記より内容をご確認ください。`;
+            if (purpose === '初診' || purpose === '再診') {
+                defaultMsg = `診療のご予約（初診/再診）についてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
+            } else if (purpose === '変更') {
+                defaultMsg = `診療のご予約（変更）につきましてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
+            }
+
+            let reasonText = `送信先: ${email}`;
+            if (optionalMsg && optionalMsg.trim() !== defaultMsg.trim()) {
+                reasonText += `\n【カスタムメッセージ】\n${optionalMsg}`;
+            }
+            
             const success = await updateRecord(recordId, updatePayload, [], false, false, reasonText);
 
             if (success) {
@@ -2052,22 +2063,29 @@
         // ★追加: 送信用メッセージ入力欄
         let sendMsgInput = null;
         if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && purpose !== '取消') {
+            const msgWrapper = document.createElement('div');
+            msgWrapper.style.cssText = 'width: 100%; border: 1px solid #ccc; border-radius: 4px; overflow: hidden;';
+
+            const msgHeader = document.createElement('div');
+            msgHeader.style.cssText = 'background-color: #123049; color: white; padding: 6px; font-size: 13px; font-weight: bold; text-align: center; letter-spacing: 1px;';
+            msgHeader.textContent = 'メール本文メッセージ挿入内容';
+
             sendMsgInput = document.createElement('textarea');
             sendMsgInput.className = 'rcb-modal-textarea';
-            sendMsgInput.style.marginTop = '0';
-            sendMsgInput.style.marginBottom = '0px';
-            sendMsgInput.style.width = '100%';
-            sendMsgInput.style.height = '80px';
+            sendMsgInput.style.cssText = 'width: 100%; height: 80px; margin: 0; padding: 10px; border: none; border-radius: 0; resize: vertical; box-sizing: border-box; outline: none; box-shadow: none; font-size: 14px;';
             
             if (purpose === '初診' || purpose === '再診') {
-                sendMsgInput.value = `診療のご予約（${purpose}）についてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
+                sendMsgInput.value = `診療のご予約（初診/再診）についてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
             } else if (purpose === '変更') {
                 sendMsgInput.value = `診療のご予約（変更）につきましてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
             } else {
                 sendMsgInput.value = `下記より内容をご確認ください。`;
             }
             sendMsgInput.placeholder = 'メッセージを入力してください';
-            actionContainer.appendChild(sendMsgInput);
+            
+            msgWrapper.appendChild(msgHeader);
+            msgWrapper.appendChild(sendMsgInput);
+            actionContainer.appendChild(msgWrapper);
         }
 
         // メール送信ボタン

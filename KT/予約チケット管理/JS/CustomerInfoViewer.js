@@ -387,11 +387,14 @@
 
             // 対応方法判定（絵文字のみ表示）
             const rawMethod = r['対応方法']?.value || '';
+            const rawMethodLower = rawMethod.toLowerCase();
             let methodEmoji = '-';
-            if (rawMethod.includes('電話') || status === '電話合意済' || status === '要電話対応') {
-              methodEmoji = '<span title="電話対応" style="font-size:13px;">📞</span>';
-            } else if (rawMethod.includes('メール') || (status && status.includes('メール'))) {
-              methodEmoji = '<span title="メール対応" style="font-size:13px;">✉️</span>';
+            if (rawMethodLower.includes('電話') || rawMethodLower.includes('phone') || status === '電話合意済' || status === '要電話対応') {
+              methodEmoji = '<span title="電話対応" style="font-size:14px; color:#1e293b;">&#x1F4DE;&#xFE0E;</span>';
+            } else if (rawMethodLower.includes('メール') || rawMethodLower.includes('email') || (status && status.includes('メール'))) {
+              methodEmoji = '<span title="メール対応" style="font-size:14px;">✉️</span>';
+            } else if (rawMethodLower.includes('staff') || rawMethodLower.includes('スタッフ')) {
+              methodEmoji = '<span title="スタッフ対応" style="font-size:14px;">🧑‍⚕️</span>';
             } else if (rawMethod) {
               methodEmoji = escapeHtml(rawMethod);
             }
@@ -574,9 +577,9 @@
               </tr>
               <tr>
                 <th>電話番号1</th>
-                <td>${valOrDash(getV('電話1'), v => `<a href="tel:${v}" class="ci-link">📞 ${v}</a>`)}</td>
+                <td>${valOrDash(getV('電話1'), v => `<a href="tel:${v}" class="ci-link"><span style="color:#1e293b;">&#x1F4DE;&#xFE0E;</span> ${v}</a>`)}</td>
                 <th>電話番号2</th>
-                <td>${valOrDash(getV('電話2'), v => `<a href="tel:${v}" class="ci-link">📞 ${v}</a>`)}</td>
+                <td>${valOrDash(getV('電話2'), v => `<a href="tel:${v}" class="ci-link"><span style="color:#1e293b;">&#x1F4DE;&#xFE0E;</span> ${v}</a>`)}</td>
               </tr>
               <tr>
                 <th>連絡希望時間帯</th>

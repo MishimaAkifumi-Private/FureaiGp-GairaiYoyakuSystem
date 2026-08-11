@@ -66,6 +66,21 @@
         opacity: 1;
         visibility: visible;
       }
+      /* 下側に表示するツールチップ */
+      .custom-tooltip-target.custom-tooltip-bottom::after {
+        bottom: auto;
+        top: 100%;
+        margin-bottom: 0;
+        margin-top: 8px;
+      }
+      .custom-tooltip-target.custom-tooltip-bottom::before {
+        bottom: auto;
+        top: 100%;
+        margin-bottom: 0;
+        margin-top: 0px;
+        border-width: 0 8px 8px;
+        border-color: transparent transparent rgba(51, 51, 51, 0.95) transparent;
+      }
     `;
     document.head.appendChild(style);
   };
@@ -78,6 +93,7 @@
     },
     {
       match: (el) => el.id === 'rcb-reset-btn',
+      position: 'bottom',
       text: '患者から予約依頼のチケットが到着した直後の状態に戻します。\n担当者は「未設定」に、管理状態は「未着手」になります。\n予約日時などのデータや経過情報なども消去されます。\nただし、患者に送信済みのメールは取り戻せませんので\nこの操作による影響を十分考慮の上で行ってください。'
     },
     {
@@ -118,6 +134,9 @@
         node.setAttribute('data-tooltip-added', 'true');
         node.setAttribute('data-tooltip', target.text);
         node.classList.add('custom-tooltip-target');
+        if (target.position === 'bottom') {
+          node.classList.add('custom-tooltip-bottom');
+        }
       }
     }
 
