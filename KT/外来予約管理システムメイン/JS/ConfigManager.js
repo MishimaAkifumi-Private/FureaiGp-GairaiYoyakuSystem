@@ -47,6 +47,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     hasUnsavedChanges: hasUnsavedChanges,
     deployToProduction: deployToProduction, // ★追加
     revertFromProduction: revertFromProduction, // ★追加: 本番から戻す
+    syncAppRecordsToPreview: syncAppRecordsToPreview, // ★追加: レコード変更のプレビュー同期
     updateStatusImmediately: updateStatusImmediately,
     updateStatusBatch: updateStatusBatch,
     updateDepartmentStatus: updateDepartmentStatus,
@@ -267,11 +268,15 @@ window.ShinryoApp = window.ShinryoApp || {};
         });
         console.groupEnd();
 
+        // ★追加: 本番環境(設定情報)のレコードも復元して比較用に返却する
+        const productionRecords = (prodData.records || []).map(inflateRecord);
+
         console.log('ConfigManager: Published data fetched.', data);
 
         // ★修正: 取得成功時にデータを返却する
         return { 
             records: records, 
+            productionRecords: productionRecords, // ★追加: 本番環境データ
             descriptions: publishedDescriptions, 
             departmentSettings: publishedDepartmentSettings,
             commonSettings: publishedCommonSettings,
@@ -660,6 +665,86 @@ window.ShinryoApp = window.ShinryoApp || {};
       throw e;
     }
   }
+  /**
+   * ★追加: App156の現在の全レコードを取得し、設定情報2 (プレビューJSON) と比較・保存する
+   * 個別レコード編集時（医師の予定変更等）にプレビューJSONを自動更新し、プレビューボタンを点灯させる
+   */
+  async function syncAppRecordsToPreview() {
+    return enqueueUpdate(async () => {
+      console.log('ConfigManager: Checking for sync between App156 records and Preview JSON...');
+      const myAppId = kintone.app.getId();
+      
+      let currentRecords = [];
+      let offset = 0;
+      while (true) {
+        const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', { 
+          app: myAppId, 
+          query: `limit 500 offset ${offset}` 
+        });
+        currentRecords = currentRecords.concat(resp.records);
+        if (resp.records.length < 500) break;
+        offset += 500;
+      }
+
+      currentRecords.sort((a, b) => {
+        const oa = parseInt(a['表示順']?.value || 9999, 10);
+        const ob = parseInt(b['表示順']?.value || 9999, 10);
+        if (oa !== ob) return oa - ob;
+        return parseInt(a.$id.value, 10) - parseInt(b.$id.value, 10);
+      });
+
+      const currentPublished = await fetchPublishedData();
+      const descriptions = currentPublished ? currentPublished.descriptions : {};
+      const deptSettings = currentPublished ? currentPublished.departmentSettings : {};
+      const commonSettings = currentPublished ? currentPublished.commonSettings : {};
+      const labelSettings = currentPublished ? currentPublished.labelSettings : {};
+      const labelVisibility = currentPublished ? currentPublished.labelVisibility : {};
+
+      const compApp = currentRecords.map(compressRecord);
+      const compDraft = (currentPublished && currentPublished.records) ? currentPublished.records.map(compressRecord) : [];
+
+      const normApp = JSON.stringify(canonicalize(compApp));
+      const normDraft = JSON.stringify(canonicalize(compDraft));
+
+      if (normApp !== normDraft) {
+        console.log('ConfigManager: Records in App156 differ from Preview JSON. Saving updated 設定情報2...');
+        await saveConfig(currentRecords, descriptions, deptSettings, commonSettings, labelSettings, labelVisibility);
+        console.log('ConfigManager: 設定情報2 successfully updated.');
+        await fetchPublishedData();
+        return true;
+      } else {
+        console.log('ConfigManager: App156 records match Preview JSON.');
+        return false;
+      }
+    });
+  }
+
+  const normalizeStr = (val) => {
+      if (val === null || val === undefined) return '';
+      return String(val)
+          .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+          .replace(/[\s\u3000]+/g, ' ')
+          .trim();
+  };
+
+  const isRecordDifferent = (rec1, rec2) => {
+      if (!rec1 || !rec2) return true;
+      const days = ['月', '火', '水', '木', '金', '土'];
+      const weeks = ['1', '2', '3', '4', '5'];
+      for (const w of weeks) {
+          for (const d of days) {
+              const key = `${d}${w}`;
+              const v1 = (rec1[key]?.value || []).slice().sort();
+              const v2 = (rec2[key]?.value || []).slice().sort();
+              if (JSON.stringify(v1) !== JSON.stringify(v2)) return true;
+          }
+      }
+      const fields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '留意案内', '着任日', '離任日', '担当者'];
+      for (const f of fields) {
+          if (normalizeStr(rec1[f]?.value) !== normalizeStr(rec2[f]?.value)) return true;
+      }
+      return false;
+  };
 
   // App156のレコードを同期する内部関数
   async function syncAppRecords(targetRecords) {
@@ -685,11 +770,10 @@ window.ShinryoApp = window.ShinryoApp || {};
       // 削除対象 (現在あるが、ターゲットにない)
       const deleteIds = currentRecords.filter(r => !targetMap.has(String(r.$id.value))).map(r => r.$id.value);
       if (deleteIds.length > 0) {
-          // 100件ずつ
           for (let i = 0; i < deleteIds.length; i += 100) {
               requests.push({
                   method: 'DELETE',
-                  api: recordsApiUrl, // ★修正: 正しいURLを使用
+                  api: recordsApiUrl,
                   payload: { app: appId, ids: deleteIds.slice(i, i + 100) }
               });
           }
@@ -707,7 +791,7 @@ window.ShinryoApp = window.ShinryoApp || {};
           const recordPayload = {};
           Object.keys(tRec).forEach(key => {
               if (['$id', 'レコード番号', '作成者', '更新者', '作成日時', '更新日時', '$revision'].includes(key)) return;
-              if (key.startsWith('_')) return; // ★追加: _debug_info などの内部プロパティを除外
+              if (key.startsWith('_')) return;
               
               if (tRec[key].type === 'SUBTABLE') {
                   recordPayload[key] = {
@@ -725,7 +809,10 @@ window.ShinryoApp = window.ShinryoApp || {};
           });
 
           if (cRec) {
-              recordsToUpdate.push({ id: tId, record: recordPayload });
+              // ★修正: スケジュールや主要属性に実際に差分があるレコードのみPUT対象にする（不要な全件更新日時書き換えを防止）
+              if (isRecordDifferent(cRec, tRec)) {
+                  recordsToUpdate.push({ id: tId, record: recordPayload });
+              }
           } else {
               recordsToAdd.push(recordPayload);
           }

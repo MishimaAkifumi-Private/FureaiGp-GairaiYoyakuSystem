@@ -142,9 +142,8 @@ window.ShinryoApp = window.ShinryoApp || {};
       .shinryo-config-table td.align-top { vertical-align: top; }
       .gray-out-cell { background-color: #888888; color: #fff; }
       
-      /* --- 差分検知（点滅） --- */
-      .cell-changed { animation: blink-animation 1.5s infinite; }
-      @keyframes blink-animation { 50% { background-color: #ff8a80; } }
+      /* --- 差分検知（薄い赤背景） --- */
+      .cell-changed { background-color: #ffebee !important; color: #c62828 !important; font-weight: bold; }
 
       /* --- トグルスイッチ --- */
       .toggle-switch {
@@ -948,12 +947,19 @@ window.ShinryoApp = window.ShinryoApp || {};
         // ★変更: レコードのマージ処理を実行
         const mergedRecords = mergeSameDoctorRecords(validRecords, commonSettings);
 
-        // ★追加: 比較用（公開済みデータ）も同様にマージしてマップ化
-        const pubAllRecords = publishedData.records || [];
+        // ★修正: 比較用データ（本番環境データ: 設定情報）をマージしてマップ化
+        const pubAllRecords = (publishedData.productionRecords && publishedData.productionRecords.length > 0)
+            ? publishedData.productionRecords
+            : (publishedData.records || []);
         const validPubRecords = pubAllRecords.filter(createFilter(pubAllRecords)); // ★変更: 公開データも同じ条件でフィルタリング
         validPubRecords.sort(sortFunc);
         const mergedPublishedRecords = mergeSameDoctorRecords(validPubRecords, commonSettings);
-        const publishedMap = new Map(mergedPublishedRecords.map(r => [String(r.$id.value), r])); // ★変更: IDを文字列に統一
+        const publishedMap = new Map();
+        mergedPublishedRecords.forEach(r => {
+            if (r.$id?.value) publishedMap.set(String(r.$id.value), r);
+            const doctorKey = `${r['診療科']?.value || ''}_${r['医師名']?.value || ''}`;
+            if (doctorKey) publishedMap.set(doctorKey, r);
+        });
 
         // ★デバッグ: マージ後のレコード数比較
         console.log(`[Viewer Debug] Merged Records Count - Local: ${mergedRecords.length}, Published: ${mergedPublishedRecords.length}`);
@@ -969,6 +975,16 @@ window.ShinryoApp = window.ShinryoApp || {};
 
   function renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings, sourceRecords) {
     container.innerHTML = '';
+
+    // ★追加: IDまたは「診療科_医師名」で本番公開レコードを取得するヘルパー
+    const getPublishedRecord = (rec) => {
+        if (!publishedMap || !rec) return null;
+        const idKey = String(rec.$id?.value || '');
+        if (idKey && publishedMap.has(idKey)) return publishedMap.get(idKey);
+        const doctorKey = `${rec['診療科']?.value || ''}_${rec['医師名']?.value || ''}`;
+        if (doctorKey && publishedMap.has(doctorKey)) return publishedMap.get(doctorKey);
+        return null;
+    };
 
     // ★追加: 最終更新日フォーマットヘルパー (日付のみ YYYY/MM/DD)
     const formatUpdatedDate = (isoString) => {
@@ -1099,7 +1115,7 @@ window.ShinryoApp = window.ShinryoApp || {};
             }
         }
         // 主要フィールド比較
-        const fields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '留意案内'];
+        const fields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '留意案内', '着任日', '離任日', '担当者'];
         for (const f of fields) {
             if (normalize(rec1[f]?.value) !== normalize(rec2[f]?.value)) return true;
         }
@@ -1169,7 +1185,7 @@ window.ShinryoApp = window.ShinryoApp || {};
         const prevField = (idx > 0) ? records[idx-1]['診療分野']?.value : null;
         if (idx === 0 || currentField !== prevField) row.classList.add('field-group-start');
 
-        const pubRec = publishedMap ? publishedMap.get(String(rec.$id.value)) : null;
+        const pubRec = getPublishedRecord(rec);
         const isRecordChanged = hasRecordChange(rec, pubRec); // レコード全体の変更有無
 
         columns.forEach(col => {
@@ -1450,8 +1466,8 @@ window.ShinryoApp = window.ShinryoApp || {};
                         containerDiv.style.height = `calc(100% / ${rowSpan})`;
                     }
 
-                    // ★追加: 個別レコードの変更判定（医師名枠を点滅させる）
-                    const targetPubRec = publishedMap ? publishedMap.get(String(targetRec.$id.value)) : null;
+                    // ★追加: 個別レコードの変更判定（該当医師のラッパーのみ薄い赤背景にする）
+                    const targetPubRec = getPublishedRecord(targetRec);
                     if (hasRecordChange(targetRec, targetPubRec)) {
                         containerDiv.classList.add('cell-changed');
                         hasAnyChanges = true;
@@ -1530,6 +1546,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                 const rowSpan = rec[`_rowspan_updated_date`] || 1;
                 for (let i = 0; i < rowSpan; i++) {
                     const targetRec = records[idx + i];
+                    const targetPubRec = getPublishedRecord(targetRec);
                     
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'updated-date-wrapper';
@@ -1539,6 +1556,9 @@ window.ShinryoApp = window.ShinryoApp || {};
                         containerDiv.classList.add('gray-out-cell');
                         containerDiv.style.backgroundColor = '#888888';
                         containerDiv.style.color = '#fff';
+                    } else if (hasRecordChange(targetRec, targetPubRec)) {
+                        // ★追加: 医師列と合わせて該当レコードの更新日ラッパーのみ薄い赤背景にする
+                        containerDiv.classList.add('cell-changed');
                     }
 
                     // ★追加: 1人の場合は高さを100%、複数人の場合はrowSpan分で等分する

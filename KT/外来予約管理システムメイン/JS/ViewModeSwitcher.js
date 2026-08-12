@@ -656,24 +656,82 @@
                 }
 
 
-                // 更新チェックロジック (ボタン生成後に移動)
+                // ヘッダーボタンの状態更新関数（プレビュー・中止・公開）
+                const refreshHeaderButtons = (hasLocalChanges = false) => {
+                    const previewBtn = document.getElementById('btn-preview-mode');
+                    const revertBtn = document.getElementById('btn-revert-mode');
+                    const publishBtn = document.getElementById('btn-publish-mode');
+                    
+                    if (!previewBtn) return;
+
+                    const openPreview = () => {
+                        const formUrl = localStorage.getItem('shinryo_form_url');
+                        if (formUrl) {
+                            const url = new URL(formUrl);
+                            url.searchParams.set('preview', '1');
+                            window.open(url.toString(), '_blank');
+                        } else {
+                            alert('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
+                        }
+                    };
+
+                    const hasProdDiff = window.ShinryoApp && window.ShinryoApp.ConfigManager && window.ShinryoApp.ConfigManager.hasProductionDiff();
+                    const isDiff = hasLocalChanges || hasProdDiff;
+
+                    if (isDiff) {
+                        previewBtn.textContent = 'プレビュー';
+                        previewBtn.classList.remove('btn-disabled');
+                        previewBtn.style.backgroundColor = '#e74c3c';
+                        previewBtn.style.color = '#fff';
+                        previewBtn.style.animation = 'pulse-animation 2s infinite';
+                        previewBtn.title = 'プレビュー環境に差異があります。クリックしてプレビューを表示します。';
+                        previewBtn.style.cursor = 'pointer';
+                        previewBtn.style.pointerEvents = 'auto';
+                        previewBtn.onclick = openPreview;
+
+                        if (revertBtn) {
+                            revertBtn.classList.remove('btn-disabled');
+                            revertBtn.style.pointerEvents = 'auto';
+                            revertBtn.style.backgroundColor = '#6c757d';
+                        }
+                        if (publishBtn) {
+                            publishBtn.classList.remove('btn-disabled');
+                            publishBtn.style.pointerEvents = 'auto';
+                            publishBtn.style.backgroundColor = '#28a745';
+                        }
+                    } else {
+                        previewBtn.textContent = 'プレビュー';
+                        previewBtn.classList.add('btn-disabled');
+                        previewBtn.style.animation = '';
+                        previewBtn.style.pointerEvents = 'none';
+                        previewBtn.style.backgroundColor = '#ccc';
+
+                        if (revertBtn) {
+                            revertBtn.classList.add('btn-disabled');
+                            revertBtn.style.pointerEvents = 'none';
+                            revertBtn.style.backgroundColor = '#ccc';
+                        }
+                        if (publishBtn) {
+                            publishBtn.classList.add('btn-disabled');
+                            publishBtn.style.pointerEvents = 'none';
+                            publishBtn.style.backgroundColor = '#ccc';
+                        }
+                    }
+                };
+                window.ShinryoApp = window.ShinryoApp || {};
+                window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
+                window.ShinryoApp.Viewer.refreshHeaderButtons = refreshHeaderButtons;
+
+                // 更新チェック・プレビュー同期ロジック
                 if (window.ShinryoApp.ConfigManager) {
                     const checkUpdates = async () => {
                         try {
-                            const records = await fetchAllRecords(kintone.app.getId());
-
-                            // ★追加: 保存前にソートして順序を安定させる (executePublishと同様)
-                            records.sort((a, b) => {
-                                const oa = parseInt(a['表示順']?.value || 9999, 10);
-                                const ob = parseInt(b['表示順']?.value || 9999, 10);
-                                if (oa !== ob) return oa - ob;
-                                return parseInt(a.$id.value, 10) - parseInt(b.$id.value, 10);
-                            });
-
-                            await window.ShinryoApp.ConfigManager.fetchPublishedData();
-
-                            // ★変更: ボタンの有効/無効制御は ShinryoViewer.js 側で行うため、
-                            // ここでの上書き処理は削除しました。
+                            if (window.ShinryoApp.ConfigManager.syncAppRecordsToPreview) {
+                                await window.ShinryoApp.ConfigManager.syncAppRecordsToPreview();
+                            } else {
+                                await window.ShinryoApp.ConfigManager.fetchPublishedData();
+                            }
+                            refreshHeaderButtons();
                         } catch (e) {
                             console.error('Update check failed:', e);
                         }

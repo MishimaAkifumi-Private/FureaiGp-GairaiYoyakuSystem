@@ -725,6 +725,14 @@
                 return fetchAllRecordsCounts();
             }).then(() => { 
                 if (window.ShinryoApp && window.ShinryoApp.ConfigManager) {
+                    if (window.ShinryoApp.ConfigManager.syncAppRecordsToPreview) {
+                        return window.ShinryoApp.ConfigManager.syncAppRecordsToPreview().then(() => {
+                            if (window.ShinryoApp.Viewer && window.ShinryoApp.Viewer.refreshHeaderButtons) {
+                                window.ShinryoApp.Viewer.refreshHeaderButtons();
+                            }
+                            return window.ShinryoApp.ConfigManager.fetchPublishedData().then(data => data.commonSettings || {});
+                        });
+                    }
                     return window.ShinryoApp.ConfigManager.fetchPublishedData().then(data => data.commonSettings || {});
                 }
                 return {};
