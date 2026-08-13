@@ -223,6 +223,7 @@
             box.appendChild(msg); box.appendChild(btnGroup); overlay.appendChild(box); document.body.appendChild(overlay);
         });
     }
+    window.showCustomDialog = showCustomDialog;
 
     kintone.events.on('app.record.index.show', async function (event) {
         isRecordView = false;
@@ -515,7 +516,7 @@
                         url.searchParams.set('preview', '1');
                         window.open(url.toString(), '_blank');
                     } else {
-                        alert('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
+                        showCustomDialog('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
                     }
                 };
                 flowContainer.appendChild(btnPreview);
@@ -624,7 +625,7 @@
                 btnPublicView.onclick = () => {
                     const currentUrl = localStorage.getItem('shinryo_form_url');
                     if (currentUrl) window.open(currentUrl, '_blank');
-                    else alert('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
+                    else showCustomDialog('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
                 };
 
                 div.appendChild(btnPublicView);
@@ -671,7 +672,7 @@
                             url.searchParams.set('preview', '1');
                             window.open(url.toString(), '_blank');
                         } else {
-                            alert('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
+                            showCustomDialog('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
                         }
                     };
 
@@ -924,7 +925,7 @@
                     if (formUrl && formUrl.trim()) {
                         window.open(formUrl.trim(), '_blank');
                     } else {
-                        alert('公開用WebフォームのURLが設定されていません。\n「共通マスタ管理」画面より設定してください。');
+                        showCustomDialog('公開用WebフォームのURLが設定されていません。\n「共通マスタ管理」画面より設定してください。');
                     }
                 }, desc: '患者様向けに公開されている外来Web予約フォームを開きます'
             },
@@ -1100,7 +1101,7 @@
                 document.body.removeChild(overlay);
                 showAdminMenu();
             } else {
-                alert('パスワードが違います。');
+                showCustomDialog('パスワードが違います。');
                 input.value = '';
                 input.focus();
             }

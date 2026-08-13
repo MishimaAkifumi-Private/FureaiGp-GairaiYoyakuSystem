@@ -1768,7 +1768,11 @@ window.ShinryoApp = window.ShinryoApp || {};
               url.searchParams.set('preview', '1');
               window.open(url.toString(), '_blank');
           } else {
-              alert('公開用URLが設定されていません。');
+              if (typeof window.showCustomDialog === 'function') {
+                  window.showCustomDialog('公開用URLが設定されていません。\n「設定 > 各種URL設定」から設定してください。');
+              } else {
+                  alert('公開用URLが設定されていません。');
+              }
           }
       };
 

@@ -532,7 +532,7 @@
               const reason = await showDialog(`チケットを${currentStatus === '強制終了' ? '直前の状態' : '「要電話対応」'}で復活させますか？\n復活する理由を入力してください。`, 'prompt', 'チケット復活', '理由を入力（必須）');
               if (reason === null) return;
               if (reason.trim() === '') {
-                  alert('理由が入力されていないため、復活をキャンセルしました。');
+                  await showDialog('理由が入力されていないため、復活をキャンセルしました。', 'warning');
                   return;
               }
 
@@ -1405,7 +1405,7 @@
             const actionReason = await showDialog(msg + '\n\n取下げの理由を入力してください。', 'prompt', '予約の取下げ', '取下げの理由（必須）', '取下げる', 'キャンセル');
             if (actionReason === null) return;
             if (actionReason.trim() === '') {
-                alert('取下げの理由を入力してください。');
+                await showDialog('取下げの理由を入力してください。', 'error');
                 return;
             }
 
@@ -2895,7 +2895,7 @@
                 const actionReason = await showDialog('このチケットを強制終了します。\n本当によろしいですか？\n強制終了の理由を入力してください。', 'prompt', '強制終了の確認', '強制終了の理由（必須）', '強制終了する', 'キャンセル');
                 if (actionReason === null) return;
                 if (actionReason.trim() === '') {
-                    alert('強制終了の理由を入力してください。');
+                    await showDialog('強制終了の理由を入力してください。', 'error');
                     return;
                 }
     
@@ -2989,11 +2989,11 @@
                         ids: [recordId]
                     });
                     // 削除成功時は一覧画面へリダイレクト
-                    alert('レコードを削除しました。\n一覧画面へ戻ります。');
+                    await showDialog('レコードを削除しました。\n一覧画面へ戻ります。', 'success');
                     window.location.href = 'https://w60013hke2ct.cybozu.com/k/guest/11/142/';
                 } catch (e) {
                     console.error('Delete error:', e);
-                    alert('削除に失敗しました。権限がない可能性があります。');
+                    await showDialog('削除に失敗しました。権限がない可能性があります。', 'error');
                 }
             };
             btnContainer.appendChild(deleteBtn);
@@ -3367,7 +3367,7 @@
                   location.reload();
               } catch (e) {
                   console.error('Failed to post message:', e);
-                  alert('業務連絡の書き込みに失敗しました。');
+                  await showDialog('業務連絡の書き込みに失敗しました。', 'error');
                   submitBtn.disabled = false;
                   submitBtn.textContent = '書き込む';
               }

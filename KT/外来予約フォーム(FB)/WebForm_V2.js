@@ -542,7 +542,6 @@
           }
           config.state.companyHolidays = holidays;
       }
-
       async function fetchPublicHolidays() {
           const response = await fetch(config.PUBLIC_HOLIDAY_API_URL);
           if (!response.ok) console.error(`[WARN] 祝日APIの取得に失敗しました: ${response.status}`);
@@ -562,12 +561,8 @@
         }
       }
       
-      // ★追加: FormBridgeのDOM要素にも値を反映させる (バリデーション通過のため)
       function syncToDom(fieldCode, value) {
-          // 1. IDで検索 (HTML例: id="用件")
           let input = document.getElementById(fieldCode);
-          
-          // 2. data-field-code属性で検索 (フォールバック)
           if (!input) {
               const container = document.querySelector(`[data-field-code="${fieldCode}"]`);
               if (container) {
@@ -576,7 +571,6 @@
           }
 
           if (input) {
-              // React/Next.js等が管理するinputの値を外部から変更するための処理
               const proto = Object.getPrototypeOf(input);
               const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
               if (descriptor && descriptor.set) {
@@ -604,21 +598,6 @@
           return true;
       }
 
-      function scrollToAndHighlight(element, message) {
-          if (!element) return;
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          if (typeof element.focus === 'function' && element.tagName !== 'DIV') {
-              setTimeout(() => {
-                  try { element.focus(); } catch (e) {}
-              }, 300);
-          }
-          if (message) {
-              setTimeout(() => {
-                  alert(message);
-              }, 100);
-          }
-      }
-
       let isCheckingDuplicate = false;
 
       function getFieldValue(record, possibleKeys) {
@@ -638,7 +617,6 @@
       let isChartNoDuplicate = false;
       let isCheckingAuth = false;
 
-      // ① カルテNo重複チェック (ボタンクリック時に発火)
       async function checkChartNoDuplicate() {
           const chartNoInput = document.getElementById(config.uiIds.CHART_NO);
           const resultArea = document.getElementById('gemini-section-duplicate-check-result');
@@ -647,7 +625,7 @@
 
           const chartNo = chartNoInput.value.trim();
           if (chartNo.length !== 8 || !/^[a-zA-Z0-9]{8}$/.test(chartNo)) {
-              alert('カルテNoを正しく8桁で入力してください。');
+              await scrollToAndHighlight(chartNoInput, '「カルテNo」は半角英数字8桁で入力してください。');
               return;
           }
 
@@ -822,7 +800,6 @@
               fieldsWrapper.style.display = 'block';
               document.body.classList.add('gemini-fields-active');
               
-              // 照合OK時に選択中の「用件」に応じて内部エリアをトグル・生成表示する
               const currentReq = config.state.requirement;
               if (currentReq === '初診') {
                   toggleSection(config.uiIds.REFERRAL_AREA, true);
@@ -854,7 +831,8 @@
               const lastNameEl = document.getElementById(config.uiIds.LAST_NAME_KANJI);
               if (lastNameEl) {
                   setTimeout(() => {
-                      scrollToAndHighlight(lastNameEl);
+                      lastNameEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      try { lastNameEl.focus(); } catch (e) {}
                   }, 100);
               }
           } catch (e) {
@@ -867,262 +845,405 @@
           }
       }
 
+      function showCustomAlert(messages) {
+          return new Promise((resolve) => {
+              let overlay = document.getElementById('gemini-custom-alert-overlay');
+              if (overlay) overlay.remove();
+
+              overlay = document.createElement('div');
+              overlay.id = 'gemini-custom-alert-overlay';
+              overlay.style.cssText = `
+                  position: fixed;
+                  top: 0;
+                  left: 0;
+                  width: 100vw;
+                  height: 100vh;
+                  background: rgba(15, 23, 42, 0.55);
+                  backdrop-filter: blur(4px);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  z-index: 999999;
+                  animation: gemini-fade-in 0.2s ease-out;
+              `;
+
+              const listItems = messages.map(msg => `<li style="margin-bottom: 6px; line-height: 1.5; color: #334155; font-size: 14px; font-weight: 500;">${msg}</li>`).join('');
+
+              overlay.innerHTML = `
+                  <style>
+                      @keyframes gemini-fade-in { from { opacity: 0; } to { opacity: 1; } }
+                      @keyframes gemini-pop-up { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+                  </style>
+                  <div style="background: #ffffff; width: 90%; max-width: 440px; border-radius: 16px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2); padding: 28px 24px 24px; text-align: center; animation: gemini-pop-up 0.25s cubic-bezier(0.16, 1, 0.3, 1); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Meiryo', sans-serif;">
+                      <div style="width: 48px; height: 48px; background-color: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                          <svg style="width: 26px; height: 26px; color: #ef4444;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                          </svg>
+                      </div>
+                      <h3 style="margin: 0 0 8px; color: #0f172a; font-size: 18px; font-weight: 700;">入力内容のご確認</h3>
+                      <p style="margin: 0 0 16px; color: #475569; font-size: 13.5px; font-weight: 600;">以下の必須項目について未入力・未選択があります：</p>
+                      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; max-height: 180px; overflow-y: auto; text-align: left; margin-bottom: 20px;">
+                          <ul style="margin: 0; padding-left: 18px; list-style-type: disc;">
+                              ${listItems}
+                          </ul>
+                      </div>
+                      <button id="gemini-custom-alert-ok-btn" style="width: 100%; height: 44px; background: #ef4444; color: #ffffff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.15s; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);">
+                          確認・修正する
+                      </button>
+                  </div>
+              `;
+
+              document.body.appendChild(overlay);
+
+              const okBtn = document.getElementById('gemini-custom-alert-ok-btn');
+              okBtn.addEventListener('click', () => {
+                  overlay.remove();
+                  resolve();
+              });
+
+              setTimeout(() => { okBtn.focus(); }, 100);
+          });
+      }
+
+      function injectHighlightStyles() {
+          let styleEl = document.getElementById('gemini-highlight-style');
+          if (!styleEl) {
+              styleEl = document.createElement('style');
+              styleEl.id = 'gemini-highlight-style';
+              document.head.appendChild(styleEl);
+          }
+          styleEl.innerHTML = `
+            @keyframes gemini-red-border-flash {
+              0% {
+                outline: 2px solid #ef4444;
+                outline-offset: -1px;
+                box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+                background-color: #fef2f2;
+              }
+              50% {
+                outline: 2px solid transparent;
+                outline-offset: -1px;
+                box-shadow: none;
+                background-color: inherit;
+              }
+              100% {
+                outline: 2px solid #ef4444;
+                outline-offset: -1px;
+                box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+                background-color: #fef2f2;
+              }
+            }
+            .gemini-field-flash {
+              animation: gemini-red-border-flash 0.8s infinite ease-in-out !important;
+              border-radius: 6px !important;
+            }
+          `;
+      }
+
+      function clearAllHighlights() {
+          document.querySelectorAll('.gemini-error-badge').forEach(el => el.remove());
+          document.querySelectorAll('.gemini-field-flash').forEach(el => el.classList.remove('gemini-field-flash'));
+          document.querySelectorAll('.gemini-field-highlight').forEach(el => el.classList.remove('gemini-field-highlight'));
+      }
+
+      function highlightInputElements(targetEl) {
+          if (!targetEl) return;
+          if (targetEl.offsetWidth === 0 && targetEl.offsetHeight === 0) return;
+          try { if (window.getComputedStyle(targetEl).display === 'none') return; } catch (e) {}
+
+          injectHighlightStyles();
+
+          const targetElements = new Set();
+          
+          const inputs = targetEl.querySelectorAll('input:not([type="hidden"]), select, textarea');
+          if (inputs.length > 0) {
+              inputs.forEach(input => {
+                  if (input.type === 'radio' || input.type === 'checkbox') {
+                      // ラジオボタンやチェックボックスの場合は、親のグループコンテナを赤枠の対象にする
+                      const wrapper = input.closest('.g-radio-group, .g-privacy-policy, .g-checkbox-label, .g-form-group');
+                      if (wrapper) targetElements.add(wrapper);
+                  } else {
+                      // 通常のテキスト入力やセレクトボックスの場合は、入力欄そのものを赤枠の対象にする
+                      targetElements.add(input);
+                  }
+              });
+          } else {
+              targetElements.add(targetEl);
+          }
+
+          // 抽出した各要素に対して点滅クラスを付与
+          targetElements.forEach(el => el.classList.add('gemini-field-flash'));
+
+          // 入力または選択操作が発生したら点滅を解除
+          const removeFlashGroup = () => {
+              targetElements.forEach(el => el.classList.remove('gemini-field-flash'));
+              const allInputs = targetEl.querySelectorAll('input, select, textarea');
+              allInputs.forEach(input => {
+                  input.removeEventListener('input', removeFlashGroup);
+                  input.removeEventListener('change', removeFlashGroup);
+              });
+              targetEl.removeEventListener('click', removeFlashGroup);
+          };
+
+          const allInputs = targetEl.querySelectorAll('input, select, textarea');
+          if (allInputs.length > 0) {
+              allInputs.forEach(input => {
+                  input.addEventListener('input', removeFlashGroup);
+                  input.addEventListener('change', removeFlashGroup);
+              });
+          } else {
+              targetEl.addEventListener('click', removeFlashGroup, { once: true });
+          }
+      }
+
+      async function highlightAllAndAlert(errors) {
+          if (!errors || errors.length === 0) return;
+          clearAllHighlights();
+          errors.forEach(({ element }) => highlightInputElements(element));
+          const firstErr = errors[0];
+          if (firstErr && firstErr.element) firstErr.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await showCustomAlert(errors.map(err => err.message));
+      }
+
+      async function scrollToAndHighlight(element, message) {
+          if (!element) return;
+          await highlightAllAndAlert([{ element, message }]);
+      }
+
       function validateStep1() {
+          clearAllHighlights();
+          const errors = [];
           const req = config.state.requirement;
 
-          // 1. ご用件
           if (!req) {
               const reqArea = document.getElementById(config.uiIds.REQUIREMENT_AREA);
-              scrollToAndHighlight(reqArea, '「ご用件」を選択してください。');
-              return false;
+              errors.push({ element: reqArea, message: '「ご用件」を選択してください。' });
           }
 
-          // 2. カルテNo
+          const chartNoSection = document.getElementById('gemini-section-chart-no');
           const chartNo = document.getElementById(config.uiIds.CHART_NO);
-          if (chartNo) {
+          if (chartNo && chartNoSection && window.getComputedStyle(chartNoSection).display !== 'none') {
               if (!chartNo.value.trim()) {
-                  scrollToAndHighlight(chartNo, '「カルテNo」を入力してください。');
-                  return false;
-              }
-              if (!/^[a-zA-Z0-9]{8}$/.test(chartNo.value.trim())) {
-                  scrollToAndHighlight(chartNo, '「カルテNo」は半角英数字8桁で入力してください。');
-                  return false;
+                  errors.push({ element: chartNoSection, message: '「カルテNo」を入力してください。' });
+              } else if (!/^[a-zA-Z0-9]{8}$/.test(chartNo.value.trim())) {
+                  errors.push({ element: chartNoSection, message: '「カルテNo」は半角英数字8桁で入力してください。' });
               }
           }
 
-          // 3. 生年月日
+          const dobSection = document.getElementById('gemini-section-dob');
           const dobYear = document.getElementById(config.uiIds.DOB_YEAR);
           const dobMonth = document.getElementById(config.uiIds.DOB_MONTH);
           const dobDay = document.getElementById(config.uiIds.DOB_DAY);
-          if (!dobYear?.value || !dobMonth?.value || !dobDay?.value) {
-              const dobSection = document.getElementById('gemini-section-dob');
-              scrollToAndHighlight(dobYear || dobSection, '「生年月日」を（年・月・日）すべて選択してください。');
-              return false;
+          if (dobSection && window.getComputedStyle(dobSection).display !== 'none') {
+              if (!dobYear?.value || !dobMonth?.value || !dobDay?.value) {
+                  errors.push({ element: dobSection, message: '「生年月日」を（年・月・日）すべて選択してください。' });
+              }
           }
 
-          // 4. 重複エラー / タイポエラー中の場合はブロック
           const resultArea = document.getElementById('gemini-section-duplicate-check-result');
           if (resultArea && resultArea.style.display !== 'none' && resultArea.innerHTML.includes('⚠️')) {
-              scrollToAndHighlight(resultArea, 'カルテNoまたは生年月日に入力不備、または進行中の予約が存在します。メッセージをご確認ください。');
-              return false;
+              errors.push({ element: resultArea, message: 'カルテNoまたは生年月日に入力不備、または進行中の予約が存在します。メッセージをご確認ください。' });
           }
 
-          // 5. 診療内容（初診、変更、または取消の場合）
           if (req === '初診' || req === '変更' || req === '取消') {
-              const bunyaSel = document.getElementById('bunya-select');
-              if (bunyaSel && !bunyaSel.value) {
-                  scrollToAndHighlight(bunyaSel, '「診療分野」を選択してください。');
-                  return false;
-              }
+              const multiStageArea = document.getElementById('gemini-multistage-select-area') || document.getElementById(config.uiIds.MULTI_STAGE_AREA);
+              if (multiStageArea && window.getComputedStyle(multiStageArea).display !== 'none') {
+                  const bunyaSel = document.getElementById('bunya-select');
+                  const deptSel = document.getElementById('department-select');
+                  const finalSel = document.getElementById('final-select');
+                  const finalWrapper = finalSel ? finalSel.parentElement : null;
 
-              const deptSel = document.getElementById('department-select');
-              if (deptSel && (!deptSel.value || deptSel.disabled)) {
-                  scrollToAndHighlight(deptSel || document.getElementById(config.uiIds.MULTI_STAGE_AREA), '「診療科」を選択してください。');
-                  return false;
-              }
-
-              const finalSel = document.getElementById('final-select');
-              const finalWrapper = finalSel ? finalSel.parentElement : null;
-              if (finalSel && finalWrapper && finalWrapper.style.display !== 'none' && !finalSel.disabled && !finalSel.value) {
-                  scrollToAndHighlight(finalSel, '「診療選択」を選択してください。');
-                  return false;
+                  if (bunyaSel && !bunyaSel.value) {
+                      errors.push({ element: multiStageArea, message: '「診療分野」を選択してください。' });
+                  } else if (deptSel && (!deptSel.value || deptSel.disabled)) {
+                      errors.push({ element: multiStageArea, message: '「診療科」を選択してください。' });
+                  } else if (finalSel && finalWrapper && finalWrapper.style.display !== 'none' && !finalSel.disabled && !finalSel.value) {
+                      errors.push({ element: multiStageArea, message: '「診療選択」を選択してください。' });
+                  }
               }
           }
 
-          // 6. 変更・取消の場合の確定予約日時
           if (req === '変更' || req === '取消') {
-              const monthSel = document.getElementById('fixed_date_month_select');
-              const daySel = document.getElementById('fixed_date_day_select');
-              const timeSel = document.getElementById('fixed_date_time_select');
-              if (!monthSel || !monthSel.value || !daySel || !daySel.value || !timeSel || !timeSel.value) {
-                  const fixedArea = document.getElementById(config.uiIds.FIXED_DATE_AREA);
-                  scrollToAndHighlight(fixedArea, '現在確定している予約日時（月・日・時刻）をすべて選択してください。');
-                  return false;
+              const fixedArea = document.getElementById(config.uiIds.FIXED_DATE_AREA);
+              if (fixedArea && window.getComputedStyle(fixedArea).display !== 'none') {
+                  const monthSel = document.getElementById('fixed_date_month_select');
+                  const daySel = document.getElementById('fixed_date_day_select');
+                  const timeSel = document.getElementById('fixed_date_time_select');
+                  if (!monthSel || !monthSel.value || !daySel || !daySel.value || !timeSel || !timeSel.value) {
+                      errors.push({ element: fixedArea, message: '現在確定している予約日時（月・日・時刻）をすべて選択してください。' });
+                  }
               }
           }
 
-          // 7. 担当医師
           const doctorArea = document.getElementById(config.uiIds.DOCTOR_AREA);
-          if (doctorArea && doctorArea.style.display !== 'none') {
+          if (doctorArea && window.getComputedStyle(doctorArea).display !== 'none') {
               const doctorSel = doctorArea.querySelector('select');
               if (doctorSel && !doctorSel.disabled && !doctorSel.value) {
-                  scrollToAndHighlight(doctorSel, '「担当医師」を選択してください。');
-                  return false;
+                  errors.push({ element: doctorArea, message: '「担当医師」を選択してください。' });
               }
           }
 
-          // 8. 希望日時指定（初診・変更の場合）
           if (req === '初診' || req === '変更') {
               const yoyakuMethod = config.state.yoyakuMethod;
               if (yoyakuMethod === config.YOYAKU_METHOD_SPECIFIC) {
-                  const hasWish = Object.values(config.state.selectedWishDateTimes).some(v => v && v.date && v.time);
-                  if (!hasWish) {
-                      const wishArea = document.getElementById(config.uiIds.WISH_DATES_AREA);
-                      scrollToAndHighlight(wishArea, '「希望日を指定」を選択した場合は、第1～5希望のうち少なくとも1つの日時を選択してください。');
-                      return false;
+                  const wishArea = document.getElementById(config.uiIds.WISH_DATES_AREA);
+                  if (wishArea && window.getComputedStyle(wishArea).display !== 'none') {
+                      const hasWish = Object.values(config.state.selectedWishDateTimes).some(v => v && v.date && v.time);
+                      if (!hasWish) {
+                          errors.push({ element: wishArea, message: '「希望日を指定」を選択した場合は、第1～5希望のうち少なくとも1つの日時を選択してください。' });
+                      }
                   }
               } else if (yoyakuMethod === config.YOYAKU_METHOD_AUTO) {
-                  const omakaseTimeRadio = document.querySelector('input[name="time_omakase"]:checked');
-                  if (!omakaseTimeRadio) {
-                      const omakaseArea = document.getElementById(config.uiIds.OMAKASE_TIME_AREA);
-                      scrollToAndHighlight(omakaseArea, '希望の時間帯を選択してください。');
-                      return false;
+                  const omakaseArea = document.getElementById(config.uiIds.OMAKASE_TIME_AREA);
+                  if (omakaseArea && window.getComputedStyle(omakaseArea).display !== 'none') {
+                      const omakaseTimeRadio = document.querySelector('input[name="time_omakase"]:checked');
+                      if (!omakaseTimeRadio) {
+                          errors.push({ element: omakaseArea, message: '希望の時間帯を選択してください。' });
+                      }
                   }
               }
           }
 
-          // 9. 初診の場合の紹介元情報（症状欄の直前）
           if (req === '初診') {
-              const referralConfirm = document.querySelector('input[name="referral_confirm"]:checked');
-              if (!referralConfirm) {
-                  const refArea = document.getElementById(config.uiIds.REFERRAL_AREA);
-                  scrollToAndHighlight(refArea, '「紹介元機関について」を選択してください。');
-                  return false;
-              }
-              if (referralConfirm.value === 'ある') {
-                  const hospitalName = document.getElementById('referral_hospital_name');
-                  if (!hospitalName || !hospitalName.value.trim()) {
-                      scrollToAndHighlight(hospitalName, '「紹介元医療機関名」を入力してください。');
-                      return false;
-                  }
-                  const hospitalTel = document.getElementById('referral_hospital_tel');
-                  if (!hospitalTel || !hospitalTel.value.trim()) {
-                      scrollToAndHighlight(hospitalTel, '「紹介元医療機関電話番号」を入力してください。');
-                      return false;
-                  }
-                  const cdRadio = document.querySelector('input[name="referral_cd"]:checked');
-                  if (!cdRadio) {
-                      const cdGroup = document.getElementById('group-referral-cd');
-                      scrollToAndHighlight(cdGroup, '「持参画像CD」を選択してください。');
-                      return false;
+              const refArea = document.getElementById(config.uiIds.REFERRAL_AREA);
+              if (refArea && window.getComputedStyle(refArea).display !== 'none') {
+                  const referralConfirm = document.querySelector('input[name="referral_confirm"]:checked');
+                  if (!referralConfirm) {
+                      errors.push({ element: refArea, message: '「紹介元機関について」を選択してください。' });
+                  } else if (referralConfirm.value === 'ある') {
+                      const hospitalName = document.getElementById('referral_hospital_name');
+                      if (!hospitalName || !hospitalName.value.trim()) {
+                          errors.push({ element: refArea, message: '「紹介元医療機関名」を入力してください。' });
+                      }
+                      const hospitalTel = document.getElementById('referral_hospital_tel');
+                      if (!hospitalTel || !hospitalTel.value.trim()) {
+                          errors.push({ element: refArea, message: '「紹介元医療機関電話番号」を入力してください。' });
+                      }
+                      const cdRadio = document.querySelector('input[name="referral_cd"]:checked');
+                      if (!cdRadio) {
+                          errors.push({ element: refArea, message: '「持参画像CD」を選択してください。' });
+                      }
                   }
               }
           }
 
-          // 10. 理由・症状
+          const reasonArea = document.getElementById(config.uiIds.REASON_AREA);
           const reasonTextarea = document.getElementById(config.uiIds.REASON_TEXTAREA);
-          if (reasonTextarea && !reasonTextarea.value.trim()) {
-              const msg = (req === '初診') ? '「現在の症状等」を入力してください。' : '「理由」を入力してください。';
-              scrollToAndHighlight(reasonTextarea, msg);
-              return false;
+          if (reasonArea && window.getComputedStyle(reasonArea).display !== 'none') {
+              if (reasonTextarea && !reasonTextarea.value.trim()) {
+                  const msg = (req === '初診') ? '「現在の症状等」を入力してください。' : '「理由」を入力してください。';
+                  errors.push({ element: reasonArea, message: msg });
+              }
           }
 
-          // 11. 患者情報フォーム詳細項目
           const patientFormContainer = document.getElementById(config.uiIds.PATIENT_FORM_CONTAINER);
-          if (patientFormContainer) {
+          if (patientFormContainer && window.getComputedStyle(patientFormContainer).display !== 'none') {
               const applicantRadio = document.querySelector(`input[name="${config.fbFields.APPLICANT}"]:checked`);
               if (applicantRadio && applicantRadio.value !== '本人') {
+                  const supplementSection = document.getElementById('gemini-section-applicant-supplement');
                   const supplementInput = document.getElementById(config.uiIds.APPLICANT_SUPPLEMENT_INPUT);
                   if (supplementInput && !supplementInput.value.trim()) {
-                      scrollToAndHighlight(supplementInput, '申込者補足情報（続柄やお名前等）を入力してください。');
-                      return false;
+                      errors.push({ element: supplementSection || supplementInput, message: '申込者補足情報（続柄やお名前等）を入力してください。' });
                   }
               }
 
               const lastNameKanji = document.getElementById(config.uiIds.LAST_NAME_KANJI);
-              if (lastNameKanji && !lastNameKanji.value.trim()) {
-                  scrollToAndHighlight(lastNameKanji, '「お名前（漢字）の姓」を入力してください。');
-                  return false;
-              }
               const firstNameKanji = document.getElementById(config.uiIds.FIRST_NAME_KANJI);
-              if (firstNameKanji && !firstNameKanji.value.trim()) {
-                  scrollToAndHighlight(firstNameKanji, '「お名前（漢字）の名」を入力してください。');
-                  return false;
+              const nameKanjiSection = document.getElementById('gemini-section-name-kanji');
+              if ((lastNameKanji && !lastNameKanji.value.trim()) || (firstNameKanji && !firstNameKanji.value.trim())) {
+                  let msg = '「お名前（漢字）」を入力してください。';
+                  if (lastNameKanji && !lastNameKanji.value.trim() && firstNameKanji && firstNameKanji.value.trim()) msg = '「お名前（漢字）の姓」を入力してください。';
+                  else if (firstNameKanji && !firstNameKanji.value.trim() && lastNameKanji && lastNameKanji.value.trim()) msg = '「お名前（漢字）の名」を入力してください。';
+                  errors.push({ element: nameKanjiSection, message: msg });
               }
 
               const lastNameKana = document.getElementById(config.uiIds.LAST_NAME_KANA);
-              if (lastNameKana && !lastNameKana.value.trim()) {
-                  scrollToAndHighlight(lastNameKana, '「お名前（ふりがな）の姓」を入力してください。');
-                  return false;
-              }
               const firstNameKana = document.getElementById(config.uiIds.FIRST_NAME_KANA);
-              if (firstNameKana && !firstNameKana.value.trim()) {
-                  scrollToAndHighlight(firstNameKana, '「お名前（ふりがな）の名」を入力してください。');
-                  return false;
+              const nameKanaSection = document.getElementById('gemini-section-name-kana');
+              if ((lastNameKana && !lastNameKana.value.trim()) || (firstNameKana && !firstNameKana.value.trim())) {
+                  let msg = '「お名前（ふりがな）」を入力してください。';
+                  if (lastNameKana && !lastNameKana.value.trim() && firstNameKana && firstNameKana.value.trim()) msg = '「お名前（ふりがな）の姓」を入力してください。';
+                  else if (firstNameKana && !firstNameKana.value.trim() && lastNameKana && lastNameKana.value.trim()) msg = '「お名前（ふりがな）の名」を入力してください。';
+                  errors.push({ element: nameKanaSection, message: msg });
               }
 
               const genderRadio = document.querySelector(`input[name="${config.fbFields.GENDER}"]:checked`);
               if (!genderRadio) {
                   const genderSection = document.getElementById('gemini-section-gender');
-                  scrollToAndHighlight(genderSection, '「性別」を選択してください。');
-                  return false;
+                  errors.push({ element: genderSection, message: '「性別」を選択してください。' });
               }
 
+              const postalCodeSection = document.getElementById('gemini-section-postal-code');
               const postalCode = document.getElementById(config.uiIds.POSTAL_CODE);
               if (postalCode) {
                   if (!postalCode.value.trim()) {
-                      scrollToAndHighlight(postalCode, '「郵便番号」を入力してください。');
-                      return false;
-                  }
-                  if (!/^\d{7}$/.test(postalCode.value.trim())) {
-                      scrollToAndHighlight(postalCode, '「郵便番号」は半角数字7桁で入力してください。');
-                      return false;
+                      errors.push({ element: postalCodeSection || postalCode, message: '「郵便番号」を入力してください。' });
+                  } else if (!/^\d{7}$/.test(postalCode.value.trim())) {
+                      errors.push({ element: postalCodeSection || postalCode, message: '「郵便番号」は半角数字7桁で入力してください。' });
                   }
               }
 
+              const streetSection = document.getElementById('gemini-section-street');
               const street = document.getElementById(config.uiIds.STREET);
               if (street && !street.value.trim()) {
-                  scrollToAndHighlight(street, '「丁目～番地」を入力してください。');
-                  return false;
+                  errors.push({ element: streetSection || street, message: '「丁目～番地」を入力してください。' });
               }
 
+              const tel1Section = document.getElementById('gemini-section-tel1');
               const tel1 = document.getElementById(config.uiIds.TEL1);
               if (tel1) {
                   const tel1Val = tel1.value.replace(/-/g, '').trim();
                   if (!tel1Val) {
-                      scrollToAndHighlight(tel1, '「電話番号①」を入力してください。');
-                      return false;
-                  }
-                  if (!/^\d{10,11}$/.test(tel1Val)) {
-                      scrollToAndHighlight(tel1, '「電話番号①」は10桁または11桁の半角数字で入力してください。');
-                      return false;
+                      errors.push({ element: tel1Section || tel1, message: '「電話番号①」を入力してください。' });
+                  } else if (!/^\d{10,11}$/.test(tel1Val)) {
+                      errors.push({ element: tel1Section || tel1, message: '「電話番号①」は10桁または11桁の半角数字で入力してください。' });
                   }
               }
 
+              const tel2Section = document.getElementById('gemini-section-tel2');
               const tel2 = document.getElementById(config.uiIds.TEL2);
               if (tel2 && tel2.value.trim()) {
                   const tel2Val = tel2.value.replace(/-/g, '').trim();
                   if (!/^\d{10,11}$/.test(tel2Val)) {
-                      scrollToAndHighlight(tel2, '「電話番号②」は10桁または11桁の半角数字で入力してください。');
-                      return false;
-                  }
-                  const tel1Val = tel1 ? tel1.value.replace(/-/g, '').trim() : '';
-                  if (tel1Val && tel1Val === tel2Val) {
-                      scrollToAndHighlight(tel2, '電話番号①と電話番号②に同じ番号は入力できません。');
-                      return false;
+                      errors.push({ element: tel2Section || tel2, message: '「電話番号②」は10桁または11桁の半角数字で入力してください。' });
+                  } else {
+                      const tel1Val = tel1 ? tel1.value.replace(/-/g, '').trim() : '';
+                      if (tel1Val && tel1Val === tel2Val) {
+                          errors.push({ element: tel2Section || tel2, message: '電話番号①と電話番号②に同じ番号は入力できません。' });
+                      }
                   }
               }
 
+              const emailSection = document.getElementById('gemini-section-email');
               const email = document.getElementById(config.uiIds.EMAIL);
               if (email) {
                   if (!email.value.trim()) {
-                      scrollToAndHighlight(email, '「メールアドレス」を入力してください。');
-                      return false;
-                  }
-                  if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.value.trim())) {
-                      scrollToAndHighlight(email, '有効なメールアドレスを入力してください。');
-                      return false;
+                      errors.push({ element: emailSection || email, message: '「メールアドレス」を入力してください。' });
+                  } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.value.trim())) {
+                      errors.push({ element: emailSection || email, message: '有効なメールアドレスを入力してください。' });
                   }
               }
 
+              const emailConfirmSection = document.getElementById('gemini-section-email-confirm');
               const emailConfirm = document.getElementById(config.uiIds.EMAIL_CONFIRM);
               if (emailConfirm) {
                   if (!emailConfirm.value.trim()) {
-                      scrollToAndHighlight(emailConfirm, '「メールアドレス（確認用）」を入力してください。');
-                      return false;
-                  }
-                  if (email && email.value.trim() !== emailConfirm.value.trim()) {
-                      scrollToAndHighlight(emailConfirm, '「メールアドレス」と「メールアドレス（確認用）」が一致しません。');
-                      return false;
+                      errors.push({ element: emailConfirmSection || emailConfirm, message: '「メールアドレス（確認用）」を入力してください。' });
+                  } else if (email && email.value.trim() !== emailConfirm.value.trim()) {
+                      errors.push({ element: emailConfirmSection || emailConfirm, message: '「メールアドレス」と「メールアドレス（確認用）」が一致しません。' });
                   }
               }
 
+              const privacySection = document.getElementById('gemini-section-privacy');
               const privacyAgree = document.getElementById(config.uiIds.PRIVACY_AGREE);
               if (privacyAgree && !privacyAgree.checked) {
-                  const privacySection = privacyAgree.closest('.g-privacy-policy') || privacyAgree;
-                  scrollToAndHighlight(privacySection, '個人情報保護方針への同意が必要です。「同意する」にチェックを入れてください。');
-                  return false;
+                  errors.push({ element: privacySection || privacyAgree, message: '個人情報保護方針への同意が必要です。「同意する」にチェックを入れてください。' });
               }
+          }
+
+          if (errors.length > 0) {
+              highlightAllAndAlert(errors);
+              return false;
           }
 
           return true;

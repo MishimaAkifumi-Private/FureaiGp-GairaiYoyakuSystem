@@ -1,4 +1,4 @@
-﻿﻿/*
+﻿/*
  * kintone Display Order Reset Button (for Number Field)
  * Copyright (c) 2024 Your Name
  * Released under the MIT license
@@ -169,7 +169,11 @@
         const allRecords = await fetchAllRecords();
 
         if (allRecords.length === 0) {
-          alert('対象のレコードがありません。');
+          if (typeof window.showCustomDialog === 'function') {
+            window.showCustomDialog('対象のレコードがありません。');
+          } else {
+            alert('対象のレコードがありません。');
+          }
         } else {
           const updatePayload = createUpdatePayload(allRecords);
           await updateRecordsInChunks(updatePayload);
@@ -179,7 +183,11 @@
 
       } catch (error) {
         console.error('エラーが発生しました:', error);
-        alert('エラーが発生しました。\n詳細はデベロッパーコンソールを確認してください。');
+        if (typeof window.showCustomDialog === 'function') {
+          window.showCustomDialog('エラーが発生しました。\n詳細はデベロッパーコンソールを確認してください。');
+        } else {
+          alert('エラーが発生しました。\n詳細はデベロッパーコンソールを確認してください。');
+        }
       }
 
       resetButton.disabled = false;
