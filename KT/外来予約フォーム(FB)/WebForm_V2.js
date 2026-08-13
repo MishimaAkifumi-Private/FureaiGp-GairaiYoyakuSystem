@@ -800,6 +800,15 @@
               fieldsWrapper.style.display = 'block';
               document.body.classList.add('gemini-fields-active');
               
+              if (chartNoInput) {
+                  chartNoInput.readOnly = true;
+                  chartNoInput.style.backgroundColor = '#e9ecef';
+              }
+              const checkBtn = document.getElementById('gemini-btn-check-duplicate');
+              if (checkBtn) {
+                  checkBtn.style.display = 'none';
+              }
+              
               const currentReq = config.state.requirement;
               if (currentReq === '初診') {
                   toggleSection(config.uiIds.REFERRAL_AREA, true);
@@ -2959,7 +2968,9 @@
             .g-btn:hover { background-color: #0056b3; }
             .g-btn:disabled { background-color: #ccc; cursor: not-allowed; }
             .g-form-note { font-size: 12px; color: #666; margin-top: 5px; }
-            .g-radio-group label, .g-checkbox-label { font-weight: normal; display: inline-flex; align-items: center; margin-right: 15px; }
+            .g-radio-group { display: inline-flex; flex-wrap: wrap; align-items: center; width: fit-content; max-width: 100%; padding: 4px 8px; margin-top: 2px; border-radius: 6px; }
+            .g-radio-group label { font-weight: normal; display: inline-flex; align-items: center; margin-right: 15px; }
+            .g-checkbox-label { font-weight: normal; display: inline-flex; align-items: center; width: fit-content; max-width: 100%; padding: 4px 8px; border-radius: 6px; margin-right: 15px; }
             #${config.uiIds.REQUIREMENT_AREA} .g-radio-group label { font-weight: bold; }
             .g-radio-label-disabled { color: #ccc; }
             .g-radio-group input, .g-checkbox-label input { margin-right: 8px; }
