@@ -86,9 +86,13 @@ window.ShinryoApp = window.ShinryoApp || {};
     if (kintoneRecord.$id) {
         compressed.$id = kintoneRecord.$id.value;
     }
+    const updatedTimeVal = kintoneRecord._latestUpdatedTime || kintoneRecord['更新日時']?.value || kintoneRecord['$updatedTime']?.value || '';
+    if (updatedTimeVal) compressed._latestUpdatedTime = updatedTimeVal;
+
     Object.keys(kintoneRecord).forEach(key => {
+        if (key === '$id' || key === '_latestUpdatedTime') return;
         // 不要なシステムフィールドとデバッグ情報を除外
-        if (['レコード番号', '作成者', '更新者', '作成日時', '更新日時', '$revision', '$id'].includes(key)) {
+        if (['レコード番号', '作成者', '更新者', '作成日時', '更新日時', '$revision'].includes(key)) {
             return;
         }
         
@@ -120,6 +124,10 @@ window.ShinryoApp = window.ShinryoApp || {};
   function inflateRecord(compressedRecord) {
       const inflated = {};
       inflated.$id = { type: '__ID__', value: compressedRecord.$id || null };
+      if (compressedRecord._latestUpdatedTime) {
+          inflated._latestUpdatedTime = compressedRecord._latestUpdatedTime;
+          inflated['更新日時'] = { type: 'SINGLE_LINE_TEXT', value: compressedRecord._latestUpdatedTime };
+      }
       Object.keys(compressedRecord).forEach(key => {
           if (key === '$id') return;
           const val = compressedRecord[key];
@@ -144,7 +152,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       if (obj === null || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map(canonicalize);
       return Object.keys(obj).sort().reduce((acc, key) => {
-          if (key === '$id' || key === '_debug_info') return acc; // ★変更: IDとデバッグ情報は比較から除外
+          if (['$id', '_debug_info', '_latestUpdatedTime', '更新日時', '$updatedTime'].includes(key)) return acc; // ★変更: IDとメタデータ情報は比較から除外
           acc[key] = canonicalize(obj[key]);
           return acc;
       }, {});

@@ -989,6 +989,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     // ★追加: 最終更新日フォーマットヘルパー (日付のみ YYYY/MM/DD)
     const formatUpdatedDate = (isoString) => {
         if (!isoString) return '-';
+        if (isoString === 'legacy_published') return '前回公開時';
         try {
             const d = new Date(isoString);
             if (isNaN(d.getTime())) return '-';
@@ -1486,8 +1487,20 @@ window.ShinryoApp = window.ShinryoApp || {};
                     searchBtn.title = 'この医師で絞り込んで編集';
                     searchBtn.onclick = (e) => {
                        e.stopPropagation();
-                       const query = `診療科 in ("${currentDept}") and 医師名 in ("${doctorName}")`;
-                       window.location.href = `?view_mode=input&query=${encodeURIComponent(query)}`;
+                       try {
+                           sessionStorage.setItem('return_view_mode', 'overview');
+                       } catch (err) {}
+                       const targetRec = records[idx + i];
+                       const recId = (targetRec && targetRec._mergedIds && targetRec._mergedIds.length > 0)
+                           ? targetRec._mergedIds[0]
+                           : (targetRec && targetRec.$id ? targetRec.$id.value : null);
+                       if (recId) {
+                           const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+                           window.location.href = `${appRoot}show#record=${recId}&mode=edit`;
+                       } else {
+                           const query = `診療科 in ("${currentDept}") and 医師名 in ("${doctorName}")`;
+                           window.location.href = `?view_mode=input&from_view=overview&query=${encodeURIComponent(query)}`;
+                       }
                     };
                     containerDiv.appendChild(searchBtn);
 
@@ -1551,12 +1564,14 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'updated-date-wrapper';
                     
+                    const isChanged = hasRecordChange(targetRec, targetPubRec);
+
                     // ★追加: 診療科停止または予定連動Off時はラッパーもグレーアウト
                     if (isDeptStopped || isScheduleLinkOff) {
                         containerDiv.classList.add('gray-out-cell');
                         containerDiv.style.backgroundColor = '#888888';
                         containerDiv.style.color = '#fff';
-                    } else if (hasRecordChange(targetRec, targetPubRec)) {
+                    } else if (isChanged) {
                         // ★追加: 医師列と合わせて該当レコードの更新日ラッパーのみ薄い赤背景にする
                         containerDiv.classList.add('cell-changed');
                     }
@@ -1569,8 +1584,14 @@ window.ShinryoApp = window.ShinryoApp || {};
                         containerDiv.style.height = `calc(100% / ${rowSpan})`;
                     }
 
+                    // ★追加: 変更中(未公開)の場合はドラフトの更新日時、変更なし/キャンセル時は本番公開データの確定更新日を表示
+                    const pubTime = targetPubRec ? (targetPubRec._latestUpdatedTime || 'legacy_published') : '';
+                    const displayUpdatedTime = isChanged 
+                        ? (targetRec._latestUpdatedTime || pubTime)
+                        : (pubTime === 'legacy_published' ? pubTime : (pubTime || targetRec._latestUpdatedTime));
+
                     const dateSpan = document.createElement('span');
-                    dateSpan.textContent = formatUpdatedDate(targetRec._latestUpdatedTime);
+                    dateSpan.textContent = formatUpdatedDate(displayUpdatedTime);
                     dateSpan.style.flex = '1';
                     dateSpan.style.textAlign = 'center';
                     containerDiv.appendChild(dateSpan);

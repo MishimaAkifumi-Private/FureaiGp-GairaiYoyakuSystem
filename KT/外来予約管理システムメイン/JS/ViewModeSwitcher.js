@@ -236,6 +236,16 @@
         }
 
         let viewMode = determineViewMode();
+        try {
+            const fromView = getUrlParam('from_view');
+            if (fromView) {
+                sessionStorage.setItem('return_view_mode', fromView);
+            } else if (viewMode === 'overview' || viewMode === 'dashboard') {
+                sessionStorage.setItem('return_view_mode', viewMode);
+            } else if (viewMode === 'input' && !sessionStorage.getItem('return_view_mode')) {
+                sessionStorage.setItem('return_view_mode', 'input');
+            }
+        } catch (e) {}
 
         // 共通スタイル適用
         window.ShinryoApp.Viewer.applyStyles();
@@ -3197,19 +3207,31 @@
         }
     }
 
-    // ★追加: 保存成功時に一覧画面(inputモード)へ戻る
+    // ★追加: 保存成功時に元の画面(overview等)へ戻る
     kintone.events.on(['app.record.edit.submit.success', 'app.record.create.submit.success'], function (event) {
         const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
-        event.url = appRoot + '?view_mode=input';
+        let returnMode = 'overview';
+        try {
+            returnMode = sessionStorage.getItem('return_view_mode') || 'overview';
+        } catch (e) {
+            returnMode = 'overview';
+        }
+        event.url = appRoot + '?view_mode=' + returnMode;
         return event;
     });
 
-    // ★追加: 詳細画面は表示せず、一覧画面(inputモード)へ強制リダイレクトする
+    // ★追加: 詳細画面は表示せず、元の画面(overview等)へ強制リダイレクトする
     kintone.events.on('app.record.detail.show', function (event) {
         const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+        let returnMode = 'overview';
+        try {
+            returnMode = sessionStorage.getItem('return_view_mode') || 'overview';
+        } catch (e) {
+            returnMode = 'overview';
+        }
         // KintoneのSPA遷移による上書きを防ぐため、少し遅延させて確実に戻す
         setTimeout(() => {
-            window.location.replace(appRoot + '?view_mode=input');
+            window.location.replace(appRoot + '?view_mode=' + returnMode);
         }, 100);
         return event;
     });
