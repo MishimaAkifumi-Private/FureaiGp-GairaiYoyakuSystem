@@ -78,8 +78,7 @@
         display: flex;
         gap: 15px;
         margin-bottom: 20px;
-        border-bottom: 2px solid #e0e0e0;
-        padding-bottom: 15px;
+        padding-bottom: 5px;
       }
       .rcb-badge {
         display: inline-flex;

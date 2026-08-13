@@ -254,7 +254,7 @@
           purposeLabel = '予約取消';
           purposeBg = '#e74c3c'; // 赤
       } else if (purpose === '初診') {
-          purposeLabel = '初診予約';
+          purposeLabel = '初診/再診 予約';
           purposeBg = '#27ae60'; // 緑
       }
 
@@ -339,6 +339,12 @@
           
           methodIconDiv.style.display = 'none';
           methodIconDiv.insertAdjacentElement('afterend', assignBtn);
+
+          // 未着手時は下部エリアが存在しないため、ヘッダーの下部罫線と不要な余白を除去
+          header.style.borderBottom = 'none';
+          header.style.marginBottom = '0';
+          header.style.paddingBottom = '0';
+          container.style.padding = '15px 20px';
       }
 
       // === 担当者本人の場合 ===
@@ -1036,8 +1042,8 @@
       // ② 確定予約日時エディタ (定義を前方に移動)
       const dateSection = document.createElement('div');
       dateSection.className = 'rcb-section';
-      dateSection.style.marginTop = '30px';
-      dateSection.style.paddingTop = '20px';
+      dateSection.style.marginTop = '10px';
+      dateSection.style.paddingTop = '0';
   
       const dateTitle = document.createElement('div');
       dateTitle.className = 'rcb-section-title';
@@ -1048,17 +1054,8 @@
         // 対応方法セクションの表示・有効化 (再設定時用)
         const methodSection = container.querySelector('.rcb-method-section');
         if (methodSection) {
-            methodSection.style.display = 'block'; // 再設定時に表示
-            const radios = methodSection.querySelectorAll('input[name="rcb-method-select"]');
-            radios.forEach(radio => {
-                radio.disabled = false;
-                if (radio.parentElement) {
-                    radio.parentElement.style.opacity = '1';
-                    radio.parentElement.style.cursor = 'pointer';
-                }
-            });
-            if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE) {
-                methodSection.style.display = 'none'; // 要電話対応の場合は非表示のままにする
+            if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || !staffName || currentStatus === '未着手') {
+                methodSection.style.display = 'none';
             } else {
                 methodSection.style.display = 'block'; // 再設定時に表示
                 const radios = methodSection.querySelectorAll('input[name="rcb-method-select"]');
@@ -1078,9 +1075,18 @@
         if (methodSection) {
             const checked = methodSection.querySelector('input[name="rcb-method-select"]:checked');
             if (!checked) {
+                if (dateSection.parentElement) {
+                    dateSection.remove();
+                }
                 return; // 何も表示しない
             }
         }
+
+        const targetBody = container.querySelector('.rcb-body') || container;
+        if (!dateSection.parentElement) {
+            targetBody.appendChild(dateSection);
+        }
+
         dateSection.appendChild(dateTitle);
     
         let initialDate = currentDate;
@@ -1251,6 +1257,9 @@
             [CONFIG.FIELDS.RES_DATE]: { value: newDate },
             [CONFIG.FIELDS.RES_TIME]: { value: selectedTime }
           };
+          if (currentMethod) {
+            payload[CONFIG.FIELDS.METHOD] = { value: currentMethod };
+          }
 
           // スタッフ取下中の場合、ステータスをクリアしてメール送信可能状態にする
           if (currentStatus === CONFIG.STATUS_WITHDRAWN_VALUE) {
@@ -1282,8 +1291,8 @@
         const methodSection = document.createElement('div');
         methodSection.className = 'rcb-section rcb-method-section'; // クラス追加
         
-        // 確定済み、または「要電話対応」、各種取下・キャンセル済みの場合は初期非表示（電話対応固定のため）
-        if (isConfirmed || currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || isWithdrawn || isWebWithdrawn || isUrlWithdrawn) {
+        // 確定済み、または「要電話対応」、各種取下・キャンセル済み、または未担当・未着手の場合は初期非表示（電話対応固定または担当設定前のため）
+        if (isConfirmed || currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || isWithdrawn || isWebWithdrawn || isUrlWithdrawn || !staffName || currentStatus === '未着手') {
             methodSection.style.display = 'none';
         }
         
@@ -1306,14 +1315,14 @@
           input.value = value;
           if (currentMethod === updateValue) input.checked = true;
 
-          // ① 確定後は選択不可 (固定)
-          if (isConfirmed) {
+          // ① 確定後、または未担当・未着手時は選択不可 (固定)
+          if (isConfirmed || !staffName || currentStatus === '未着手') {
             input.disabled = true;
             labelEl.style.opacity = '0.6';
             labelEl.style.cursor = 'not-allowed';
           }
   
-          input.onchange = async () => {
+          input.onchange = () => {
             // UI更新 (即時反映)
             document.querySelectorAll('.rcb-radio-label').forEach(el => el.classList.remove('checked'));
             labelEl.classList.add('checked');
@@ -1328,24 +1337,16 @@
                 sessionStorage.setItem('rcb_temp_time_' + recordId, selectedTimeBtn.textContent);
             }
 
-            // API更新
-            const success = await updateRecord(recordId, {
-              [CONFIG.FIELDS.METHOD]: { value: updateValue }
-            });
-            
-            if (success) {
-              currentMethod = updateValue; // 内部変数を更新
-              // 決定ボタン押下時の再描画で元に戻らないよう、レコードデータ自体も更新しておく
-              if (record[CONFIG.FIELDS.METHOD]) {
-                  record[CONFIG.FIELDS.METHOD].value = updateValue;
-              } else {
-                  record[CONFIG.FIELDS.METHOD] = { value: updateValue };
-              }
-              // アイコン更新
-              methodIconDiv.innerHTML = getMethodIconHtml(updateValue);
-              renderEditorView(); // 日時設定エリアを更新（表示）
-              // リロード削除: 画面リセットを防ぐためDOM更新のみに留める
+            currentMethod = updateValue; // 内部変数を更新
+            if (record[CONFIG.FIELDS.METHOD]) {
+                record[CONFIG.FIELDS.METHOD].value = updateValue;
+            } else {
+                record[CONFIG.FIELDS.METHOD] = { value: updateValue };
             }
+
+            // アイコン更新
+            methodIconDiv.innerHTML = getMethodIconHtml(updateValue);
+            renderEditorView(); // 日時設定エリアを更新（表示）
           };
   
           labelEl.appendChild(input);
@@ -2812,8 +2813,12 @@
       } else {
         // --- 未確定: 編集フォーム表示 ---
         renderEditorView();
-      } // end if-else
-      container.appendChild(dateSection);
+      }
+
+      const targetBody = container.querySelector('.rcb-body') || container;
+      if (dateSection.children.length > 0) {
+          targetBody.appendChild(dateSection);
+      }
   
       spaceElement.appendChild(container);
     };
@@ -3255,19 +3260,6 @@
       if (messageSpace) {
           messageSpace.innerHTML = '';
           
-          const msgContainer = document.createElement('div');
-          msgContainer.style.cssText = 'background: #fff; border-radius: 6px; overflow: hidden; border: 1px solid #dcdfe6; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 10px;';
-          
-          // タイトルバー
-          const titleBar = document.createElement('div');
-          titleBar.style.cssText = 'font-weight: bold; padding: 8px 14px; background-color: #2c3e50; color: #ffffff; font-size: 14px; letter-spacing: 0.5px;';
-          titleBar.textContent = '業務連絡';
-          msgContainer.appendChild(titleBar);
-          
-          // スレッド一覧エリア (固定高120px・縦スクロール)
-          const threadList = document.createElement('div');
-          threadList.style.cssText = 'padding: 8px 12px; height: 120px; overflow-y: auto; background: #fafbfc; border-bottom: 1px solid #eee; box-sizing: border-box;';
-          
           const msgValue = event.record['業務連絡']?.value || '';
           
           // スレッドのパース
@@ -3278,28 +3270,66 @@
               let match;
               const cleanText = text.replace(/\r\n/g, '\n');
               while ((match = regex.exec(cleanText)) !== null) {
+                  const rawContent = match[3].replace(/\n?---$/, '').trim();
                   posts.push({
                       date: match[1],
                       user: match[2],
-                      content: match[3].trim()
+                      content: rawContent
                   });
               }
               if (posts.length === 0 && text.trim()) {
                   posts.push({
                       date: '過去の登録',
                       user: '管理者/システム',
-                      content: text.trim()
+                      content: text.replace(/---$/, '').trim()
                   });
               }
               return posts;
           };
           
           const posts = parseThread(msgValue);
+          const hasPosts = posts.length > 0;
+
+          const msgContainer = document.createElement('div');
+          msgContainer.style.cssText = 'background: #fff; border-radius: 6px; overflow: hidden; border: 1px solid #dcdfe6; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 10px;';
           
+          // タイトルバー
+          const titleBar = document.createElement('div');
+          titleBar.style.cssText = 'font-weight: bold; padding: 8px 14px; background-color: #2c3e50; color: #ffffff; font-size: 14px; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between; user-select: none;';
+          
+          const titleLeft = document.createElement('div');
+          titleLeft.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+          titleLeft.innerHTML = `<span>業務連絡</span>${!hasPosts ? '<span style="font-weight: normal; font-size: 12px; color: #bdc3c7;">なし</span>' : ''}`;
+          titleBar.appendChild(titleLeft);
+
+          let editBtn = null;
+          if (!hasPosts) {
+              editBtn = document.createElement('div');
+              editBtn.style.cssText = 'cursor: pointer; font-size: 12px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px; font-weight: normal; transition: background 0.2s;';
+              editBtn.textContent = '＋編集';
+              editBtn.onmouseover = () => editBtn.style.background = 'rgba(255,255,255,0.35)';
+              editBtn.onmouseout = () => editBtn.style.background = 'rgba(255,255,255,0.2)';
+              titleBar.appendChild(editBtn);
+          }
+
+          msgContainer.appendChild(titleBar);
+          
+          // アコーディオン本体
+          const accordionBody = document.createElement('div');
+          if (!hasPosts) {
+              accordionBody.style.display = 'none';
+          }
+
+          // スレッド一覧エリア (可変高・最大120px・縦スクロール)
+          const threadList = document.createElement('div');
+          threadList.style.cssText = 'padding: 8px 12px; max-height: 120px; overflow-y: auto; background: #fafbfc; border-bottom: 1px solid #eee; box-sizing: border-box;';
+          
+          const activeStaffName = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey') || kintone.getLoginUser().name;
+
           if (posts.length === 0) {
               threadList.innerHTML = '<div style="font-size: 12px; color: #7f8c8d; text-align: center; padding: 10px 0;">（業務連絡はありません）</div>';
           } else {
-              posts.forEach(post => {
+              posts.forEach((post, idx) => {
                   const postDiv = document.createElement('div');
                   postDiv.style.cssText = 'display: flex; gap: 8px; font-size: 12px; line-height: 20px; border-bottom: 1px dashed #f0f2f5; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-items: center; box-sizing: border-box;';
                   postDiv.title = `[${post.date} ${post.user}]\n${post.content}`; // ホバー時に全文表示
@@ -3319,10 +3349,45 @@
                   postDiv.appendChild(dateSpan);
                   postDiv.appendChild(userSpan);
                   postDiv.appendChild(contentSpan);
+
+                  // 自分の投稿の場合のみ削除ボタン (✖) を表示
+                  if (activeStaffName && post.user && (post.user.trim() === activeStaffName.trim() || activeStaffName.includes(post.user) || post.user.includes(activeStaffName))) {
+                      const deleteBtn = document.createElement('span');
+                      deleteBtn.textContent = '✖';
+                      deleteBtn.title = 'このメッセージを削除';
+                      deleteBtn.style.cssText = 'color: #e74c3c; cursor: pointer; font-weight: bold; margin-left: 6px; padding: 0 4px; border-radius: 3px; font-size: 11px; flex-shrink: 0; transition: background 0.2s;';
+                      deleteBtn.onmouseover = () => deleteBtn.style.background = '#fadbd8';
+                      deleteBtn.onmouseout = () => deleteBtn.style.background = 'transparent';
+
+                      deleteBtn.onclick = async (e) => {
+                          e.stopPropagation();
+                          const ok = await showDialog('この業務連絡メッセージを削除しますか？', 'confirm', 'メッセージ削除', '', '削除', 'キャンセル');
+                          if (!ok) return;
+
+                          const newPosts = posts.filter((_, i) => i !== idx);
+                          const updatedVal = newPosts.map(p => `[${p.date} ${p.user}]\n${p.content}\n---`).join('\n');
+
+                          try {
+                              await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', {
+                                  app: kintone.app.getId(),
+                                  id: kintone.app.record.getId(),
+                                  record: {
+                                      '業務連絡': { value: updatedVal }
+                                  }
+                              });
+                              location.reload();
+                          } catch (err) {
+                              console.error('Failed to delete message:', err);
+                              await showDialog('メッセージの削除に失敗しました。', 'error');
+                          }
+                      };
+                      postDiv.appendChild(deleteBtn);
+                  }
+
                   threadList.appendChild(postDiv);
               });
           }
-          msgContainer.appendChild(threadList);
+          accordionBody.appendChild(threadList);
           
           // 入力・書き込みフォームエリア (1行で省スペース化)
           const inputArea = document.createElement('div');
@@ -3375,7 +3440,33 @@
           
           inputArea.appendChild(textInput);
           inputArea.appendChild(submitBtn);
-          msgContainer.appendChild(inputArea);
+          accordionBody.appendChild(inputArea);
+
+          msgContainer.appendChild(accordionBody);
+
+          if (editBtn) {
+              const toggleAccordion = () => {
+                  const isHidden = accordionBody.style.display === 'none';
+                  if (isHidden) {
+                      accordionBody.style.display = 'block';
+                      editBtn.textContent = '閉じる';
+                      setTimeout(() => textInput.focus(), 50);
+                  } else {
+                      accordionBody.style.display = 'none';
+                      editBtn.textContent = '＋編集';
+                  }
+              };
+              editBtn.onclick = (e) => {
+                  e.stopPropagation();
+                  toggleAccordion();
+              };
+              titleBar.style.cursor = 'pointer';
+              titleBar.onclick = (e) => {
+                  if (e.target !== editBtn) {
+                      toggleAccordion();
+                  }
+              };
+          }
           
           messageSpace.appendChild(msgContainer);
       }
@@ -3395,6 +3486,7 @@
                         titleBar.textContent = 'コントロールパネル';
                         
                         const rcbBody = document.createElement('div');
+                        rcbBody.className = 'rcb-body';
                         rcbBody.style.padding = '20px';
                         
                         while (rcbContent.firstChild) {

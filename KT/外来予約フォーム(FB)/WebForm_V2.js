@@ -654,7 +654,7 @@
               if (activeRecord) {
                   isChartNoDuplicate = true;
                   resultArea.style.cssText = 'padding: 15px; border-radius: 5px; background-color: #fff5f5; border: 2px solid #e53e3e; color: #c53030; font-weight: bold; font-size: 13px; line-height: 1.6; margin-top: 15px; margin-bottom: 20px; text-align: center;';
-                  const errMsg = `⚠️ 現在、別途ご依頼いただいております用件が処理中のため、Webフォームから続けての申し込みはできません。<br>お急ぎの場合はお電話にてお問い合わせください。`;
+                  const errMsg = `⚠️ 現在、別途ご依頼いただいておりますご用件を処理しているため、Webフォームから続けての申し込みはできません。<br>お急ぎの場合はお電話にてお問い合わせください。`;
                   resultArea.innerHTML = errMsg;
                   
                   fieldsWrapper.style.display = 'none';
