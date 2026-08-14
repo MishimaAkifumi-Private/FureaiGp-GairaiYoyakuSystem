@@ -443,9 +443,9 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         
         // 日付またぎチェック
         const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric' });
-        const sendDateStr = sendDateVal ? fmt.format(new Date(sendDateVal)) : "";
+        const sendDateStr = resolveSendDateStr(record, sendDateVal, fmt);
         const nowDateStr = fmt.format(new Date());
-        if (sendDateStr !== nowDateStr) {
+        if (sendDateStr && sendDateStr !== nowDateStr) {
             res.status(200).send(getTimeoutHtml(centerName, phoneNumber));
             return;
         }
@@ -464,6 +464,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             id: recordId,
             record: {
                 "管理状況": { value: "申込者再依頼" },
+                "対応方法": { value: "email" },
                 "経過情報": { value: currentHistories }
             }
         };
@@ -512,20 +513,24 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         return;
     }
 
-    // 1.5 タイムアウト判定
-    // ステータスが「閲覧期限切れ」の場合、または期限切れの場合
-    if (currentStatus === "閲覧期限切れ") {
+    // 1.5 タイムアウト・要電話対応判定
+    // ステータスが「閲覧期限切れ」または「要電話対応」の場合
+    if (currentStatus === "閲覧期限切れ" || currentStatus === "要電話対応") {
         // 日付判定 (日本時間で当日中かどうか)
         const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric' });
-        const sendDateStr = sendDateVal ? fmt.format(new Date(sendDateVal)) : "";
+        const sendDateStr = resolveSendDateStr(record, sendDateVal, fmt);
         const nowDateStr = fmt.format(new Date());
 
         if (sendDateStr === nowDateStr) {
             // 当日中なら再依頼ボタンを表示
             res.status(200).send(getTimeoutRetryHtml(recordId, centerName, phoneNumber));
         } else {
-            // 翌日以降ならフォーム誘導
-            res.status(200).send(getTimeoutHtml(centerName, phoneNumber));
+            // 翌日以降なら無効/フォーム誘導
+            if (currentStatus === "要電話対応") {
+                res.status(200).send(getAlreadyCancelledHtml(centerName, phoneNumber, currentStatus));
+            } else {
+                res.status(200).send(getTimeoutHtml(centerName, phoneNumber));
+            }
         }
         return;
     }
@@ -586,7 +591,16 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
                 },
                 body: JSON.stringify(updateBody)
             });
-            res.status(200).send(getTimeoutHtml(centerName, phoneNumber));
+
+            const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric' });
+            const sendDateStr = resolveSendDateStr(record, sendDateVal, fmt);
+            const nowDateStr = fmt.format(new Date());
+
+            if (sendDateStr === nowDateStr) {
+                res.status(200).send(getTimeoutRetryHtml(recordId, centerName, phoneNumber));
+            } else {
+                res.status(200).send(getTimeoutHtml(centerName, phoneNumber));
+            }
             return;
         }
     }
@@ -767,6 +781,30 @@ function getConfirmedHtml(record, recordId, showCancel, mode, centerName, phoneN
 }
 
 /**
+ * レコードまたは経過情報からメール送信日（または対応日）の文字列（YYYY/MM/DD）を特定
+ */
+function resolveSendDateStr(record, sendDateVal, fmt) {
+    if (sendDateVal) {
+        try { return fmt.format(new Date(sendDateVal)); } catch (e) {}
+    }
+    const histories = record["経過情報"]?.value || [];
+    for (let i = histories.length - 1; i >= 0; i--) {
+        const h = histories[i].value;
+        const state = h["経過情報_管理状態"]?.value;
+        if ((state === "メール送信済" || state === "閲覧期限切れ" || state === "要電話対応") && h["経過情報_日時"]?.value) {
+            const match = h["経過情報_日時"].value.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+            if (match) {
+                return fmt.format(new Date(`${match[1]}/${match[2]}/${match[3]}`));
+            }
+        }
+    }
+    if (record["$updatedAt"]?.value) {
+        try { return fmt.format(new Date(record["$updatedAt"].value)); } catch (e) {}
+    }
+    return fmt.format(new Date()); // フォールバック（当日扱い）
+}
+
+/**
  * 既にキャンセル・無効・終了済みの場合のHTML
  */
 function getAlreadyCancelledHtml(centerName, phoneNumber, currentStatus = "") {
@@ -786,6 +824,13 @@ function getAlreadyCancelledHtml(centerName, phoneNumber, currentStatus = "") {
     } else if (currentStatus === "終了") {
         // ② 患者様が予定していた診療日時が過ぎている (3)
         reasonText = "この情報は患者様が予定していた診療日時が過ぎているため表示することができません。";
+        subContentHtml = `
+          <p style="margin-top: 15px;">ご不明な点がございましたら、${defaultCenter}までお問い合わせください。</p>
+          <p style="font-size: 14px; font-weight: bold; margin-top: 8px;">TEL: ${defaultPhone}</p>
+        `;
+    } else if (currentStatus === "要電話対応") {
+        // ④ タイムアウト（閲覧確認期限切れ）による無効
+        reasonText = "ご提示させていただいた予約枠について、閲覧確認が期限内に行われなかったため、この仮予約枠は無効となりました。";
         subContentHtml = `
           <p style="margin-top: 15px;">ご不明な点がございましたら、${defaultCenter}までお問い合わせください。</p>
           <p style="font-size: 14px; font-weight: bold; margin-top: 8px;">TEL: ${defaultPhone}</p>
@@ -1112,7 +1157,7 @@ function getExpiredHtml(centerName, phoneNumber) {
     <body>
       <div class="container">
         <h1>この情報が含まれるメールは予約センター側での再調整が必要になったため無効となりました。<br>お手数ですが破棄するようにしてください。</h1>
-        <p style="margin-top: 15px;">予約センターより改めてご連絡（または最新のメールを送付）させていただきます。<br>最新のメール、またはご案内をご確認ください。</p>
+        <p style="margin-top: 15px;">予約センターより改めてご連絡（または最新のメールを送付）させていただきます。</p>
         <hr style="border:0; border-top:1px solid #eee; margin: 20px 0;">
         <p style="font-size: 13px;">ご不明な点がございましたら、${defaultCenter}までお問い合わせください。</p>
         <p style="font-size: 14px; font-weight: bold; margin-top: 8px;">TEL: ${defaultPhone}</p>

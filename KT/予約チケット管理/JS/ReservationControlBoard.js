@@ -104,6 +104,9 @@
       // 現在の値を取得
       const currentStatus = record[CONFIG.FIELDS.STATUS]?.value || '未設定';
       let currentMethod = record[CONFIG.FIELDS.METHOD]?.value || '未設定';
+      if (currentStatus === CONFIG.STATUS_RE_REQUEST_VALUE || currentStatus === '申込者再依頼') {
+          currentMethod = 'email';
+      }
   
       const purpose = record[CONFIG.FIELDS.PURPOSE]?.value || '';
       const currentDate = record[CONFIG.FIELDS.RES_DATE]?.value || '';
@@ -1035,7 +1038,7 @@
         // 対応方法セクションの表示・有効化 (再設定時用)
         const methodSection = container.querySelector('.rcb-method-section');
         if (methodSection) {
-            if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || !staffName || currentStatus === '未着手') {
+            if (!staffName || currentStatus === '未着手') {
                 methodSection.style.display = 'none';
             } else {
                 methodSection.style.display = 'block'; // 再設定時に表示
@@ -1259,7 +1262,7 @@
                   [CONFIG.FIELDS.RES_DATE]: { value: newDate },
                   [CONFIG.FIELDS.RES_TIME]: { value: selectedTime },
                   [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_SENT_VALUE },
-                  [CONFIG.FIELDS.SEND_DATE]: { value: new Date().toISOString() }, // タイムアウト起算点を更新
+                  [CONFIG.FIELDS.SEND_DATE]: { value: latestSendDate }, // 前回の送信日時を維持（タイムアウト起算点はリセットせず継続）
                   [CONFIG.FIELDS.READ_DATE]: { value: null },
                   [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
                   [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
@@ -1294,8 +1297,8 @@
             payload[CONFIG.FIELDS.METHOD] = { value: currentMethod };
           }
 
-          // スタッフ取下中の場合、ステータスをクリアしてメール送信可能状態にする
-          if (latestStatus === CONFIG.STATUS_WITHDRAWN_VALUE) {
+          // スタッフ取下中、または要電話対応からメールに変更された場合、ステータスをクリアしてメール送信可能状態にする
+          if (latestStatus === CONFIG.STATUS_WITHDRAWN_VALUE || (latestStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE && currentMethod === 'email')) {
               payload[CONFIG.FIELDS.STATUS] = { value: null };
           }
     
@@ -1413,7 +1416,7 @@
             msgDiv.style.fontSize = '14px';
             msgDiv.style.fontWeight = 'bold';
             msgDiv.style.color = '#e74c3c'; // 注意を引くための赤系
-            msgDiv.innerHTML = `本件は申込者の閲覧期限が過ぎたことによる予約の再依頼です。<br>下記の${reservationDateLabel}でよい場合はこのまま送信ボタンを押してください。<br>あるいは時間が経過したため、予約日時や対応方法を見直す場合は再設定ボタンを押してください。`;
+            msgDiv.innerHTML = `📢 本件は申込者よりWebから再依頼が届きました。<br>電話連絡を行わず、下記の${reservationDateLabel}でよい場合はこのまま送信ボタンを押してください。<br>時間が経過したため予約日時や対応方法を見直す場合は「再設定」ボタンを押してください。`;
             confirmedContainer.appendChild(msgDiv);
         }
 
@@ -2380,12 +2383,31 @@
                     historyContainer.appendChild(timeoutTimeRow);
                 }
 
-                // メッセージ
+                // メッセージ（切替期日の動的判定）
+                let deadlineLabel = '本日24時';
+                if (timeoutDateObj) {
+                    const now = new Date();
+                    const todayStr = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
+                    const expireDayStr = `${timeoutDateObj.getFullYear()}/${timeoutDateObj.getMonth() + 1}/${timeoutDateObj.getDate()}`;
+                    
+                    const tomorrow = new Date(now);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const tomorrowStr = `${tomorrow.getFullYear()}/${tomorrow.getMonth() + 1}/${tomorrow.getDate()}`;
+
+                    if (expireDayStr === todayStr) {
+                        deadlineLabel = '本日24時';
+                    } else if (expireDayStr === tomorrowStr) {
+                        deadlineLabel = '明日24時';
+                    } else {
+                        deadlineLabel = `${timeoutDateObj.getMonth() + 1}月${timeoutDateObj.getDate()}日24時`;
+                    }
+                }
+
                 const timeoutMsg = document.createElement('div');
                 timeoutMsg.style.fontSize = '14px';
                 timeoutMsg.style.color = '#333';
                 timeoutMsg.style.lineHeight = '1.6';
-                timeoutMsg.innerHTML = `設定された閲覧期限を経過しましたが、反応がありません。<br><span style="color: #d9534f; font-weight: bold; display: inline-block; margin-top: 5px;">このまま本日24時までに申込者から再依頼がない場合、このチケットは自動的に電話対応に切り替わります。</span>`;
+                timeoutMsg.innerHTML = `設定された閲覧期限を経過しましたが、反応がありませんでした。<br>しばらく様子を見る場合は一旦電子カルテ側の仮予約を解除することを検討してください。`;
                 historyContainer.appendChild(timeoutMsg);
                 
                 const btnGroup = document.createElement('div');
@@ -2412,7 +2434,6 @@
                     const payload = {
                         [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_REQUIRE_PHONE_VALUE },
                         [CONFIG.FIELDS.METHOD]: { value: 'phone' },
-                        [CONFIG.FIELDS.SEND_DATE]: { value: null },
                         [CONFIG.FIELDS.READ_DATE]: { value: null },
                         [CONFIG.FIELDS.TIMEOUT]: { value: null },
                         '共通評価': { value: commonEval }
@@ -2423,6 +2444,15 @@
 
                 btnGroup.appendChild(switchPhoneBtn);
                 historyContainer.appendChild(btnGroup);
+
+                const autoSwitchMsg = document.createElement('div');
+                autoSwitchMsg.style.fontSize = '13px';
+                autoSwitchMsg.style.color = '#d9534f';
+                autoSwitchMsg.style.fontWeight = 'bold';
+                autoSwitchMsg.style.marginTop = '15px';
+                autoSwitchMsg.style.lineHeight = '1.6';
+                autoSwitchMsg.innerHTML = `このまま${deadlineLabel}までに申込者から再依頼がない場合、このチケットは自動的に電話対応に切り替わります。`;
+                historyContainer.appendChild(autoSwitchMsg);
             } else {
                 // タイムアウト予告表示 (未読かつタイムアウト設定ありかつ送信済ステータスの場合)
                 if (!readDateVal && timeoutDateObj && isSent) {
@@ -2516,7 +2546,7 @@
                 sendMailBtn.disabled = true;
             } else if (isTimeoutStatus) {
                 sendMailBtn.style.display = 'none'; // ボタンを非表示にする
-            } else if (currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || (currentMethod === 'phone' && purpose !== '取消')) {
+            } else if ((currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || (currentMethod === 'phone' && purpose !== '取消')) && !isReRequest) {
                 sendMailBtn.textContent = '電話対応を完了する';
                 sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
                 sendMailBtn.onclick = () => processSendMail(currentDate, currentTime, sendMsgInput ? sendMsgInput.value : '');
@@ -2783,11 +2813,14 @@
                 const isReconfigOk = await showDialog('仮予約情報を最初から再設定しますか？\n申込者へ送付済みのメールのリンクは無効表示になります。', 'confirm', '再設定の確認', '', '再設定する', 'キャンセル', '電カル側の予約枠を解除しました。');
                 if (!isReconfigOk) return;
 
+                // 未読のメール送信履歴がある場合は保持し、既読の場合はクリアする
+                const preservedSendDate = (sendDateVal && !readDateVal) ? sendDateVal : null;
+
                 const payload = {
                     [CONFIG.FIELDS.STATUS]: { value: '担当設定' },
                     [CONFIG.FIELDS.RES_DATE]: { value: null },
                     [CONFIG.FIELDS.RES_TIME]: { value: null },
-                    [CONFIG.FIELDS.SEND_DATE]: { value: null },
+                    [CONFIG.FIELDS.SEND_DATE]: { value: preservedSendDate },
                     [CONFIG.FIELDS.READ_DATE]: { value: null },
                     [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
                     [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },

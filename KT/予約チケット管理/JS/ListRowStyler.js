@@ -384,7 +384,6 @@
                     // タイムアウト翌日になったら、電話対応に切り替える
                     updatePayload[CONFIG.STATUS_FIELD] = { value: '要電話対応' };
                     updatePayload[CONFIG.METHOD_FIELD] = { value: 'phone' };
-                    updatePayload[CONFIG.SEND_DATE_FIELD] = { value: null };
                     updatePayload[CONFIG.READ_DATE_FIELD] = { value: null };
                     updatePayload[CONFIG.TIMEOUT_FIELD] = { value: null };
                     updatePayload[CONFIG.PHONE_CONFIRM_FIELD] = { value: null };
