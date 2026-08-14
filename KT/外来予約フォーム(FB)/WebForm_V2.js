@@ -651,10 +651,13 @@
                   return !inactiveStatuses.includes(status);
               });
 
-              if (activeRecord) {
+              // 用件が「取消」の場合は、進行中のチケットが存在していても予約取り消しを受け付ける（制限対象外）
+              const isCancelRequest = (config.state.requirement === '取消');
+
+              if (activeRecord && !isCancelRequest) {
                   isChartNoDuplicate = true;
                   resultArea.style.cssText = 'padding: 15px; border-radius: 5px; background-color: #fff5f5; border: 2px solid #e53e3e; color: #c53030; font-weight: bold; font-size: 13px; line-height: 1.6; margin-top: 15px; margin-bottom: 20px; text-align: center;';
-                  const errMsg = `⚠️ 現在、別途ご依頼いただいておりますご用件を処理しているため、Webフォームから続けての申し込みはできません。<br>お急ぎの場合はお電話にてお問い合わせください。`;
+                  const errMsg = `⚠️ 現在、既にお申込みをいただいているため、Webフォームから続けてのお申込みができません。<br>お急ぎの場合はお電話にてお問い合わせください。`;
                   resultArea.innerHTML = errMsg;
                   
                   fieldsWrapper.style.display = 'none';
@@ -769,26 +772,51 @@
                   return cNo && cNo.trim().toUpperCase() === chartNo.toUpperCase();
               });
 
-              const untrustedStatuses = ['未着手', 'スタッフ取下', '強制終了', 'URL取下', 'WEB取下'];
-              const recordWithDob = matchingChartRecords.find(r => {
-                  const hasDob = getFieldValue(r, dobKeys);
-                  if (!hasDob) return false;
-                  const status = getFieldValue(r, statusKeys);
-                  if (!status || untrustedStatuses.includes(status)) return false;
-                  return true;
-              });
+              // --- 生年月日照合（3分岐判定ロジック） ---
+              // 1. 同一カルテNoのチケットが存在しない場合 -> 誕生日の照合判定はなく通す
+              if (matchingChartRecords.length > 0) {
+                  // スタッフの確認前（未着手・担当設定）の未確定ステータス
+                  const unverifiedStatuses = ['未着手', '担当設定'];
 
-              if (recordWithDob) {
+                  // 取消済み、または仮予約日時確定段階を経た「信頼できる過去チケット」を抽出
+                  const trustedRecords = matchingChartRecords.filter(r => {
+                      const status = getFieldValue(r, statusKeys);
+                      const dob = getFieldValue(r, dobKeys);
+                      if (!status || unverifiedStatuses.includes(status)) return false;
+                      return dob && dob.trim() !== '';
+                  });
+
+                  // 2. 同一カルテNoはあるが、信頼できる過去チケットが1件もない（未着手・担当設定のみ）場合 -> 通さない
+                  if (trustedRecords.length === 0) {
+                      errorArea.innerHTML = '⚠️ 現在、以前のお申込み内容をスタッフが確認中のため、Webからの追加手続きはお受けできません。<br>お急ぎの場合はお電話にてお問い合わせください。';
+                      errorArea.style.display = 'block';
+                      isCheckingAuth = false;
+                      return;
+                  }
+
+                  // 3. 信頼できる過去チケットが存在する場合 -> 生年月日照合を実行
+                  const recordWithDob = trustedRecords[0];
                   const pastDob = getFieldValue(recordWithDob, dobKeys);
-                  const inputY = String(yVal);
-                  const inputM = String(mVal).padStart(2, '0');
-                  const inputD = String(dVal).padStart(2, '0');
-                  
-                  const isYearMatch = pastDob.includes(inputY);
-                  const isMonthMatch = pastDob.includes(`${mVal}月`) || pastDob.includes(`-${inputM}-`) || pastDob.includes(`/${inputM}/`);
-                  const isDayMatch = pastDob.includes(`${dVal}日`) || pastDob.endsWith(`-${inputD}`) || pastDob.endsWith(`/${inputD}`) || pastDob.includes(`-${inputD} `);
+                  let isMatched = false;
 
-                  if (!isYearMatch || (!isMonthMatch && !isDayMatch)) {
+                  // 正規表現による YYYY-MM-DD, YYYY/MM/DD, YYYY年M月D日 等のパース
+                  const match = pastDob.match(/(\d{4})[^\d]+(\d{1,2})[^\d]+(\d{1,2})/);
+                  if (match) {
+                      const pastY = parseInt(match[1], 10);
+                      const pastM = parseInt(match[2], 10);
+                      const pastD = parseInt(match[3], 10);
+                      isMatched = (pastY === parseInt(yVal, 10) && pastM === parseInt(mVal, 10) && pastD === parseInt(dVal, 10));
+                  } else {
+                      const inputY = String(yVal);
+                      const inputM = String(mVal).padStart(2, '0');
+                      const inputD = String(dVal).padStart(2, '0');
+                      const isYearMatch = pastDob.includes(inputY);
+                      const isMonthMatch = pastDob.includes(`${mVal}月`) || pastDob.includes(`-${inputM}-`) || pastDob.includes(`/${inputM}/`);
+                      const isDayMatch = pastDob.includes(`${dVal}日`) || pastDob.endsWith(`-${inputD}`) || pastDob.endsWith(`/${inputD}`) || pastDob.includes(`-${inputD} `);
+                      isMatched = isYearMatch && isMonthMatch && isDayMatch;
+                  }
+
+                  if (!isMatched) {
                       errorArea.innerHTML = '⚠️ 生年月日が一致しません。<br>診察券の表記をご確認ください。';
                       errorArea.style.display = 'block';
                       isCheckingAuth = false;
@@ -2545,7 +2573,7 @@
       }
 
       function initializePatientFormUI(container) {
-        const chartCardImageUrl = 'https://i.ibb.co/6kmdrf7/No.png';
+        const chartCardImageUrl = 'https://i.ibb.co/gMyxH8ZY/image.png';
         
         container.innerHTML = `
           <form class="g-patient-form" novalidate style="border: none; padding: 0;">

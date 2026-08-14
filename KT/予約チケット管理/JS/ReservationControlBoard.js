@@ -535,39 +535,27 @@
           reviveBtn.style.backgroundColor = '#f39c12';
 
           reviveBtn.onclick = async () => {
-              const reason = await showDialog(`チケットを${currentStatus === '強制終了' ? '直前の状態' : '「要電話対応」'}で復活させますか？\n復活する理由を入力してください。`, 'prompt', 'チケット復活', '理由を入力（必須）');
+              const reason = await showDialog('チケットを「担当設定」で復活させますか？\n復活する理由を入力してください。', 'prompt', 'チケット復活', '理由を入力（必須）');
               if (reason === null) return;
               if (reason.trim() === '') {
                   await showDialog('理由が入力されていないため、復活をキャンセルしました。', 'warning');
                   return;
               }
 
-              let payload = { 'ReserveLock': { value: 'lock' } }; // 復活のためデフォルトでロックをかけ直す
-
-              if (currentStatus === '強制終了') {
-                  // 履歴を遡って直前の有効なステータスを探す
-                  let previousStatus = '担当設定'; // 見つからなかった場合のフォールバック
-                  if (record['経過情報'] && record['経過情報'].value) {
-                      const histories = record['経過情報'].value;
-                      for (let i = histories.length - 1; i >= 0; i--) {
-                          const st = histories[i].value['経過情報_管理状態']?.value;
-                          // 瞬間的なステータスや終了系ステータスを除外
-                          if (st && !['強制終了', 'チケット復活', '終了', '予約日時通過', '診療日時通過'].includes(st)) {
-                              previousStatus = st;
-                              break;
-                          }
-                      }
-                  }
-                  payload[CONFIG.FIELDS.STATUS] = { value: previousStatus };
-                  // 直前の状態がキャンセルや取下だった場合はロックを解除したままにする
-                  if (['WEB取下', 'キャンセル', 'スタッフ取下'].includes(previousStatus)) {
-                      payload['ReserveLock'] = { value: 'unlock' };
-                  }
-              } else {
-                  // 「終了」からの復活（日時経過） -> 要電話対応で復活
-                  payload[CONFIG.FIELDS.STATUS] = { value: CONFIG.STATUS_REQUIRE_PHONE_VALUE };
-                  payload[CONFIG.FIELDS.METHOD] = { value: 'phone' };
-              }
+              const payload = {
+                  [CONFIG.FIELDS.STATUS]: { value: '担当設定' },
+                  [CONFIG.FIELDS.METHOD]: { value: 'staff' },
+                  [CONFIG.FIELDS.RES_DATE]: { value: null },
+                  [CONFIG.FIELDS.RES_TIME]: { value: null },
+                  [CONFIG.FIELDS.SEND_DATE]: { value: null },
+                  [CONFIG.FIELDS.READ_DATE]: { value: null },
+                  [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
+                  [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
+                  [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
+                  [CONFIG.FIELDS.TIMEOUT]: { value: null },
+                  [CONFIG.FIELDS.NOTE]: { value: null },
+                  'ReserveLock': { value: 'lock' }
+              };
 
               // 「チケット復活」を瞬間ステータスとして履歴に残す（skipStatusHistoryはfalseなので復活先のステータスも記録される）
               const success = await updateRecord(recordId, payload, ['チケット復活'], false, false, reason.trim());
@@ -815,17 +803,9 @@
           const timeoutSelect = container.querySelector('select');
           const selectedTimeout = timeoutSelect ? timeoutSelect.value : null;
 
-          // トークンの確保 (レコードになければ新規生成)
-          let token = urlToken;
-          if (!token) {
-              token = Math.random().toString(36).substring(2, 10);
-              // 【重要】プレビューのリンクを機能させるため、ダイアログ表示前にトークンを保存する
-              const tokenSaved = await updateRecord(recordId, { 
-                  [CONFIG.FIELDS.URL_TOKEN]: { value: token } 
-              });
-              if (!tokenSaved) return; // 保存に失敗した場合は中断
-              urlToken = token;
-          }
+          // 1メール1URLの原則: 新規メール送信ごとに常に新しいURLトークンを発行（旧メールのURLは自動的に失効）
+          const token = Math.random().toString(36).substring(2, 10);
+          urlToken = token;
 
           // 送信内容のプレビュー作成
           const email = record[CONFIG.FIELDS.EMAIL]?.value || '';
@@ -985,6 +965,7 @@
 
             const updatePayload = { 
                 [CONFIG.FIELDS.STATUS]: { value: targetStatus },
+                [CONFIG.FIELDS.URL_TOKEN]: { value: token }, // 新規発行したURLトークンを保存
                 [CONFIG.FIELDS.SEND_DATE]: { value: new Date().toISOString() },
                 [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
                 [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
@@ -1247,11 +1228,63 @@
           // すでに日時が設定されていた（再設定の）場合は文言を変更
           const isUpdate = currentDate && currentTime;
           const checkboxMsg = isUpdate ? '事前に電子カルテ側の予約を変更済' : '事前に電子カルテ側の予約を確保済';
-          const isSaveOk = await showDialog('', 'confirm', '予約日時の決定', '', '決定', 'キャンセル', checkboxMsg);
+          const confirmTitle = '予約日時の決定';
+          const formattedDateText = (typeof formatToJapaneseDate === 'function') ? formatToJapaneseDate(newDate) : newDate;
+          const confirmMsg = `仮予約日時を「${formattedDateText} ${selectedTime}」に設定します。\nよろしいですか？`;
+          const isSaveOk = await showDialog(confirmMsg, 'confirm', confirmTitle, '', '決定', 'キャンセル', checkboxMsg);
           if (!isSaveOk) return;
     
           saveBtn.disabled = true;
           saveBtn.textContent = '保存中...';
+
+          // 最新のレコード情報を取得して未読判定
+          let latestRecord = null;
+          try {
+              const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
+                  app: kintone.app.getId(),
+                  id: recordId
+              });
+              latestRecord = resp.record;
+          } catch (e) {
+              console.error('Failed to fetch latest record', e);
+          }
+
+          const latestSendDate = latestRecord?.[CONFIG.FIELDS.SEND_DATE]?.value || sendDateVal;
+          const latestReadDate = latestRecord?.[CONFIG.FIELDS.READ_DATE]?.value || readDateVal;
+          const latestStatus = latestRecord?.[CONFIG.FIELDS.STATUS]?.value || currentStatus;
+
+          // メール対応で、過去にメール送信実績があり、かつ未読の場合（そっと変更・サイレント更新）
+          if (currentMethod !== 'phone' && latestSendDate && !latestReadDate) {
+              const payload = {
+                  [CONFIG.FIELDS.RES_DATE]: { value: newDate },
+                  [CONFIG.FIELDS.RES_TIME]: { value: selectedTime },
+                  [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_SENT_VALUE },
+                  [CONFIG.FIELDS.SEND_DATE]: { value: new Date().toISOString() }, // タイムアウト起算点を更新
+                  [CONFIG.FIELDS.READ_DATE]: { value: null },
+                  [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
+                  [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
+                  'ReserveLock': { value: 'lock' }
+              };
+              if (currentMethod) {
+                  payload[CONFIG.FIELDS.METHOD] = { value: currentMethod };
+              }
+
+              const success = await updateRecord(recordId, payload, ['仮予約日時変更'], false, false, `未読のためメール再送なしで仮予約日時を更新（${formattedDateText} ${selectedTime}）`);
+              if (success) {
+                  await showDialog('患者様は未読のためメールは再送せず、仮予約日時を更新しました。\n（お手元のメールのURLから新しい予約日時が表示されます）', 'success');
+                  location.reload();
+                  return;
+              } else {
+                  saveBtn.disabled = false;
+                  saveBtn.textContent = '決定';
+                  return;
+              }
+          }
+
+          // すでに既読の場合で、再調整した場合は注意を促す
+          if (currentMethod !== 'phone' && latestSendDate && latestReadDate) {
+              await showDialog('患者様が以前の仮予約案内を既に閲覧されています。\n新しい仮予約日時で案内メールを送信してください。', 'info');
+          }
     
           const payload = {
             [CONFIG.FIELDS.RES_DATE]: { value: newDate },
@@ -1262,7 +1295,7 @@
           }
 
           // スタッフ取下中の場合、ステータスをクリアしてメール送信可能状態にする
-          if (currentStatus === CONFIG.STATUS_WITHDRAWN_VALUE) {
+          if (latestStatus === CONFIG.STATUS_WITHDRAWN_VALUE) {
               payload[CONFIG.FIELDS.STATUS] = { value: null };
           }
     
@@ -1275,7 +1308,7 @@
             }, 800);
           } else {
             saveBtn.disabled = false;
-            saveBtn.textContent = '予約日時を保存する';
+            saveBtn.textContent = '決定';
           }
         };
     

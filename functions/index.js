@@ -377,7 +377,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
 
         // 既にキャンセル済みの場合は専用画面へ
         if (currentStatus === "キャンセル" || currentStatus === "URL取下") {
-            res.status(200).send(getAlreadyCancelledHtml(centerName, phoneNumber));
+            res.status(200).send(getAlreadyCancelledHtml(centerName, phoneNumber, currentStatus));
             return;
         }
 
@@ -502,7 +502,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     // 1. 既に無効ステータスの場合 (再設定、キャンセル済等)
     // ※既読処理より先に判定し、無効画面を表示して処理を終了する
     if (currentStatus === "キャンセル" || currentStatus === "URL取下" || currentStatus === "スタッフ取下" || currentStatus === "終了" || currentStatus === "担当設定") {
-        res.status(200).send(getAlreadyCancelledHtml(centerName, phoneNumber));
+        res.status(200).send(getAlreadyCancelledHtml(centerName, phoneNumber, currentStatus));
         return;
     }
 
@@ -767,28 +767,62 @@ function getConfirmedHtml(record, recordId, showCancel, mode, centerName, phoneN
 }
 
 /**
- * 既にキャンセル済みの場合のHTML
+ * 既にキャンセル・無効・終了済みの場合のHTML
  */
-function getAlreadyCancelledHtml(centerName, phoneNumber) {
+function getAlreadyCancelledHtml(centerName, phoneNumber, currentStatus = "") {
+    const defaultCenter = centerName || "湘南東部外来予約センター";
+    const defaultPhone = phoneNumber || "045-832-8337 (平日～土曜日 9:00～17:00)";
+
+    let reasonText = "";
+    let subContentHtml = "";
+
+    if (currentStatus === "URL取下" || currentStatus === "キャンセル") {
+        // ① 患者様からお取下げのご依頼をいただいた (1)
+        reasonText = "この情報は患者様からお取下げのご依頼をいただいたため表示することができません。";
+        subContentHtml = `
+          <p style="margin-top: 15px;">ご不明な点がございましたら、${defaultCenter}までお問い合わせください。</p>
+          <p style="font-size: 14px; font-weight: bold; margin-top: 8px;">TEL: ${defaultPhone}</p>
+        `;
+    } else if (currentStatus === "終了") {
+        // ② 患者様が予定していた診療日時が過ぎている (3)
+        reasonText = "この情報は患者様が予定していた診療日時が過ぎているため表示することができません。";
+        subContentHtml = `
+          <p style="margin-top: 15px;">ご不明な点がございましたら、${defaultCenter}までお問い合わせください。</p>
+          <p style="font-size: 14px; font-weight: bold; margin-top: 8px;">TEL: ${defaultPhone}</p>
+        `;
+    } else if (currentStatus === "スタッフ取下" || currentStatus === "担当設定") {
+        // ③ 予約センター側での再調整 (2, 4)
+        reasonText = "この情報が含まれるメールは予約センター側での再調整が必要になったため無効となりました。<br>お手数ですが破棄するようにしてください。";
+        subContentHtml = `
+          <p style="margin-top: 15px;">予約センターより改めてご連絡させていただきます。</p>
+        `;
+    } else {
+        // フォールバック
+        reasonText = "この情報が含まれるメールは予約センター側での再調整が必要になったため無効となりました。<br>お手数ですが破棄するようにしてください。";
+        subContentHtml = `
+          <p style="margin-top: 15px;">ご不明な点がございましたら、${defaultCenter}までお問い合わせください。</p>
+          <p style="font-size: 14px; font-weight: bold; margin-top: 8px;">TEL: ${defaultPhone}</p>
+        `;
+    }
+
     return `
       <!DOCTYPE html>
       <html lang="ja">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>キャンセル済み</title>
+        <title>ご案内</title>
         <style>
           body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; text-align: center; }
-          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-          h1 { color: #7f8c8d; font-size: 20px; }
-          p { color: #555; line-height: 1.6; }
+          .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+          h1 { color: #7f8c8d; font-size: 18px; line-height: 1.6; font-weight: bold; }
+          p { color: #555; line-height: 1.6; font-size: 14px; }
         </style>
       </head>
       <body>
         <div class="container">
-          <h1>この予約は無効になりました</h1>
-          <p>この予約は無効となったか、既に取り下げ手続きが完了しています。<br>ご不明な点がございましたら、${centerName}までお問い合わせください。</p>
-          ${phoneNumber ? `<p style="font-size: 14px; font-weight: bold;">TEL: ${phoneNumber}</p>` : ''}
+          <h1>${reasonText}</h1>
+          ${subContentHtml}
         </div>
       </body>
       </html>
@@ -1056,31 +1090,32 @@ function getErrorHtml(message, centerName, phoneNumber) {
 }
 
 /**
- * 有効期限切れ画面のHTMLを生成するヘルパー関数
+ * 有効期限切れ（旧トークン失効・不一致）画面のHTMLを生成するヘルパー関数
  */
 function getExpiredHtml(centerName, phoneNumber) {
+  const defaultCenter = centerName || "ふれあいグループ 湘南東部病院予約センター";
+  const defaultPhone = phoneNumber || "045-832-8337 (平日～土曜日 9:00～17:00)";
   return `
     <!DOCTYPE html>
     <html lang="ja">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>リンク有効期限切れ</title>
+      <title>ご案内</title>
       <style>
-        body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .container { max-width: 500px; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; }
-        h1 { color: #e74c3c; font-size: 20px; margin-bottom: 20px; }
+        body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { max-width: 500px; background: #fff; padding: 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; }
+        h1 { color: #7f8c8d; font-size: 18px; line-height: 1.6; font-weight: bold; margin-bottom: 20px; }
         p { font-size: 14px; line-height: 1.6; color: #555; }
-        .icon { font-size: 48px; margin-bottom: 20px; }
       </style>
     </head>
     <body>
       <div class="container">
-        <div class="icon">⚠️</div>
-        <h1>このリンクは無効です</h1>
-        <p>予約日時を過ぎているため、詳細を表示できません。<br>
-        ご不明な点がございましたら、${centerName}までお問い合わせください。</p>
-        ${phoneNumber ? `<p style="font-size: 14px; font-weight: bold;">TEL: ${phoneNumber}</p>` : ''}
+        <h1>この情報が含まれるメールは予約センター側での再調整が必要になったため無効となりました。<br>お手数ですが破棄するようにしてください。</h1>
+        <p style="margin-top: 15px;">予約センターより改めてご連絡（または最新のメールを送付）させていただきます。<br>最新のメール、またはご案内をご確認ください。</p>
+        <hr style="border:0; border-top:1px solid #eee; margin: 20px 0;">
+        <p style="font-size: 13px;">ご不明な点がございましたら、${defaultCenter}までお問い合わせください。</p>
+        <p style="font-size: 14px; font-weight: bold; margin-top: 8px;">TEL: ${defaultPhone}</p>
       </div>
     </body>
     </html>
