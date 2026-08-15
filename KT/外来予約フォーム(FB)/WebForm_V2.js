@@ -262,6 +262,80 @@
         window.scrollTo(0, 0);
       }
 
+      let isSubmittingDirectly = false;
+
+      // document全体に対する最上位キャプチャフェーズのクリック監視（Vue.js再描画によるリスナー破棄を100%防止）
+      document.addEventListener('click', async (e) => {
+          const btn = e.target.closest ? e.target.closest('button, input[type="submit"]') : null;
+          if (!btn) return;
+
+          // 自前のナビゲーションボタンや確認ボタン等は除外
+          if (btn.classList.contains('gemini-nav-btn') || 
+              btn.id === 'gemini-btn-check-duplicate' || 
+              btn.id === 'gemini-auth-modal-submit' || 
+              btn.id === 'gemini-auth-modal-cancel' || 
+              btn.id === 'gemini-custom-alert-ok-btn') {
+              return;
+          }
+
+          // 送信ボタンかどうかの判定（クラス名や属性）
+          const isSubmitButton = btn.classList.contains('fb-submit') || 
+                                 btn.classList.contains('el-button--primary') || 
+                                 btn.closest('.fb-custom--button--submit') ||
+                                 btn.type === 'submit' ||
+                                 (btn.textContent && btn.textContent.includes('予約を申し込む')) ||
+                                 (btn.value && btn.value.includes('予約を申し込む'));
+
+          if (!isSubmitButton) return;
+
+          if (isSubmittingDirectly) return;
+
+          // FormBridge標準の送信処理を100%最優先で停止
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          const origText = (btn.tagName === 'INPUT') ? btn.value : btn.textContent;
+          if (btn.tagName === 'INPUT') {
+              btn.value = '確認中...';
+          } else {
+              btn.textContent = '確認中...';
+          }
+          btn.disabled = true;
+
+          const chartNo = config.state.submitData[config.fbFields.CHART_NO] || 
+                          document.getElementById(config.uiIds.CHART_NO)?.value?.trim();
+
+          if (chartNo) {
+              try {
+                  const blockMsg = await getDuplicateBlockMessage(chartNo);
+                  if (blockMsg) {
+                      await showCustomAlert([blockMsg.replace(/<br>/g, '\n')]);
+                      if (btn.tagName === 'INPUT') {
+                          btn.value = origText;
+                      } else {
+                          btn.textContent = origText;
+                      }
+                      btn.disabled = false;
+                      return; // 送信を完全に遮断
+                  }
+              } catch (err) {
+                  console.error('[Submit Intercept Error]', err);
+              }
+          }
+
+          // 重複なし：フラグを立てて本来のFormBridge送信を実行
+          updateFbField(config.fbFields.HIDDEN_SUBMIT_FLAG, 'On');
+          isSubmittingDirectly = true;
+          if (btn.tagName === 'INPUT') {
+              btn.value = '送信中...';
+          } else {
+              btn.textContent = '送信中...';
+          }
+          btn.disabled = false;
+          btn.click();
+      }, true); // ★ capture: true で最上位のdocumentから全イベントを先回り捕捉
+
       function setupSubmitButton() {
           const submitBtn = document.querySelector('.fb-submit') || 
                             document.querySelector('.fb-custom--button--submit button') ||
@@ -272,13 +346,6 @@
               submitBtn.value = '予約を申し込む';
           } else {
               submitBtn.textContent = '予約を申し込む';
-          }
-
-          if (!submitBtn.dataset.geminiValidated) {
-              submitBtn.dataset.geminiValidated = 'true';
-              submitBtn.addEventListener('click', () => {
-                  updateFbField(config.fbFields.HIDDEN_SUBMIT_FLAG, 'On');
-              });
           }
       }
 
@@ -302,31 +369,110 @@
                   nextBtn.textContent = '入力内容を確認する';
                   nextBtn.style.cssText = 'background-color: #007bff; color: white; border: none; padding: 12px 35px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer;';
 
-                  nextBtn.addEventListener('click', () => {
-                      if (validateStep1()) {
-                          switchStep(2);
+                  nextBtn.addEventListener('click', async () => {
+                      if (!validateStep1()) {
+                          return;
                       }
+
+                      // 確認画面へ進む直前に最新チケット状況を再照合（別タブ・別端末からの並行送信をブロック）
+                      const chartNo = document.getElementById(config.uiIds.CHART_NO)?.value?.trim() || config.state.submitData[config.fbFields.CHART_NO];
+                      if (chartNo) {
+                          nextBtn.disabled = true;
+                          const origText = nextBtn.textContent;
+                          nextBtn.textContent = '確認中...';
+                          try {
+                              const blockMsg = await getDuplicateBlockMessage(chartNo);
+                              if (blockMsg) {
+                                  await showCustomAlert([blockMsg.replace(/<br>/g, '\n')]);
+                                  const resultArea = document.getElementById('gemini-section-duplicate-check-result');
+                                  if (resultArea) {
+                                      resultArea.style.display = 'block';
+                                      resultArea.style.cssText = 'padding: 15px; border-radius: 5px; background-color: #fff5f5; border: 2px solid #e53e3e; color: #c53030; font-weight: bold; font-size: 13px; line-height: 1.6; margin-top: 15px; margin-bottom: 20px; text-align: center;';
+                                      resultArea.innerHTML = blockMsg;
+                                  }
+                                  document.getElementById('gemini-patient-fields-wrapper').style.display = 'none';
+                                  document.body.classList.remove('gemini-fields-active');
+                                  updateNavigationButtons();
+                                  return;
+                              }
+                          } catch (e) {
+                              console.error('Pre-proceed check error', e);
+                          } finally {
+                              nextBtn.disabled = false;
+                              nextBtn.textContent = origText;
+                          }
+                      }
+
+                      switchStep(2);
                   });
                   navContainer.appendChild(nextBtn);
               } else {
                   navContainer.style.display = 'none';
               }
           } else if (config.state.currentStep === 2) {
-              navContainer.style.display = 'block';
-              navContainer.style.textAlign = 'center';
-              navContainer.style.marginTop = '20px';
-              navContainer.style.marginBottom = '20px';
+              navContainer.style.display = 'flex';
+              navContainer.style.justifyContent = 'center';
+              navContainer.style.alignItems = 'center';
+              navContainer.style.gap = '15px';
+              navContainer.style.marginTop = '30px';
+              navContainer.style.marginBottom = '30px';
 
               const backBtn = document.createElement('button');
               backBtn.type = 'button';
               backBtn.className = 'gemini-nav-btn gemini-injected-back-btn';
               backBtn.textContent = '修正する（入力画面へ戻る）';
-              backBtn.style.cssText = 'background-color: #6c757d; color: white; border: none; padding: 10px 25px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; margin-right: 15px;';
+              backBtn.style.cssText = 'background-color: #6c757d; color: white; border: none; padding: 12px 25px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; height: 46px;';
               backBtn.addEventListener('click', () => {
                   switchStep(1);
               });
               navContainer.appendChild(backBtn);
-              setupSubmitButton();
+
+              const customSubmitBtn = document.createElement('button');
+              customSubmitBtn.id = 'gemini-custom-submit-btn';
+              customSubmitBtn.type = 'button';
+              customSubmitBtn.className = 'gemini-nav-btn';
+              customSubmitBtn.textContent = '予約を申し込む';
+              customSubmitBtn.style.cssText = 'background-color: #1E8449; color: white; border: 1px solid #1A5276; padding: 12px 35px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; height: 46px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);';
+
+              customSubmitBtn.addEventListener('click', async () => {
+                  if (isSubmittingDirectly) return;
+
+                  customSubmitBtn.disabled = true;
+                  customSubmitBtn.textContent = '確認中...';
+
+                  const chartNo = config.state.submitData[config.fbFields.CHART_NO] || 
+                                  document.getElementById(config.uiIds.CHART_NO)?.value?.trim();
+
+                  if (chartNo) {
+                      try {
+                          const blockMsg = await getDuplicateBlockMessage(chartNo);
+                          if (blockMsg) {
+                              await showCustomAlert([blockMsg.replace(/<br>/g, '\n')]);
+                              customSubmitBtn.disabled = false;
+                              customSubmitBtn.textContent = '予約を申し込む';
+                              return; // 送信を完全に中止
+                          }
+                      } catch (err) {
+                          console.error('Custom Submit check error:', err);
+                      }
+                  }
+
+                  // 重複なし：送信を実行
+                  customSubmitBtn.textContent = '送信中...';
+                  updateFbField(config.fbFields.HIDDEN_SUBMIT_FLAG, 'On');
+                  isSubmittingDirectly = true;
+
+                  const nativeBtn = document.querySelector('.fb-submit') || 
+                                    document.querySelector('.fb-custom--button--submit button') ||
+                                    document.querySelector('button[type="submit"]');
+                  if (nativeBtn) {
+                      nativeBtn.click();
+                  } else {
+                      console.error('Native submit button not found in DOM');
+                  }
+              });
+
+              navContainer.appendChild(customSubmitBtn);
           }
       }
 
@@ -448,14 +594,23 @@
 
       async function fetchTicketData() {
           try {
-              const response = await fetch(config.TICKET_API_URL);
+              const cacheBuster = `_t=${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              const sep = config.TICKET_API_URL.includes('?') ? '&' : '?';
+              const url = `${config.TICKET_API_URL}${sep}${cacheBuster}`;
+              const response = await fetch(url, {
+                  cache: 'no-store',
+                  headers: {
+                      'Pragma': 'no-cache',
+                      'Cache-Control': 'no-cache'
+                  }
+              });
               if (!response.ok) return;
               const data = await response.json();
               if (data && data.records) {
                   config.state.rawTicketRecords = data.records;
               }
           } catch (err) {
-              console.error('[TicketData] Fetch Error:', err);
+              console.warn('[TicketData] kViewer API unavailable (Cloud Functions fallback active):', err.message);
           }
       }
 
@@ -617,6 +772,72 @@
       let isChartNoDuplicate = false;
       let isCheckingAuth = false;
 
+      async function getDuplicateBlockMessage(chartNo) {
+          if (!chartNo) return null;
+          const reqVal = config.state.requirement || '';
+
+          // 1. Firebase Cloud Functions による Kintone 直接リアルタイム照合（遅延ゼロ）
+          try {
+              const cfUrl = `https://checkduplicateticket-yoslzibmlq-uc.a.run.app/?chartNo=${encodeURIComponent(chartNo)}&requirement=${encodeURIComponent(reqVal)}&_t=${Date.now()}`;
+              const cfResp = await fetch(cfUrl, { cache: 'no-store' });
+              if (cfResp.ok) {
+                  const cfData = await cfResp.json();
+                  if (cfData.status === 'success') {
+                      if (cfData.blocked) {
+                          return cfData.message;
+                      }
+                      return null;
+                  }
+              }
+          } catch (e) {
+              console.warn('[Realtime Dup Check] Functions query fallback to kViewer:', e);
+          }
+
+          // 2. kViewer によるフォールバック判定
+          await fetchTicketData();
+          const ticketRecords = config.state.rawTicketRecords || [];
+          const chartKeys = ['カルテNo', 'カルテID', config.fbFields.CHART_NO, 'karte_no', 'KarteNo', 'chart_no'];
+          const statusKeys = ['管理状況', 'ステータス', 'status', 'Status'];
+          const requirementKeys = ['用件', 'REQUIREMENT', config.fbFields.REQUIREMENT, 'purpose', 'Purpose'];
+
+          const matchingChartRecords = ticketRecords.filter(r => {
+              const cNo = getFieldValue(r, chartKeys);
+              return cNo && cNo.trim().toUpperCase() === chartNo.toUpperCase();
+          });
+
+          const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
+          const activeRecords = matchingChartRecords.filter(r => {
+              const status = (getFieldValue(r, statusKeys) || '').trim();
+              return !inactiveStatuses.includes(status);
+          });
+
+          const activeCancelRecord = activeRecords.find(r => {
+              const req = getFieldValue(r, requirementKeys);
+              return req === '取消';
+          });
+          const activeNormalRecord = activeRecords.find(r => {
+              const req = getFieldValue(r, requirementKeys);
+              return req !== '取消';
+          });
+
+          const isCancelRequest = (reqVal === '取消');
+
+          if (isCancelRequest) {
+              // 取消申込み時：すでに未処理の取消チケットが存在する場合は多重取消をブロック
+              if (activeCancelRecord) {
+                  return '⚠️ 現在、予約取り消しのお申込みをスタッフが確認中です。<br>複数件のお取り消しやお急ぎの場合はお電話にてお問い合わせください。';
+              }
+          } else {
+              // 新規・変更申込み時
+              if (activeCancelRecord) {
+                  return '⚠️ 直前の予約取り消し内容をスタッフが確認中のため、完了までしばらくお待ちください。<br>お急ぎの場合はお電話にてお問い合わせください。';
+              } else if (activeNormalRecord || activeRecords.length > 0) {
+                  return '⚠️ 現在、既にお申込みをいただいているため、Webフォームから続けてのお申込みができません。<br>お急ぎの場合はお電話にてお問い合わせください。';
+              }
+          }
+          return null;
+      }
+
       async function checkChartNoDuplicate() {
           const chartNoInput = document.getElementById(config.uiIds.CHART_NO);
           const resultArea = document.getElementById('gemini-section-duplicate-check-result');
@@ -635,30 +856,12 @@
           resultArea.innerHTML = '⏳ 過去の予約状況を確認しています...';
 
           try {
-              await fetchTicketData();
-              const ticketRecords = config.state.rawTicketRecords || [];
-              const chartKeys = ['カルテNo', 'カルテID', config.fbFields.CHART_NO, 'karte_no', 'KarteNo', 'chart_no'];
-              const statusKeys = ['管理状況', 'ステータス', 'status', 'Status'];
+              const blockMsg = await getDuplicateBlockMessage(chartNo);
 
-              const matchingChartRecords = ticketRecords.filter(r => {
-                  const cNo = getFieldValue(r, chartKeys);
-                  return cNo && cNo.trim().toUpperCase() === chartNo.toUpperCase();
-              });
-              const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
-              const activeRecord = matchingChartRecords.find(r => {
-                  const status = getFieldValue(r, statusKeys);
-                  if (!status || status.trim() === '') return false;
-                  return !inactiveStatuses.includes(status);
-              });
-
-              // 用件が「取消」の場合は、進行中のチケットが存在していても予約取り消しを受け付ける（制限対象外）
-              const isCancelRequest = (config.state.requirement === '取消');
-
-              if (activeRecord && !isCancelRequest) {
+              if (blockMsg) {
                   isChartNoDuplicate = true;
                   resultArea.style.cssText = 'padding: 15px; border-radius: 5px; background-color: #fff5f5; border: 2px solid #e53e3e; color: #c53030; font-weight: bold; font-size: 13px; line-height: 1.6; margin-top: 15px; margin-bottom: 20px; text-align: center;';
-                  const errMsg = `⚠️ 現在、既にお申込みをいただいているため、Webフォームから続けてのお申込みができません。<br>お急ぎの場合はお電話にてお問い合わせください。`;
-                  resultArea.innerHTML = errMsg;
+                  resultArea.innerHTML = blockMsg;
                   
                   fieldsWrapper.style.display = 'none';
                   document.body.classList.remove('gemini-fields-active');
@@ -761,16 +964,35 @@
           errorArea.style.display = 'block';
 
           try {
-              await fetchTicketData();
-              const ticketRecords = config.state.rawTicketRecords || [];
-              const chartKeys = ['カルテNo', 'カルテID', config.fbFields.CHART_NO, 'karte_no', 'KarteNo', 'chart_no'];
-              const dobKeys = ['生年月日', config.fbFields.DOB, 'birthday', 'Birthday', 'dob'];
-              const statusKeys = ['管理状況', 'ステータス', 'status', 'Status'];
+              // 1. Cloud Functions による Kintone 直接データ取得（遅延ゼロ・エラーフリー）
+              let matchingChartRecords = [];
+              try {
+                  const cfUrl = `https://checkduplicateticket-yoslzibmlq-uc.a.run.app/?chartNo=${encodeURIComponent(chartNo)}&_t=${Date.now()}`;
+                  const cfResp = await fetch(cfUrl, { cache: 'no-store' });
+                  if (cfResp.ok) {
+                      const cfData = await cfResp.json();
+                      if (cfData.status === 'success' && Array.isArray(cfData.records)) {
+                          matchingChartRecords = cfData.records;
+                      }
+                  }
+              } catch (cfErr) {
+                  console.warn('[BirthdayAuth] Cloud Functions query fallback to kViewer:', cfErr);
+              }
 
-              const matchingChartRecords = ticketRecords.filter(r => {
-                  const cNo = getFieldValue(r, chartKeys);
-                  return cNo && cNo.trim().toUpperCase() === chartNo.toUpperCase();
-              });
+              // 2. フォールバック: kViewer
+              if (matchingChartRecords.length === 0) {
+                  await fetchTicketData();
+                  const ticketRecords = config.state.rawTicketRecords || [];
+                  const chartKeys = ['カルテNo', 'カルテID', config.fbFields.CHART_NO, 'karte_no', 'KarteNo', 'chart_no'];
+                  matchingChartRecords = ticketRecords.filter(r => {
+                      const cNo = getFieldValue(r, chartKeys);
+                      return cNo && cNo.trim().toUpperCase() === chartNo.toUpperCase();
+                  }).map(r => ({
+                      dob: getFieldValue(r, ['生年月日', config.fbFields.DOB, 'birthday', 'Birthday', 'dob']),
+                      status: getFieldValue(r, ['管理状況', 'ステータス', 'status', 'Status']),
+                      req: getFieldValue(r, ['用件', 'REQUIREMENT', config.fbFields.REQUIREMENT, 'purpose', 'Purpose'])
+                  }));
+              }
 
               // --- 生年月日照合（3分岐判定ロジック） ---
               // 1. 同一カルテNoのチケットが存在しない場合 -> 誕生日の照合判定はなく通す
@@ -780,40 +1002,56 @@
 
                   // 取消済み、または仮予約日時確定段階を経た「信頼できる過去チケット」を抽出
                   const trustedRecords = matchingChartRecords.filter(r => {
-                      const status = getFieldValue(r, statusKeys);
-                      const dob = getFieldValue(r, dobKeys);
+                      const status = (r.status || '').trim();
+                      const dob = (r.dob || '').trim();
                       if (!status || unverifiedStatuses.includes(status)) return false;
-                      return dob && dob.trim() !== '';
+                      return dob !== '';
                   });
 
                   // 2. 同一カルテNoはあるが、信頼できる過去チケットが1件もない（未着手・担当設定のみ）場合 -> 通さない
                   if (trustedRecords.length === 0) {
-                      errorArea.innerHTML = '⚠️ 現在、以前のお申込み内容をスタッフが確認中のため、Webからの追加手続きはお受けできません。<br>お急ぎの場合はお電話にてお問い合わせください。';
+                      const hasCancelPending = matchingChartRecords.some(r => r.req === '取消');
+                      if (hasCancelPending) {
+                          errorArea.innerHTML = '⚠️ 直前の予約取り消し内容をスタッフが確認中のため、Webからの追加手続きはお受けできません。<br>お急ぎの場合はお電話にてお問い合わせください。';
+                      } else {
+                          errorArea.innerHTML = '⚠️ 現在、以前のお申込み内容をスタッフが確認中のため、Webからの追加手続きはお受けできません。<br>お急ぎの場合はお電話にてお問い合わせください。';
+                      }
                       errorArea.style.display = 'block';
                       isCheckingAuth = false;
                       return;
                   }
 
-                  // 3. 信頼できる過去チケットが存在する場合 -> 生年月日照合を実行
-                  const recordWithDob = trustedRecords[0];
-                  const pastDob = getFieldValue(recordWithDob, dobKeys);
+                  // 3. 信頼できる過去チケットが存在する場合 -> 生年月日照合を実行 (いずれかの過去チケットと一致すればOK)
                   let isMatched = false;
+                  for (const rec of trustedRecords) {
+                      const pastDob = rec.dob || '';
+                      if (!pastDob) continue;
 
-                  // 正規表現による YYYY-MM-DD, YYYY/MM/DD, YYYY年M月D日 等のパース
-                  const match = pastDob.match(/(\d{4})[^\d]+(\d{1,2})[^\d]+(\d{1,2})/);
-                  if (match) {
-                      const pastY = parseInt(match[1], 10);
-                      const pastM = parseInt(match[2], 10);
-                      const pastD = parseInt(match[3], 10);
-                      isMatched = (pastY === parseInt(yVal, 10) && pastM === parseInt(mVal, 10) && pastD === parseInt(dVal, 10));
-                  } else {
-                      const inputY = String(yVal);
-                      const inputM = String(mVal).padStart(2, '0');
-                      const inputD = String(dVal).padStart(2, '0');
-                      const isYearMatch = pastDob.includes(inputY);
-                      const isMonthMatch = pastDob.includes(`${mVal}月`) || pastDob.includes(`-${inputM}-`) || pastDob.includes(`/${inputM}/`);
-                      const isDayMatch = pastDob.includes(`${dVal}日`) || pastDob.endsWith(`-${inputD}`) || pastDob.endsWith(`/${inputD}`) || pastDob.includes(`-${inputD} `);
-                      isMatched = isYearMatch && isMonthMatch && isDayMatch;
+                      // 和暦などの括弧内（例: "(昭和43年)"）を除去
+                      const cleanDob = pastDob.replace(/\(.*?\)|（.*?）/g, ' ');
+
+                      // 正規表現による YYYY-MM-DD, YYYY/MM/DD, YYYY年M月D日 等のパース
+                      const match = cleanDob.match(/(\d{4})[^\d]+(\d{1,2})[^\d]+(\d{1,2})/);
+                      if (match) {
+                          const pastY = parseInt(match[1], 10);
+                          const pastM = parseInt(match[2], 10);
+                          const pastD = parseInt(match[3], 10);
+                          if (pastY === parseInt(yVal, 10) && pastM === parseInt(mVal, 10) && pastD === parseInt(dVal, 10)) {
+                              isMatched = true;
+                              break;
+                          }
+                      } else {
+                          const inputY = String(yVal);
+                          const inputM = String(mVal).padStart(2, '0');
+                          const inputD = String(dVal).padStart(2, '0');
+                          const isYearMatch = cleanDob.includes(inputY);
+                          const isMonthMatch = cleanDob.includes(`${mVal}月`) || cleanDob.includes(`-${inputM}-`) || cleanDob.includes(`/${inputM}/`);
+                          const isDayMatch = cleanDob.includes(`${dVal}日`) || cleanDob.endsWith(`-${inputD}`) || cleanDob.endsWith(`/${inputD}`) || cleanDob.includes(`-${inputD} `);
+                          if (isYearMatch && isMonthMatch && isDayMatch) {
+                              isMatched = true;
+                              break;
+                          }
+                      }
                   }
 
                   if (!isMatched) {
@@ -2537,14 +2775,6 @@
               } else {
                   updateFbField(config.fbFields.FIXED_DATETIME, '');
               }
-              
-              if (config.state.requirement === '変更' || config.state.requirement === '取消') {
-                  const hasValue = !!config.state.submitData[config.fbFields.FIXED_DATETIME];
-                  toggleSection(config.uiIds.NEW_RESERVATION_AREA, hasValue);
-                  if (hasValue && !document.getElementById('bunya-select')) {
-                      createMultiStageSelectSection();
-                  }
-              }
           };
           monthSelect.addEventListener('change', function() {
               const selectedMonth = parseInt(this.value, 10);
@@ -3039,24 +3269,19 @@
                 display: inline-flex !important;
             }
             
-            form .fb-submit, .fb-custom--button--submit { display: none !important; }
-            .gemini-step-2 .fb-submit, 
-            .gemini-step-2 .fb-custom--button--submit,
-            .gemini-step-2 .fb-custom--button--submit button { 
-                display: inline-flex !important; 
+            /* FormBridge標準の送信ボタンは完全に非表示（gemini-custom-submit-btnで排他制御を行ってから送信するため） */
+            form .fb-submit, 
+            .fb-custom--button--submit, 
+            .fb-custom--button--submit button,
+            .fb-submit-button { 
+                display: none !important; 
             }
 
             .gemini-step-2 .fb-custom--content--divider {
                 display: block !important;
             }
 
-            .gemini-nav-btn:hover, form .fb-submit:hover { opacity: 0.85 !important; }
-            form .fb-submit, .fb-custom--button--submit button { 
-                background-color: #1E8449 !important; 
-                border-color: #1A5276 !important; 
-                color: white !important;
-                margin-left: 10px !important;
-            }
+            .gemini-nav-btn:hover { opacity: 0.85 !important; }
             .gemini-nav-btn.gemini-btn-primary { background-color: #007bff !important; border-color: #007bff !important; color: white !important; }
             .gemini-nav-btn.gemini-injected-back-btn { background-color: #6c757d !important; border-color: #6c757d !important; color: white !important; }
             
@@ -3100,7 +3325,17 @@
           return state;
       }
 
-      window.fb.events.form.submit.push(handleDataInjection);
+      window.fb.events.form.submit.push(async (state) => {
+          const chartNo = config.state.submitData[config.fbFields.CHART_NO] || (state.record && state.record[config.fbFields.CHART_NO]?.value);
+          if (chartNo) {
+              const blockMsg = await getDuplicateBlockMessage(chartNo);
+              if (blockMsg) {
+                  await showCustomAlert([blockMsg.replace(/<br>/g, '\n')]);
+                  throw new Error('重複申込みのため送信を中止しました。');
+              }
+          }
+          return handleDataInjection(state);
+      });
 
       let retryCount = 0;
       let isInitializing = false; // ★追加: 初期化中フラグ

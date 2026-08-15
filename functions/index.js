@@ -1166,3 +1166,96 @@ function getExpiredHtml(centerName, phoneNumber) {
     </html>
   `;
 }
+
+// ======================================================================
+//  Function 4: リアルタイム重複・排他判定 (checkDuplicateTicket)
+// ======================================================================
+exports.checkDuplicateTicket = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  const chartNo = req.query.chartNo || (req.body && req.body.chartNo);
+  const requirement = req.query.requirement || (req.body && req.body.requirement);
+
+  if (!chartNo) {
+    res.status(400).json({ status: 'error', message: 'chartNo is required' });
+    return;
+  }
+
+  const GUEST_SPACE_ID = process.env.KINTONE_GUEST_SPACE_ID || "11";
+  const APP_ID = process.env.KINTONE_APP_ID || "142";
+  const API_TOKEN = process.env.KINTONE_API_TOKEN || "lzGrrquqznrH0cpPIzmzvLKdn4PhyebSRyYKMxSE";
+  const SUBDOMAIN = process.env.KINTONE_SUBDOMAIN || "w60013hke2ct";
+  const BASE_URI = `https://${SUBDOMAIN}.cybozu.com/k/guest/${GUEST_SPACE_ID}/v1`;
+
+  try {
+    const query = `カルテNo = "${chartNo.trim()}" order by 作成日時 desc limit 100`;
+    const kintoneUri = `${BASE_URI}/records.json?app=${APP_ID}&query=${encodeURIComponent(query)}`;
+    
+    const resp = await fetch(kintoneUri, {
+      method: "GET",
+      headers: { "X-Cybozu-API-Token": API_TOKEN }
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('[checkDuplicateTicket] Kintone API Error:', resp.status, errText);
+      res.status(500).json({ status: 'error', message: errText });
+      return;
+    }
+
+    const data = await resp.json();
+    const rawRecords = data.records || [];
+
+    const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
+    const activeRecords = rawRecords.filter(r => {
+      const status = (r['管理状況']?.value || '').trim();
+      return !inactiveStatuses.includes(status);
+    });
+
+    const activeCancelRecord = activeRecords.find(r => r['用件']?.value === '取消');
+    const activeNormalRecord = activeRecords.find(r => r['用件']?.value !== '取消');
+
+    let blocked = false;
+    let message = '';
+
+    if (requirement === '取消') {
+      if (activeCancelRecord) {
+        blocked = true;
+        message = '⚠️ 現在、予約取り消しのお申込みをスタッフが確認中です。<br>複数件のお取り消しやお急ぎの場合はお電話にてお問い合わせください。';
+      }
+    } else {
+      if (activeCancelRecord) {
+        blocked = true;
+        message = '⚠️ 直前の予約取り消し内容をスタッフが確認中のため、完了までしばらくお待ちください。<br>お急ぎの場合はお電話にてお問い合わせください。';
+      } else if (activeNormalRecord || activeRecords.length > 0) {
+        blocked = true;
+        message = '⚠️ 現在、既にお申込みをいただいているため、Webフォームから続けてのお申込みができません。<br>お急ぎの場合はお電話にてお問い合わせください。';
+      }
+    }
+
+    res.status(200).json({
+      status: 'success',
+      blocked: blocked,
+      message: message,
+      activeCount: activeRecords.length,
+      totalCount: rawRecords.length,
+      records: rawRecords.map(r => ({
+        id: r.$id?.value,
+        status: r['管理状況']?.value,
+        req: r['用件']?.value,
+        dob: r['生年月日']?.value,
+        chartNo: r['カルテNo']?.value
+      }))
+    });
+  } catch (err) {
+    console.error('[checkDuplicateTicket] Critical Error:', err);
+    res.status(500).json({ status: 'error', message: err.toString() });
+  }
+});

@@ -282,8 +282,11 @@
             const currentMemo = getVal('人物メモ') || '';
             const hasConfirmedDup = currentMemo.includes('[複数の用件を短期間に依頼:');
 
-            // 多重チケットの警告表示 (DOM操作)
-            if (duplicateChartNos.has(record['カルテNo']?.value) && !hasConfirmedDup) {
+            const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
+            const isSelfActive = !inactiveStatuses.includes(status);
+
+            // 多重チケットの警告表示 (DOM操作) - 自身が進行中チケットの場合のみ表示
+            if (isSelfActive && duplicateChartNos.has(record['カルテNo']?.value) && !hasConfirmedDup) {
                 // カルテNoフィールドがあればそこへ、なければ管理状況フィールドへ
                 const targetEl = (chartNoElements && chartNoElements[index]) ? chartNoElements[index] : statusElements[index];
                 if (targetEl && !targetEl.querySelector('.duplicate-warn')) {
