@@ -273,6 +273,7 @@
   
       // --- 2. コンテンツ分岐 ---
       const isAssignedToMe = staffName && staffName === currentStaff;
+      const isAssignedToOther = !!(staffName && staffName !== currentStaff);
 
       if (!isAssignedToMe && currentStatus === '未着手') {
           // 未着手なら担当者変更・アサインボタンを表示
@@ -401,8 +402,15 @@
                   const okBtn = document.createElement('button');
                   okBtn.textContent = 'このチケットを有効とする';
                   okBtn.style.cssText = 'background-color: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; transition: background-color 0.2s;';
-                  okBtn.onmouseover = () => okBtn.style.backgroundColor = '#2ecc71';
-                  okBtn.onmouseout = () => okBtn.style.backgroundColor = '#27ae60';
+                  if (isAssignedToOther) {
+                      okBtn.disabled = true;
+                      okBtn.style.opacity = '0.5';
+                      okBtn.style.cursor = 'not-allowed';
+                      okBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                  } else {
+                      okBtn.onmouseover = () => okBtn.style.backgroundColor = '#2ecc71';
+                      okBtn.onmouseout = () => okBtn.style.backgroundColor = '#27ae60';
+                  }
                   okBtn.onclick = async () => {
                       // 3件以上（自分を含めると3件以上＝他のチケットが2件以上）の場合はブロック
                       if (dupIds.length >= 2) {
@@ -440,7 +448,12 @@
                   mergeBtn.textContent = 'このチケットを無効とする（取下げて強制終了）';
                   mergeBtn.style.cssText = 'background-color: #e67e22; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; transition: background-color 0.2s;';
                   
-                  if (isRead || isPhoneConfirmed) {
+                  if (isAssignedToOther) {
+                      mergeBtn.disabled = true;
+                      mergeBtn.style.opacity = '0.5';
+                      mergeBtn.style.cursor = 'not-allowed';
+                      mergeBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                  } else if (isRead || isPhoneConfirmed) {
                       mergeBtn.style.opacity = '0.5';
                       mergeBtn.style.cursor = 'not-allowed';
                       mergeBtn.title = '既に患者様が確認済みのため、このチケットは統合取下できません。';
@@ -514,6 +527,24 @@
 
       // === 担当者本人の場合 (以下、既存のメインロジック) ===
 
+      // ★ 他スタッフ担当時のロック案内バナー
+      const isFinished = (currentStatus === '終了' || currentStatus === '強制終了');
+      if (isAssignedToOther && !isFinished) {
+          const lockBanner = document.createElement('div');
+          lockBanner.id = 'rcb-other-staff-lock-banner';
+          lockBanner.style.cssText = 'background-color: #fff8e1; border: 1px solid #ffe082; border-left: 5px solid #ffa000; border-radius: 6px; padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
+          lockBanner.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 12px; color: #5d4037; font-size: 14px; font-weight: bold; line-height: 1.5;">
+                  <span style="font-size: 24px;">🔒</span>
+                  <div>
+                      <div>現在、このチケットは「<span style="color: #d84315;">${staffName}</span>」さんが担当しています。</div>
+                      <div style="font-size: 12px; font-weight: normal; color: #795548; margin-top: 2px;">操作を行うには、右上の「担当を引継ぐ」ボタンを押して担当交代を行ってください。</div>
+                  </div>
+              </div>
+          `;
+          container.appendChild(lockBanner);
+      }
+
       // ★ 重複統合による強制終了ステータスの場合は専用のメッセージを表示して処理を終了する
       if (currentStatus === '強制終了' && isMergedEnd) {
           const mergedMsg = document.createElement('div');
@@ -537,33 +568,40 @@
           reviveBtn.style.marginTop = '25px';
           reviveBtn.style.backgroundColor = '#f39c12';
 
-          reviveBtn.onclick = async () => {
-              const reason = await showDialog('チケットを「担当設定」で復活させますか？\n復活する理由を入力してください。', 'prompt', 'チケット復活', '理由を入力（必須）');
-              if (reason === null) return;
-              if (reason.trim() === '') {
-                  await showDialog('理由が入力されていないため、復活をキャンセルしました。', 'warning');
-                  return;
-              }
+          if (isAssignedToOther) {
+              reviveBtn.disabled = true;
+              reviveBtn.style.opacity = '0.5';
+              reviveBtn.style.cursor = 'not-allowed';
+              reviveBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+          } else {
+              reviveBtn.onclick = async () => {
+                  const reason = await showDialog('チケットを「担当設定」で復活させますか？\n復活する理由を入力してください。', 'prompt', 'チケット復活', '理由を入力（必須）');
+                  if (reason === null) return;
+                  if (reason.trim() === '') {
+                      await showDialog('理由が入力されていないため、復活をキャンセルしました。', 'warning');
+                      return;
+                  }
 
-              const payload = {
-                  [CONFIG.FIELDS.STATUS]: { value: '担当設定' },
-                  [CONFIG.FIELDS.METHOD]: { value: 'staff' },
-                  [CONFIG.FIELDS.RES_DATE]: { value: null },
-                  [CONFIG.FIELDS.RES_TIME]: { value: null },
-                  [CONFIG.FIELDS.SEND_DATE]: { value: null },
-                  [CONFIG.FIELDS.READ_DATE]: { value: null },
-                  [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
-                  [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
-                  [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
-                  [CONFIG.FIELDS.TIMEOUT]: { value: null },
-                  [CONFIG.FIELDS.NOTE]: { value: null },
-                  'ReserveLock': { value: 'lock' }
+                  const payload = {
+                      [CONFIG.FIELDS.STATUS]: { value: '担当設定' },
+                      [CONFIG.FIELDS.METHOD]: { value: 'staff' },
+                      [CONFIG.FIELDS.RES_DATE]: { value: null },
+                      [CONFIG.FIELDS.RES_TIME]: { value: null },
+                      [CONFIG.FIELDS.SEND_DATE]: { value: null },
+                      [CONFIG.FIELDS.READ_DATE]: { value: null },
+                      [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
+                      [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
+                      [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
+                      [CONFIG.FIELDS.TIMEOUT]: { value: null },
+                      [CONFIG.FIELDS.NOTE]: { value: null },
+                      'ReserveLock': { value: 'lock' }
+                  };
+
+                  // 「チケット復活」を瞬間ステータスとして履歴に残す（skipStatusHistoryはfalseなので復活先のステータスも記録される）
+                  const success = await updateRecord(recordId, payload, ['チケット復活'], false, false, reason.trim());
+                  if (success) location.reload();
               };
-
-              // 「チケット復活」を瞬間ステータスとして履歴に残す（skipStatusHistoryはfalseなので復活先のステータスも記録される）
-              const success = await updateRecord(recordId, payload, ['チケット復活'], false, false, reason.trim());
-              if (success) location.reload();
-          };
+          }
 
           finishedMsg.appendChild(document.createElement('br'));
           finishedMsg.appendChild(reviveBtn);
@@ -584,84 +622,92 @@
           finishBtn.className = 'rcb-btn-save';
           finishBtn.style.marginTop = '25px';
           finishBtn.style.backgroundColor = '#1565c0';
-          finishBtn.onclick = async () => {
-              // ★変更: 専用の受診確認ダイアログを表示
-              const confirmContent = `
-                  <div style="margin-bottom: 15px; font-weight: bold; color: #2c3e50;">この患者は予定通り受診しましたか？</div>
-                  <div style="display: flex; gap: 20px; margin-bottom: 20px;" id="visit-radio-group">
-                      <label style="cursor: pointer;"><input type="radio" name="visit-status" value="yes" checked> はい（受診した）</label>
-                      <label style="cursor: pointer;"><input type="radio" name="visit-status" value="no"> いいえ（受診しなかった）</label>
-                  </div>
-                  <div style="font-weight: bold; color: #2c3e50; margin-bottom: 5px;">何かあれば記載してください</div>
-                  <div style="font-size: 11px; color: #7f8c8d; margin-bottom: 8px;">※ここに入力した内容は「人物メモ」に追記されます</div>
-                  <input type="text" id="visit-memo-input" class="rcb-input-text" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 13px;" placeholder="特になければ空欄でOK">
-              `;
+          if (isAssignedToOther) {
+              finishBtn.disabled = true;
+              finishBtn.style.opacity = '0.5';
+              finishBtn.style.cursor = 'not-allowed';
+              finishBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+              finishBtn.style.backgroundColor = '#78909c';
+          } else {
+              finishBtn.onclick = async () => {
+                  // ★変更: 専用の受診確認ダイアログを表示
+                  const confirmContent = `
+                      <div style="margin-bottom: 15px; font-weight: bold; color: #2c3e50;">この患者は予定通り受診しましたか？</div>
+                      <div style="display: flex; gap: 20px; margin-bottom: 20px;" id="visit-radio-group">
+                          <label style="cursor: pointer;"><input type="radio" name="visit-status" value="yes" checked> はい（受診した）</label>
+                          <label style="cursor: pointer;"><input type="radio" name="visit-status" value="no"> いいえ（受診しなかった）</label>
+                      </div>
+                      <div style="font-weight: bold; color: #2c3e50; margin-bottom: 5px;">何かあれば記載してください</div>
+                      <div style="font-size: 11px; color: #7f8c8d; margin-bottom: 8px;">※ここに入力した内容は「人物メモ」に追記されます</div>
+                      <input type="text" id="visit-memo-input" class="rcb-input-text" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 13px;" placeholder="特になければ空欄でOK">
+                  `;
 
-              const visitResult = await new Promise((resolve) => {
-                  const { overlay, box, content } = window.RcbUI.createModalBase ? window.RcbUI.createModalBase() : (() => {
-                      // RcbUI.createModalBaseが外部公開されていない場合の簡易フォールバック
-                      const div = document.createElement('div');
-                      return { overlay: div, box: div, content: div };
-                  })();
-                  
-                  // 既存の showDialog をハックしてカスタムコンテンツを表示
-                  showDialog(confirmContent, 'confirm', '受診確認', '', '終了する', 'キャンセル').then(isOk => {
-                      if (!isOk) {
-                          resolve(null);
-                          return;
-                      }
-                      // DOMから値を取得 (showDialog が閉じられる前に取得する必要があるが、
-                      // 今回は簡易的に setTimeout で描画されたDOMから取得するアプローチをとるか、
-                      // 事前にイベントリスナーで値を変数に退避する)
-                  });
-                  
-                  // DOM生成後にイベントリスナーを設定して値を退避
-                  setTimeout(() => {
-                      const radios = document.querySelectorAll('input[name="visit-status"]');
-                      const memoInput = document.getElementById('visit-memo-input');
-                      let selectedVisit = 'yes';
-                      let inputMemo = '';
+                  const visitResult = await new Promise((resolve) => {
+                      const { overlay, box, content } = window.RcbUI.createModalBase ? window.RcbUI.createModalBase() : (() => {
+                          // RcbUI.createModalBaseが外部公開されていない場合の簡易フォールバック
+                          const div = document.createElement('div');
+                          return { overlay: div, box: div, content: div };
+                      })();
                       
-                      radios.forEach(r => {
-                          r.addEventListener('change', (e) => { selectedVisit = e.target.value; });
+                      // 既存の showDialog をハックしてカスタムコンテンツを表示
+                      showDialog(confirmContent, 'confirm', '受診確認', '', '終了する', 'キャンセル').then(isOk => {
+                          if (!isOk) {
+                              resolve(null);
+                              return;
+                          }
+                          // DOMから値を取得 (showDialog が閉じられる前に取得する必要があるが、
+                          // 今回は簡易的に setTimeout で描画されたDOMから取得するアプローチをとるか、
+                          // 事前にイベントリスナーで値を変数に退避する)
                       });
-                      if (memoInput) {
-                          memoInput.addEventListener('input', (e) => { inputMemo = e.target.value; });
-                      }
                       
-                      // OKボタンの処理をフック
-                      const okBtn = document.querySelector('.rcb-modal-btn-ok');
-                      if (okBtn) {
-                          const originalClick = okBtn.onclick;
-                          okBtn.onclick = (e) => {
-                              resolve({ visited: selectedVisit === 'yes', memo: inputMemo.trim() });
-                              if (originalClick) originalClick(e);
-                          };
-                      }
-                  }, 100);
-              });
+                      // DOM生成後にイベントリスナーを設定して値を退避
+                      setTimeout(() => {
+                          const radios = document.querySelectorAll('input[name="visit-status"]');
+                          const memoInput = document.getElementById('visit-memo-input');
+                          let selectedVisit = 'yes';
+                          let inputMemo = '';
+                          
+                          radios.forEach(r => {
+                              r.addEventListener('change', (e) => { selectedVisit = e.target.value; });
+                          });
+                          if (memoInput) {
+                              memoInput.addEventListener('input', (e) => { inputMemo = e.target.value; });
+                          }
+                          
+                          // OKボタンの処理をフック
+                          const okBtn = document.querySelector('.rcb-modal-btn-ok');
+                          if (okBtn) {
+                              const originalClick = okBtn.onclick;
+                              okBtn.onclick = (e) => {
+                                  resolve({ visited: selectedVisit === 'yes', memo: inputMemo.trim() });
+                                  if (originalClick) originalClick(e);
+                              };
+                          }
+                      }, 100);
+                  });
 
-              if (!visitResult) return;
-              
-              let newCommonEval = [...currentCommonEval];
-              if (!visitResult.visited && !newCommonEval.includes('無断で受診キャンセル')) {
-                  newCommonEval.push('無断で受診キャンセル');
-              }
+                  if (!visitResult) return;
+                  
+                  let newCommonEval = [...currentCommonEval];
+                  if (!visitResult.visited && !newCommonEval.includes('無断で受診キャンセル')) {
+                      newCommonEval.push('無断で受診キャンセル');
+                  }
 
-              let newMemo = currentMemo;
-              if (visitResult.memo) {
-                  newMemo = newMemo ? `${newMemo}\n[受診確認] ${visitResult.memo}` : `[受診確認] ${visitResult.memo}`;
-              }
+                  let newMemo = currentMemo;
+                  if (visitResult.memo) {
+                      newMemo = newMemo ? `${newMemo}\n[受診確認] ${visitResult.memo}` : `[受診確認] ${visitResult.memo}`;
+                  }
 
-              const payload = {
-                  [CONFIG.FIELDS.STATUS]: { value: '終了' },
-                  'ReserveLock': { value: 'unlock' },
-                  '共通評価': { value: newCommonEval },
-                  '人物メモ': { value: newMemo }
+                  const payload = {
+                      [CONFIG.FIELDS.STATUS]: { value: '終了' },
+                      'ReserveLock': { value: 'unlock' },
+                      '共通評価': { value: newCommonEval },
+                      '人物メモ': { value: newMemo }
+                  };
+                  const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
+                  if (success) location.reload();
               };
-              const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
-              if (success) location.reload();
-          };
+          }
 
           waitMsg.appendChild(document.createElement('br'));
           waitMsg.appendChild(finishBtn);
@@ -1110,6 +1156,11 @@
         dateInput.min = formatDateISO(today);
         dateInput.max = formatDateISO(maxDate);
         dateInput.value = initialDate; // 初期値
+        if (isAssignedToOther) {
+            dateInput.disabled = true;
+            dateInput.style.cursor = 'not-allowed';
+            dateInput.style.opacity = '0.7';
+        }
         
         dateGroup.appendChild(dateLabel);
         dateGroup.appendChild(dateInput);
@@ -1154,8 +1205,8 @@
                 const btn = document.createElement('div');
                 btn.className = 'rcb-time-btn';
                 
-                // ③ 過去時刻チェック
-                if (isPastTime(dateInput.value, time)) {
+                // ③ 過去時刻チェック または 他スタッフ担当時ロック
+                if (isPastTime(dateInput.value, time) || isAssignedToOther) {
                   btn.style.backgroundColor = '#eee';
                   btn.style.color = '#ccc';
                   btn.style.cursor = 'not-allowed';
@@ -1211,109 +1262,116 @@
         saveBtn.className = 'rcb-btn-save';
         saveBtn.textContent = '決定';
         
-        saveBtn.onclick = async () => {
-          const newDate = dateInput.value;
-          if (!newDate) {
-            await showDialog('日付を選択してください', 'error');
-            return;
-          }
-          if (!selectedTime) {
-            await showDialog('時刻を選択してください', 'error');
-            return;
-          }
-          
-          // 値が変更されていない場合は、保存処理を行わずに元の表示に戻る
-          if (newDate === currentDate && selectedTime === currentTime) {
-              renderBoard(spaceElement, record);
-              return;
-          }
+        if (isAssignedToOther) {
+            saveBtn.disabled = true;
+            saveBtn.style.opacity = '0.5';
+            saveBtn.style.cursor = 'not-allowed';
+            saveBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+        } else {
+            saveBtn.onclick = async () => {
+              const newDate = dateInput.value;
+              if (!newDate) {
+                await showDialog('日付を選択してください', 'error');
+                return;
+              }
+              if (!selectedTime) {
+                await showDialog('時刻を選択してください', 'error');
+                return;
+              }
+              
+              // 値が変更されていない場合は、保存処理を行わずに元の表示に戻る
+              if (newDate === currentDate && selectedTime === currentTime) {
+                  renderBoard(spaceElement, record);
+                  return;
+              }
 
-          // すでに日時が設定されていた（再設定の）場合は文言を変更
-          const isUpdate = currentDate && currentTime;
-          const checkboxMsg = isUpdate ? '事前に電子カルテ側の予約を変更済' : '事前に電子カルテ側の予約を確保済';
-          const confirmTitle = '予約日時の決定';
-          const formattedDateText = (typeof formatToJapaneseDate === 'function') ? formatToJapaneseDate(newDate) : newDate;
-          const confirmMsg = `仮予約日時を「${formattedDateText} ${selectedTime}」に設定します。\nよろしいですか？`;
-          const isSaveOk = await showDialog(confirmMsg, 'confirm', confirmTitle, '', '決定', 'キャンセル', checkboxMsg);
-          if (!isSaveOk) return;
-    
-          saveBtn.disabled = true;
-          saveBtn.textContent = '保存中...';
+              // すでに日時が設定されていた（再設定の）場合は文言を変更
+              const isUpdate = currentDate && currentTime;
+              const checkboxMsg = isUpdate ? '事前に電子カルテ側の予約を変更済' : '事前に電子カルテ側の予約を確保済';
+              const confirmTitle = '予約日時の決定';
+              const formattedDateText = (typeof formatToJapaneseDate === 'function') ? formatToJapaneseDate(newDate) : newDate;
+              const confirmMsg = `仮予約日時を「${formattedDateText} ${selectedTime}」に設定します。\nよろしいですか？`;
+              const isSaveOk = await showDialog(confirmMsg, 'confirm', confirmTitle, '', '決定', 'キャンセル', checkboxMsg);
+              if (!isSaveOk) return;
+        
+              saveBtn.disabled = true;
+              saveBtn.textContent = '保存中...';
 
-          // 最新のレコード情報を取得して未読判定
-          let latestRecord = null;
-          try {
-              const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
-                  app: kintone.app.getId(),
-                  id: recordId
-              });
-              latestRecord = resp.record;
-          } catch (e) {
-              console.error('Failed to fetch latest record', e);
-          }
+              // 最新のレコード情報を取得して未読判定
+              let latestRecord = null;
+              try {
+                  const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
+                      app: kintone.app.getId(),
+                      id: recordId
+                  });
+                  latestRecord = resp.record;
+              } catch (e) {
+                  console.error('Failed to fetch latest record', e);
+              }
 
-          const latestSendDate = latestRecord?.[CONFIG.FIELDS.SEND_DATE]?.value || sendDateVal;
-          const latestReadDate = latestRecord?.[CONFIG.FIELDS.READ_DATE]?.value || readDateVal;
-          const latestStatus = latestRecord?.[CONFIG.FIELDS.STATUS]?.value || currentStatus;
+              const latestSendDate = latestRecord?.[CONFIG.FIELDS.SEND_DATE]?.value || sendDateVal;
+              const latestReadDate = latestRecord?.[CONFIG.FIELDS.READ_DATE]?.value || readDateVal;
+              const latestStatus = latestRecord?.[CONFIG.FIELDS.STATUS]?.value || currentStatus;
 
-          // メール対応で、過去にメール送信実績があり、かつ未読の場合（そっと変更・サイレント更新）
-          if (currentMethod !== 'phone' && latestSendDate && !latestReadDate) {
+              // メール対応で、過去にメール送信実績があり、かつ未読の場合（そっと変更・サイレント更新）
+              if (currentMethod !== 'phone' && latestSendDate && !latestReadDate) {
+                  const payload = {
+                      [CONFIG.FIELDS.RES_DATE]: { value: newDate },
+                      [CONFIG.FIELDS.RES_TIME]: { value: selectedTime },
+                      [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_SENT_VALUE },
+                      [CONFIG.FIELDS.SEND_DATE]: { value: latestSendDate }, // 前回の送信日時を維持（タイムアウト起算点はリセットせず継続）
+                      [CONFIG.FIELDS.READ_DATE]: { value: null },
+                      [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
+                      [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
+                      'ReserveLock': { value: 'lock' }
+                  };
+                  if (currentMethod) {
+                      payload[CONFIG.FIELDS.METHOD] = { value: currentMethod };
+                  }
+
+                  const success = await updateRecord(recordId, payload, ['仮予約日時変更'], false, false, `未読のためメール再送なしで仮予約日時を更新（${formattedDateText} ${selectedTime}）`);
+                  if (success) {
+                      await showDialog('患者様は未読のためメールは再送せず、仮予約日時を更新しました。\n（お手元のメールのURLから新しい予約日時が表示されます）', 'success');
+                      location.reload();
+                      return;
+                  } else {
+                      saveBtn.disabled = false;
+                      saveBtn.textContent = '決定';
+                      return;
+                  }
+              }
+
+              // すでに既読の場合で、再調整した場合は注意を促す
+              if (currentMethod !== 'phone' && latestSendDate && latestReadDate) {
+                  await showDialog('患者様が以前の仮予約案内を既に閲覧されています。\n新しい仮予約日時で案内メールを送信してください。', 'info');
+              }
+        
               const payload = {
-                  [CONFIG.FIELDS.RES_DATE]: { value: newDate },
-                  [CONFIG.FIELDS.RES_TIME]: { value: selectedTime },
-                  [CONFIG.FIELDS.STATUS]: { value: CONFIG.STATUS_SENT_VALUE },
-                  [CONFIG.FIELDS.SEND_DATE]: { value: latestSendDate }, // 前回の送信日時を維持（タイムアウト起算点はリセットせず継続）
-                  [CONFIG.FIELDS.READ_DATE]: { value: null },
-                  [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
-                  [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
-                  'ReserveLock': { value: 'lock' }
+                [CONFIG.FIELDS.RES_DATE]: { value: newDate },
+                [CONFIG.FIELDS.RES_TIME]: { value: selectedTime }
               };
               if (currentMethod) {
-                  payload[CONFIG.FIELDS.METHOD] = { value: currentMethod };
+                payload[CONFIG.FIELDS.METHOD] = { value: currentMethod };
               }
 
-              const success = await updateRecord(recordId, payload, ['仮予約日時変更'], false, false, `未読のためメール再送なしで仮予約日時を更新（${formattedDateText} ${selectedTime}）`);
+              // スタッフ取下中、または要電話対応からメールに変更された場合、ステータスをクリアしてメール送信可能状態にする
+              if (latestStatus === CONFIG.STATUS_WITHDRAWN_VALUE || (latestStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE && currentMethod === 'email')) {
+                  payload[CONFIG.FIELDS.STATUS] = { value: null };
+              }
+        
+              const success = await updateRecord(recordId, payload);
+        
               if (success) {
-                  await showDialog('患者様は未読のためメールは再送せず、仮予約日時を更新しました。\n（お手元のメールのURLから新しい予約日時が表示されます）', 'success');
-                  location.reload();
-                  return;
+                msgSpan.style.display = 'inline';
+                setTimeout(() => {
+                   location.reload();
+                }, 800);
               } else {
-                  saveBtn.disabled = false;
-                  saveBtn.textContent = '決定';
-                  return;
+                saveBtn.disabled = false;
+                saveBtn.textContent = '決定';
               }
-          }
-
-          // すでに既読の場合で、再調整した場合は注意を促す
-          if (currentMethod !== 'phone' && latestSendDate && latestReadDate) {
-              await showDialog('患者様が以前の仮予約案内を既に閲覧されています。\n新しい仮予約日時で案内メールを送信してください。', 'info');
-          }
-    
-          const payload = {
-            [CONFIG.FIELDS.RES_DATE]: { value: newDate },
-            [CONFIG.FIELDS.RES_TIME]: { value: selectedTime }
-          };
-          if (currentMethod) {
-            payload[CONFIG.FIELDS.METHOD] = { value: currentMethod };
-          }
-
-          // スタッフ取下中、または要電話対応からメールに変更された場合、ステータスをクリアしてメール送信可能状態にする
-          if (latestStatus === CONFIG.STATUS_WITHDRAWN_VALUE || (latestStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE && currentMethod === 'email')) {
-              payload[CONFIG.FIELDS.STATUS] = { value: null };
-          }
-    
-          const success = await updateRecord(recordId, payload);
-    
-          if (success) {
-            msgSpan.style.display = 'inline';
-            setTimeout(() => {
-               location.reload();
-            }, 800);
-          } else {
-            saveBtn.disabled = false;
-            saveBtn.textContent = '決定';
-          }
-        };
+            };
+        }
     
         actionRow.appendChild(msgSpan);
         actionRow.appendChild(saveBtn);
@@ -1351,11 +1409,12 @@
           input.value = value;
           if (currentMethod === updateValue) input.checked = true;
 
-          // ① 確定後、または未担当・未着手時は選択不可 (固定)
-          if (isConfirmed || !staffName || currentStatus === '未着手') {
+          // ① 確定後、または未担当・未着手、または他スタッフ担当時は選択不可 (固定)
+          if (isConfirmed || !staffName || currentStatus === '未着手' || isAssignedToOther) {
             input.disabled = true;
             labelEl.style.opacity = '0.6';
             labelEl.style.cursor = 'not-allowed';
+            if (isAssignedToOther) labelEl.title = `担当者（${staffName}さん）のみ操作可能です`;
           }
   
           input.onchange = () => {
@@ -2189,6 +2248,20 @@
                     sendMailBtn.onclick = () => processCancelMail(cancelDateInput.value, cancelTimeInput.value, currentDeptInput, cancelMsgInput.value);
                 }
 
+                if (isAssignedToOther) {
+                    if (cancelDateInput) cancelDateInput.disabled = true;
+                    if (cancelTimeInput) cancelTimeInput.disabled = true;
+                    if (cancelMsgInput) cancelMsgInput.disabled = true;
+                    if (dateCorrectCheckbox) dateCorrectCheckbox.disabled = true;
+                    if (deptCorrectCheckbox) deptCorrectCheckbox.disabled = true;
+                    if (!sendMailBtn.disabled) {
+                        sendMailBtn.disabled = true;
+                        sendMailBtn.style.opacity = '0.5';
+                        sendMailBtn.style.cursor = 'not-allowed';
+                        sendMailBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                    }
+                }
+
                 actionContainer.appendChild(sendMailBtn);
                 confirmedContainer.appendChild(actionContainer);
 
@@ -2288,7 +2361,14 @@
                     editBtn.className = 'rcb-btn-secondary';
                     editBtn.innerHTML = '<span style="font-size:14px;">⚙️</span> 再設定する';
                     editBtn.style.marginTop = '5px';
-                    editBtn.onclick = () => renderEditorView();
+                    if (isAssignedToOther) {
+                        editBtn.disabled = true;
+                        editBtn.style.opacity = '0.5';
+                        editBtn.style.cursor = 'not-allowed';
+                        editBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                    } else {
+                        editBtn.onclick = () => renderEditorView();
+                    }
                     dateTimeDisplay.appendChild(editBtn);
                 }
             }
@@ -2728,6 +2808,17 @@
             // ★追加: メール送信ボタンをタイムアウト設定より下（後）に追加
             actionContainer.appendChild(sendMailBtn);
 
+            if (isAssignedToOther) {
+                if (sendMsgInput) sendMsgInput.disabled = true;
+                if (timeoutSelect) timeoutSelect.disabled = true;
+                if (!sendMailBtn.disabled) {
+                    sendMailBtn.disabled = true;
+                    sendMailBtn.style.opacity = '0.5';
+                    sendMailBtn.style.cursor = 'not-allowed';
+                    sendMailBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                }
+            }
+
             confirmedContainer.appendChild(actionContainer);
         }
 
@@ -2741,7 +2832,14 @@
             withdrawBtn.style.maxWidth = '300px';
             withdrawBtn.style.marginTop = '10px';
             
-            withdrawBtn.onclick = () => handleWithdrawal();
+            if (isAssignedToOther) {
+                withdrawBtn.disabled = true;
+                withdrawBtn.style.opacity = '0.5';
+                withdrawBtn.style.cursor = 'not-allowed';
+                withdrawBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+            } else {
+                withdrawBtn.onclick = () => handleWithdrawal();
+            }
             
             confirmedContainer.appendChild(withdrawBtn);
         }
@@ -2768,36 +2866,43 @@
                 reviveBtn.style.whiteSpace = 'pre-wrap';
                 reviveBtn.style.lineHeight = '1.2';
                 
-                reviveBtn.onclick = async () => {
-                    const isReviveOk = await showDialog('取下げを中止して、取下げる前の状態に戻しますか？', 'confirm');
-                    if (!isReviveOk) return;
+                if (isAssignedToOther) {
+                    reviveBtn.disabled = true;
+                    reviveBtn.style.opacity = '0.5';
+                    reviveBtn.style.cursor = 'not-allowed';
+                    reviveBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                } else {
+                    reviveBtn.onclick = async () => {
+                        const isReviveOk = await showDialog('取下げを中止して、取下げる前の状態に戻しますか？', 'confirm');
+                        if (!isReviveOk) return;
 
-                    // 最新の既読状態をチェック
-                    try {
-                        const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
-                            app: kintone.app.getId(),
-                            id: recordId
-                        });
-                        if (resp.record[CONFIG.FIELDS.READ_DATE]?.value) {
-                            await showDialog('スタッフによって予約が取下げられたことを申込者が既に認識していますので\n前の状態に戻すことができませんでした。', 'error');
-                            location.reload();
-                            return;
+                        // 最新の既読状態をチェック
+                        try {
+                            const resp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
+                                app: kintone.app.getId(),
+                                id: recordId
+                            });
+                            if (resp.record[CONFIG.FIELDS.READ_DATE]?.value) {
+                                await showDialog('スタッフによって予約が取下げられたことを申込者が既に認識していますので\n前の状態に戻すことができませんでした。', 'error');
+                                location.reload();
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('Status check failed', e);
                         }
-                    } catch (e) {
-                        console.error('Status check failed', e);
-                    }
 
-                    // 元のステータスを推定
-                    let targetStatus = CONFIG.STATUS_SENT_VALUE;
-                    if (phoneDateVal) targetStatus = CONFIG.STATUS_PHONE_VALUE;
-                    else if (sendDateVal) targetStatus = CONFIG.STATUS_SENT_VALUE;
+                        // 元のステータスを推定
+                        let targetStatus = CONFIG.STATUS_SENT_VALUE;
+                        if (phoneDateVal) targetStatus = CONFIG.STATUS_PHONE_VALUE;
+                        else if (sendDateVal) targetStatus = CONFIG.STATUS_SENT_VALUE;
 
-                    await updateRecord(recordId, {
-                        [CONFIG.FIELDS.STATUS]: { value: targetStatus },
-                        [CONFIG.FIELDS.NOTE]: { value: '' }
-                    }, [CONFIG.STATUS_REVIVED_VALUE], false, true); // 取下中止を瞬間ステータスとして履歴に残し、戻り先のステータスは記録しない
-                    location.reload();
-                };
+                        await updateRecord(recordId, {
+                            [CONFIG.FIELDS.STATUS]: { value: targetStatus },
+                            [CONFIG.FIELDS.NOTE]: { value: '' }
+                        }, [CONFIG.STATUS_REVIVED_VALUE], false, true); // 取下中止を瞬間ステータスとして履歴に残し、戻り先のステータスは記録しない
+                        location.reload();
+                    };
+                }
                 actionGroup.appendChild(reviveBtn);
             }
 
@@ -2809,29 +2914,36 @@
             reconfigBtn.style.flex = '1';
             reconfigBtn.style.maxWidth = '200px';
 
-            reconfigBtn.onclick = async () => {
-                const isReconfigOk = await showDialog('仮予約情報を最初から再設定しますか？\n申込者へ送付済みのメールのリンクは無効表示になります。', 'confirm', '再設定の確認', '', '再設定する', 'キャンセル', '電カル側の予約枠を解除しました。');
-                if (!isReconfigOk) return;
+            if (isAssignedToOther) {
+                reconfigBtn.disabled = true;
+                reconfigBtn.style.opacity = '0.5';
+                reconfigBtn.style.cursor = 'not-allowed';
+                reconfigBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+            } else {
+                reconfigBtn.onclick = async () => {
+                    const isReconfigOk = await showDialog('仮予約情報を最初から再設定しますか？\n申込者へ送付済みのメールのリンクは無効表示になります。', 'confirm', '再設定の確認', '', '再設定する', 'キャンセル', '電カル側の予約枠を解除しました。');
+                    if (!isReconfigOk) return;
 
-                // 未読のメール送信履歴がある場合は保持し、既読の場合はクリアする
-                const preservedSendDate = (sendDateVal && !readDateVal) ? sendDateVal : null;
+                    // 未読のメール送信履歴がある場合は保持し、既読の場合はクリアする
+                    const preservedSendDate = (sendDateVal && !readDateVal) ? sendDateVal : null;
 
-                const payload = {
-                    [CONFIG.FIELDS.STATUS]: { value: '担当設定' },
-                    [CONFIG.FIELDS.RES_DATE]: { value: null },
-                    [CONFIG.FIELDS.RES_TIME]: { value: null },
-                    [CONFIG.FIELDS.SEND_DATE]: { value: preservedSendDate },
-                    [CONFIG.FIELDS.READ_DATE]: { value: null },
-                    [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
-                    [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
-                    [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
-                    [CONFIG.FIELDS.TIMEOUT]: { value: null },
-                    [CONFIG.FIELDS.NOTE]: { value: null }
+                    const payload = {
+                        [CONFIG.FIELDS.STATUS]: { value: '担当設定' },
+                        [CONFIG.FIELDS.RES_DATE]: { value: null },
+                        [CONFIG.FIELDS.RES_TIME]: { value: null },
+                        [CONFIG.FIELDS.SEND_DATE]: { value: preservedSendDate },
+                        [CONFIG.FIELDS.READ_DATE]: { value: null },
+                        [CONFIG.FIELDS.PHONE_CONFIRM]: { value: null },
+                        [CONFIG.FIELDS.CANCEL_EXECUTOR]: { value: null },
+                        [CONFIG.FIELDS.CANCEL_DATE]: { value: null },
+                        [CONFIG.FIELDS.TIMEOUT]: { value: null },
+                        [CONFIG.FIELDS.NOTE]: { value: null }
+                    };
+                    
+                    const success = await updateRecord(recordId, payload);
+                    if (success) location.reload();
                 };
-                
-                const success = await updateRecord(recordId, payload);
-                if (success) location.reload();
-            };
+            }
             actionGroup.appendChild(reconfigBtn);
 
             // ③ 再設定しないボタン
@@ -2846,29 +2958,36 @@
             noReconfigBtn.style.whiteSpace = 'pre-wrap';
             noReconfigBtn.style.lineHeight = '1.2';
 
-            noReconfigBtn.onclick = async () => {
-                const isDiscardOk = await showDialog('この操作により、この予約チケットは破棄され、申込者はすぐに新たな予約ができるようになります。\n本当によろしいですか？', 'confirm', 'チケットの破棄', '', '破棄する', 'キャンセル', '電カル側の予約枠を解除しました。');
-                if (!isDiscardOk) return;
+            if (isAssignedToOther) {
+                noReconfigBtn.disabled = true;
+                noReconfigBtn.style.opacity = '0.5';
+                noReconfigBtn.style.cursor = 'not-allowed';
+                noReconfigBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+            } else {
+                noReconfigBtn.onclick = async () => {
+                    const isDiscardOk = await showDialog('この操作により、この予約チケットは破棄され、申込者はすぐに新たな予約ができるようになります。\n本当によろしいですか？', 'confirm', 'チケットの破棄', '', '破棄する', 'キャンセル', '電カル側の予約枠を解除しました。');
+                    if (!isDiscardOk) return;
 
-                const payload = { 
-                    'ReserveLock': { value: 'unlock' },
-                    [CONFIG.FIELDS.STATUS]: { value: '終了' }
-                };
+                    const payload = { 
+                        'ReserveLock': { value: 'unlock' },
+                        [CONFIG.FIELDS.STATUS]: { value: '終了' }
+                    };
 
-                const hasPhoneContact = !!phoneDateVal || currentMethod === 'phone';
-                if (hasPhoneContact) {
-                    const initialData = { common: currentCommonEval, memo: currentMemo };
-                    const evalMessage = '次回に同じ方が申し込まれたときの対応方法の参考情報として役立てられます。';
-                    const evalData = await showEvaluationDialog(evalMessage, '申込者（患者等）', currentMethod, initialData, null, 'OK', null);
-                    if (evalData) {
-                        payload['共通評価'] = { value: evalData.common };
-                        payload['人物メモ'] = { value: evalData.memo };
+                    const hasPhoneContact = !!phoneDateVal || currentMethod === 'phone';
+                    if (hasPhoneContact) {
+                        const initialData = { common: currentCommonEval, memo: currentMemo };
+                        const evalMessage = '次回に同じ方が申し込まれたときの対応方法の参考情報として役立てられます。';
+                        const evalData = await showEvaluationDialog(evalMessage, '申込者（患者等）', currentMethod, initialData, null, 'OK', null);
+                        if (evalData) {
+                            payload['共通評価'] = { value: evalData.common };
+                            payload['人物メモ'] = { value: evalData.memo };
+                        }
                     }
-                }
 
-                const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
-                if (success) location.reload();
-            };
+                    const success = await updateRecord(recordId, payload, [], false, false, getConfirmUrlString());
+                    if (success) location.reload();
+                };
+            }
             actionGroup.appendChild(noReconfigBtn);
 
             confirmedContainer.appendChild(actionGroup);
@@ -2941,7 +3060,6 @@
                 };
                 
                 const success = await updateRecord(recordId, payload, ['担当引き継ぎ']);
-                if (success) location.reload();
                 if (success) {
                     await updateAllDuplicateTicketsStaff(record['カルテNo']?.value, currentStaff, recordId);
                     location.reload();
