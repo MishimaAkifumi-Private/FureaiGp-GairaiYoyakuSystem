@@ -799,6 +799,22 @@
           const chartKeys = ['カルテNo', 'カルテID', config.fbFields.CHART_NO, 'karte_no', 'KarteNo', 'chart_no'];
           const statusKeys = ['管理状況', 'ステータス', 'status', 'Status'];
           const requirementKeys = ['用件', 'REQUIREMENT', config.fbFields.REQUIREMENT, 'purpose', 'Purpose'];
+          const dateKeys = ['確定予約日', config.fbFields.RES_DATE, 'res_date', 'ResDate'];
+          const timeKeys = ['確定予約時刻', config.fbFields.RES_TIME, 'res_time', 'ResTime'];
+
+          const isAppointmentPassed = (resDateStr, resTimeStr) => {
+              if (!resDateStr || !resDateStr.trim()) return false;
+              try {
+                  let timeStr = (resTimeStr && resTimeStr.trim()) ? resTimeStr.trim() : '23:59:59';
+                  if (timeStr.length === 5) timeStr += ':00';
+                  const apptIso = `${resDateStr.trim()}T${timeStr}+09:00`;
+                  const apptTime = new Date(apptIso).getTime();
+                  if (isNaN(apptTime)) return false;
+                  return Date.now() >= apptTime;
+              } catch (e) {
+                  return false;
+              }
+          };
 
           const matchingChartRecords = ticketRecords.filter(r => {
               const cNo = getFieldValue(r, chartKeys);
@@ -808,7 +824,14 @@
           const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
           const activeRecords = matchingChartRecords.filter(r => {
               const status = (getFieldValue(r, statusKeys) || '').trim();
-              return !inactiveStatuses.includes(status);
+              if (inactiveStatuses.includes(status)) return false;
+
+              const resDate = getFieldValue(r, dateKeys);
+              const resTime = getFieldValue(r, timeKeys);
+              if (resDate && isAppointmentPassed(resDate, resTime)) {
+                  return false;
+              }
+              return true;
           });
 
           const activeCancelRecord = activeRecords.find(r => {

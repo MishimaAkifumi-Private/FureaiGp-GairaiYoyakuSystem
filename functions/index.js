@@ -1213,10 +1213,34 @@ exports.checkDuplicateTicket = functions.https.onRequest(async (req, res) => {
     const data = await resp.json();
     const rawRecords = data.records || [];
 
+    // 予約日時（JST）が既に経過しているかを判定するヘルパー
+    const isAppointmentPassed = (resDateStr, resTimeStr) => {
+      if (!resDateStr || !resDateStr.trim()) return false;
+      try {
+        let timeStr = (resTimeStr && resTimeStr.trim()) ? resTimeStr.trim() : '23:59:59';
+        if (timeStr.length === 5) timeStr += ':00'; // 例: "14:30" -> "14:30:00"
+        const apptIso = `${resDateStr.trim()}T${timeStr}+09:00`;
+        const apptTime = new Date(apptIso).getTime();
+        if (isNaN(apptTime)) return false;
+        return Date.now() >= apptTime;
+      } catch (e) {
+        return false;
+      }
+    };
+
     const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
     const activeRecords = rawRecords.filter(r => {
       const status = (r['管理状況']?.value || '').trim();
-      return !inactiveStatuses.includes(status);
+      if (inactiveStatuses.includes(status)) return false;
+
+      // ② 確定予約日時が既に経過している場合は、スタッフの終了処理前であってもブロック対象外とする
+      const resDate = r['確定予約日']?.value;
+      const resTime = r['確定予約時刻']?.value;
+      if (resDate && isAppointmentPassed(resDate, resTime)) {
+        return false;
+      }
+
+      return true;
     });
 
     const activeCancelRecord = activeRecords.find(r => r['用件']?.value === '取消');
@@ -1251,7 +1275,9 @@ exports.checkDuplicateTicket = functions.https.onRequest(async (req, res) => {
         status: r['管理状況']?.value,
         req: r['用件']?.value,
         dob: r['生年月日']?.value,
-        chartNo: r['カルテNo']?.value
+        chartNo: r['カルテNo']?.value,
+        resDate: r['確定予約日']?.value,
+        resTime: r['確定予約時刻']?.value
       }))
     });
   } catch (err) {
