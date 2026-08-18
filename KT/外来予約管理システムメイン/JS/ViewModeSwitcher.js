@@ -1338,10 +1338,11 @@
     // ★追加: アプリ連携設定ダイアログ (システム管理者用)
     function showAppIdSettingDialog() {
         let config = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
+        let crmSettings = window.ShinryoApp?.ConfigManager?.getCrmSettings ? window.ShinryoApp.ConfigManager.getCrmSettings() : { crmHistoryCount: 30 };
         const inputRefs = {};
 
         const checkDirty = (action) => {
-            const isDirty = inputRefs.appId.value != (config.appId || '');
+            const isDirty = inputRefs.appId.value != (config.appId || '') || inputRefs.crmHistoryCount.value != (crmSettings.crmHistoryCount || '');
             checkDirtyAndConfirm(isDirty, action);
         };
 
@@ -1372,6 +1373,27 @@
         content.appendChild(div);
         inputRefs.appId = inp;
 
+        // ★追加: CRMチケット履歴保持件数
+        const divCrm = document.createElement('div');
+        divCrm.style.marginBottom = '15px';
+        divCrm.style.marginTop = '15px';
+        const lblCrm = document.createElement('label');
+        lblCrm.textContent = 'CRMチケット履歴保持件数';
+        lblCrm.style.display = 'block';
+        lblCrm.style.fontSize = '12px';
+        lblCrm.style.fontWeight = 'bold';
+        lblCrm.style.marginBottom = '4px';
+        divCrm.appendChild(lblCrm);
+
+        const inpCrm = document.createElement('input');
+        inpCrm.className = 'custom-modal-input';
+        inpCrm.type = 'number';
+        inpCrm.value = config.crmHistoryCount || '30';
+        inpCrm.style.marginBottom = '0';
+        divCrm.appendChild(inpCrm);
+        content.appendChild(divCrm);
+        inputRefs.crmHistoryCount = inpCrm;
+
         const desc = document.createElement('p');
         desc.textContent = '※通常は「142」が設定されています。アプリを移行した場合のみ変更してください。';
         desc.style.cssText = 'font-size: 11px; color: #888; margin-top: 10px;';
@@ -1389,9 +1411,17 @@
         const saveBtn = document.createElement('button');
         saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
         saveBtn.textContent = '保存';
-        saveBtn.onclick = () => {
+        saveBtn.onclick = async () => {
             config.appId = inp.value;
             localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
+            
+            if (window.ShinryoApp?.ConfigManager?.updateCrmSettings) {
+                try {
+                    await window.ShinryoApp.ConfigManager.updateCrmSettings(parseInt(inpCrm.value, 10));
+                } catch (e) {
+                    console.error('Failed to save CRM settings:', e);
+                }
+            }
             document.body.removeChild(overlay);
             showAdminMenu();
         };

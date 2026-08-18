@@ -16,6 +16,10 @@
     const FIELD_CODE = '設定情報'; // Kintone側のフィールドコード
     const DEFAULT_APP_ID = 200; // デフォルトの保存先アプリID (診療シフト管理アプリ)
 
+    // CRM設定 (App 309連携)
+    const CRM_APP_ID = 309;
+    const DEFAULT_CRM_HISTORY_COUNT = 30;
+
     // 保存先アプリIDを取得 (常にデフォルトアプリIDを使用)
     const getTargetAppId = () => {
         return DEFAULT_APP_ID;
@@ -191,7 +195,28 @@
          * キャッシュ済みの共通設定を取得（同期的）
          */
         getCommonSettings: function() {
-            return (cachedData && cachedData.commonSettings) ? cachedData.commonSettings : {};
+            return cachedData ? (cachedData.commonSettings || {}) : {};
+        },
+
+        /**
+         * CRM設定を取得する
+         */
+        getCrmSettings: function() {
+            const settings = cachedData ? (cachedData.commonSettings || {}) : {};
+            return {
+                crmAppId: CRM_APP_ID,
+                crmHistoryCount: settings.crmHistoryCount ? parseInt(settings.crmHistoryCount, 10) : DEFAULT_CRM_HISTORY_COUNT
+            };
+        },
+
+        /**
+         * CRM設定を更新する (主にメインアプリ側から呼ばれる想定)
+         */
+        updateCrmSettings: async function(historyCount) {
+            const data = await this.fetchPublishedData();
+            data.commonSettings = data.commonSettings || {};
+            data.commonSettings.crmHistoryCount = historyCount;
+            await this._saveToKintone(data);
         },
         
         /**

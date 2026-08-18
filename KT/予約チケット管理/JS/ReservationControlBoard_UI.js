@@ -911,6 +911,31 @@
           id: recordId,
           record: payload
         });
+
+        // --- ★追加: 終了/取下ステータスの場合はCRMへ退避し、元のレコードを削除する ---
+        const newStatus = payload[CONFIG.FIELDS.STATUS] ? payload[CONFIG.FIELDS.STATUS].value : null;
+        const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下'];
+        if (newStatus && inactiveStatuses.includes(newStatus) && window.CrmIntegration && window.CrmIntegration.transferToCrmAndDelete) {
+            try {
+                showSpinner('CRMへアーカイブ中...');
+                const fullResp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
+                    app: kintone.app.getId(),
+                    id: recordId
+                });
+                await window.CrmIntegration.transferToCrmAndDelete(fullResp.record);
+                hideSpinner();
+                // 削除後は元のレコード画面が存在しないため、一覧画面へ遷移する
+                const listUrl = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+                window.location.href = listUrl;
+                return true;
+            } catch (crmError) {
+                hideSpinner();
+                console.error('[RcbUI] CRM Integration failed:', crmError);
+                await showDialog('CRMへのデータ退避中にエラーが発生しました。チケットは終了状態のままアプリ内に残ります。\n' + crmError.message, 'error');
+            }
+        }
+        // ------------------------------------------------------------------------
+
         return true;
       } catch (e) {
         console.error('Update failed:', e);

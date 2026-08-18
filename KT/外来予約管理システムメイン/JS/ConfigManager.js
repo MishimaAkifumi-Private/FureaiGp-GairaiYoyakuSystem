@@ -59,6 +59,8 @@ window.ShinryoApp = window.ShinryoApp || {};
     updateCommonCalendarSettings: updateCommonCalendarSettings, // ★変更: 休診日・例外日・土曜設定をまとめて更新
     updateCommonFacilities: updateCommonFacilities, // ★追加
     updateCommonStaffs: updateCommonStaffs, // ★追加
+    getCrmSettings: getCrmSettings, // ★追加: CRM設定取得用
+    updateCrmSettings: updateCrmSettings, // ★追加: CRM設定更新用
     syncAppDropdown: syncAppDropdown, // ★追加: アプリ設定同期用
     syncExternalAppDropdown: syncExternalAppDropdown, // ★追加: 外部アプリ設定同期用
     getStorageStatus: () => ({ 
@@ -1163,6 +1165,33 @@ window.ShinryoApp = window.ShinryoApp || {};
       console.log(`ConfigManager: Common facilities updated directly to production. Count: ${facilities ? facilities.length : 0}`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common facilities.', e);
+      throw e;
+    }
+  }
+
+
+  /**
+   * ★追加: CRM設定を取得
+   */
+  function getCrmSettings() {
+    const settings = publishedCommonSettings || {};
+    return {
+        crmAppId: 309,
+        crmHistoryCount: settings.crmHistoryCount ? parseInt(settings.crmHistoryCount, 10) : 30
+    };
+  }
+
+  /**
+   * ★追加: CRM設定を更新、本番データに保存
+   */
+  async function updateCrmSettings(historyCount) {
+    try {
+      await _updateCommonSettingField((common) => {
+        common.crmHistoryCount = historyCount;
+      });
+      console.log(`ConfigManager: CRM settings updated directly to production. Count: ${historyCount}`);
+    } catch (e) {
+      console.error('ConfigManager: Failed to update CRM settings.', e);
       throw e;
     }
   }

@@ -13,21 +13,11 @@
         let allRecords = [];
         let offset = 0;
         const limit = 500;
-        
-        // 有効/終了のトグル状態を取得（ListToggleFilter.jsとの互換性）
-        const toggleMode = localStorage.getItem('shinryo_ticket_status_filter') || 'active';
-        const baseCondition = toggleMode === 'active' ? '管理状況 not in ("終了", "強制終了")' : '管理状況 in ("終了", "強制終了")';
-        
-        const searchText = sessionStorage.getItem('shinryo_ticket_search_chart_no') || '';
-        let searchCondition = '';
-        if (searchText) {
-            searchCondition = ` and (カルテNo like "${searchText}" or 姓漢字 like "${searchText}" or 名漢字 like "${searchText}" or 姓かな like "${searchText}" or 名かな like "${searchText}")`;
-        }
 
         while (true) {
             const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', { 
                 app: appId, 
-                query: `${baseCondition}${searchCondition} limit ${limit} offset ${offset}`,
+                query: `limit ${limit} offset ${offset}`,
                 fields: ['担当者', '管理状況']
             });
             allRecords = allRecords.concat(resp.records);
@@ -41,25 +31,15 @@
     function applyStaffFilter(staffName) {
         localStorage.setItem(STORAGE_KEY_STAFF_FILTER, staffName);
         
-        // 有効/終了のトグル状態を取得（ListToggleFilter.jsとの互換性）
-        const toggleMode = localStorage.getItem('shinryo_ticket_status_filter') || 'active';
-        const baseCondition = toggleMode === 'active' ? '管理状況 not in ("終了", "強制終了")' : '管理状況 in ("終了", "強制終了")';
-
-        const searchText = sessionStorage.getItem('shinryo_ticket_search_chart_no') || '';
-        let searchCondition = '';
-        if (searchText) {
-            searchCondition = ` and (カルテNo like "${searchText}" or 姓漢字 like "${searchText}" or 名漢字 like "${searchText}" or 姓かな like "${searchText}" or 名かな like "${searchText}")`;
-        }
-        
         let staffCondition = '';
         if (staffName !== '全担当') {
-            // 選択した担当者（他の担当者ボタンの場合はその他担当者） ＋ 未着手
-            staffCondition = ` and (担当者 in ("${staffName}") or 管理状況 in ("未着手"))`;
+            // 選択した担当者 ＋ 未着手
+            staffCondition = `(担当者 in ("${staffName}") or 管理状況 in ("未着手")) `;
         }
 
-        // 未着手を上にするためのソート（文字コード順を利用して暫定的にdesc指定）
+        // 未着手を上にするためのソート
         const orderClause = 'order by 管理状況 desc, 更新日時 desc';
-        const newQuery = `${baseCondition}${searchCondition}${staffCondition} ${orderClause}`;
+        const newQuery = staffCondition ? `${staffCondition}${orderClause}` : orderClause;
 
         const url = new URL(window.location.href);
         url.searchParams.set('query', newQuery);

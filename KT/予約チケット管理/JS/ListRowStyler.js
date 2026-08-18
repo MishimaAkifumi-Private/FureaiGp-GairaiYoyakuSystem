@@ -115,8 +115,7 @@
             } else if (methodVal === 'email' || methodVal === 'mail' || methodVal === 'メール対応') {
                 iconHtml = `<div style="font-size:20px; line-height:1;">📩</div>`;
             } else {
-                // スタッフ（staff / 内部対応 / 取消）は確実な黒色シルエットSVGベクトルで描画
-                iconHtml = `<div style="line-height:1; display:flex; justify-content:center; align-items:center;" title="スタッフ対応"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" style="fill: #000000; vertical-align: middle;"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></div>`;
+                iconHtml = `<div style="line-height:1; text-align:center; color:#94a3b8; font-size:14px;">-</div>`;
             }
             methodEl.innerHTML = iconHtml;
         }

@@ -1,14 +1,10 @@
 /*
  * PatientSearch.js
- * 一覧画面上部にカルテNoでの患者検索機能を設けます。
  * 全画面（一覧・詳細・編集・作成）で共通して、情報バーの右端に「管理状況凡例」ボタンを表示します。
+ * （※患者検索ボックスはCRMアプリ側へ移設されました）
  */
 (function () {
     'use strict';
-
-    const STORAGE_KEY_SEARCH = 'shinryo_ticket_search_chart_no';
-    const STORAGE_KEY_MODE = 'shinryo_ticket_status_filter';
-    const STORAGE_KEY_STAFF = 'shinryo_staff_filter_selected';
 
     kintone.events.on([
         'app.record.index.show',
@@ -31,82 +27,6 @@
             legendBtn.onclick = showStatusLegendDialog;
         }
 
-        // --- 2. 検索ボックスの構築 (一覧画面のみ) ---
-        let container = null;
-        if (isIndex && !document.getElementById('custom-patient-search-container')) {
-            const headerSpace = kintone.app.getHeaderMenuSpaceElement();
-            if (headerSpace) {
-                container = document.createElement('div');
-                container.id = 'custom-patient-search-container';
-                container.style.cssText = 'display: inline-flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 30px; padding: 2px 10px; margin-left: 10px; margin-bottom: 18px; vertical-align: middle; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); height: 38px; box-sizing: border-box; visibility: hidden;';
-
-                const searchInput = document.createElement('input');
-                searchInput.type = 'text';
-                searchInput.placeholder = 'No・名前で検索';
-                searchInput.style.cssText = 'border: none; outline: none; font-size: 13px; width: 110px; background: transparent; color: #333; margin-right: 5px;';
-
-                const currentSearch = sessionStorage.getItem(STORAGE_KEY_SEARCH) || '';
-                searchInput.value = currentSearch;
-
-                const clearBtn = document.createElement('button');
-                clearBtn.textContent = '✖';
-                clearBtn.title = '検索クリア';
-                clearBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; font-size: 12px; padding: 3px; color: #aaa; display: ' + (currentSearch ? 'block' : 'none') + '; margin-right: 5px; transition: color 0.2s;';
-                clearBtn.onmouseover = () => clearBtn.style.color = '#e74c3c';
-                clearBtn.onmouseout = () => clearBtn.style.color = '#aaa';
-
-                const searchBtn = document.createElement('button');
-                searchBtn.id = 'rcb-search-btn';
-                searchBtn.textContent = '🔍';
-                searchBtn.style.cssText = 'background: #3498db; color: #fff; border: none; border-radius: 15px; cursor: pointer; font-size: 12px; font-weight: bold; padding: 4px 10px; transition: background 0.2s;';
-                searchBtn.onmouseover = () => searchBtn.style.background = '#2980b9';
-                searchBtn.onmouseout = () => searchBtn.style.background = '#3498db';
-
-                const executeSearch = () => {
-                    const val = searchInput.value.trim();
-                    if (val) {
-                        sessionStorage.setItem(STORAGE_KEY_SEARCH, val);
-                        localStorage.setItem(STORAGE_KEY_STAFF, '全担当');
-                    } else {
-                        sessionStorage.removeItem(STORAGE_KEY_SEARCH);
-                    }
-                    location.reload();
-                };
-
-                searchBtn.onclick = executeSearch;
-                searchInput.onkeydown = (e) => {
-                    if (e.key === 'Enter') executeSearch();
-                };
-
-                clearBtn.onclick = () => {
-                    searchInput.value = '';
-                    sessionStorage.removeItem(STORAGE_KEY_SEARCH);
-                    location.reload();
-                };
-
-                container.appendChild(searchInput);
-                container.appendChild(clearBtn);
-                container.appendChild(searchBtn);
-            }
-        }
-
-        // --- 3. 配置・挿入ロジック ---
-
-        // 検索ボックスの挿入 (一覧のみ)
-        const insertSearchContainer = () => {
-            if (!container) return false;
-            const toggleContainer = document.getElementById('custom-status-toggle-container');
-            if (toggleContainer && toggleContainer.parentNode && toggleContainer.style.visibility !== 'hidden') {
-                const parent = toggleContainer.parentNode;
-                if (toggleContainer.nextSibling !== container) {
-                    parent.insertBefore(container, toggleContainer.nextSibling);
-                }
-                container.style.visibility = 'visible'; // 位置確定後に可視化
-                return true;
-            }
-            return false;
-        };
-
         // 凡例ボタンの挿入 (全画面共通)
         const insertLegendBtn = () => {
             const iconlistWrapper = document.querySelector('.gaia-argoui-app-infobar-breadcrumb-iconlist');
@@ -116,13 +36,12 @@
             const targetMarginRight = isIndex ? '26px' : '90px';
             
             if (iconlistWrapper) {
-                // 行全体を Flexbox 化して垂直中央揃えを強制
                 iconlistWrapper.style.display = 'flex';
                 iconlistWrapper.style.alignItems = 'center';
                 iconlistWrapper.style.width = '100%';
                 
                 if (iconList) {
-                    iconList.style.marginLeft = '0'; // アイコン群はパンくずテキストの直後に配置
+                    iconList.style.marginLeft = '0';
                     iconList.style.marginRight = '10px';
                     iconList.style.display = 'inline-flex';
                     iconList.style.alignItems = 'center';
@@ -137,7 +56,6 @@
                 }
                 return true;
             } else if (infobar) {
-                // 詳細・編集画面などでパンくず階層リストが無い場合、親の情報バー自体に Flex 配置する
                 infobar.style.display = 'flex';
                 infobar.style.alignItems = 'center';
                 infobar.style.width = '100%';
@@ -152,27 +70,15 @@
             return false;
         };
 
-        // 初期挿入
-        if (isIndex && container) {
-            if (!insertSearchContainer()) {
-                const headerSpace = kintone.app.getHeaderMenuSpaceElement();
-                if (headerSpace) headerSpace.appendChild(container); // 一時的な配置
-            }
-        }
         insertLegendBtn();
 
         // DOMの変更を監視して再配置
         const observer = new MutationObserver(() => {
-            if (isIndex) insertSearchContainer();
             insertLegendBtn();
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
-        // タイムアウトフォールバック
         setTimeout(() => {
-            if (isIndex && container) {
-                container.style.visibility = 'visible';
-            }
             insertLegendBtn();
         }, 400);
 
@@ -181,7 +87,6 @@
 
     // --- 凡例ダイアログ表示関数 (全画面共通) ---
     function showStatusLegendDialog() {
-        // スタイルがなければ注入
         if (!document.getElementById('rcb-modal-styles-legend')) {
             const modalStyle = document.createElement('style');
             modalStyle.id = 'rcb-modal-styles-legend';

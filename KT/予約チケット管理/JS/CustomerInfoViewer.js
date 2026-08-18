@@ -124,10 +124,10 @@
       }
       .ci-history-table th, .ci-history-table td {
         border: 1px solid #e0e0e0;
-        padding: 6px 8px !important;
+        padding: 2px 4px !important;
         text-align: center;
         vertical-align: middle;
-        line-height: 1.4;
+        line-height: 1.2;
       }
       .ci-history-table th {
         background-color: #f4f6f8;
@@ -138,8 +138,8 @@
         text-align: left;
         min-width: 160px;
         word-break: break-word;
-        line-height: 1.5;
-        padding: 6px 10px !important;
+        line-height: 1.2;
+        padding: 2px 4px !important;
       }
       .ci-ticket-open-btn {
         display: inline-flex;
@@ -183,10 +183,10 @@
       }
       .ci-progress-table th, .ci-progress-table td {
         border: 1px solid #e0e0e0;
-        padding: 6px 10px;
+        padding: 2px 4px;
         text-align: center;
         vertical-align: middle;
-        line-height: 1.4;
+        line-height: 1.2;
       }
       .ci-progress-table th {
         background-color: #f4f6f8;
@@ -196,9 +196,153 @@
       .ci-progress-table td.ci-reason-cell {
         text-align: left;
         color: #1e293b;
-      }
     `;
     document.head.appendChild(style);
+
+    // ダイアログ用CSS
+    if (!document.getElementById('ci-dialog-styles')) {
+      const dialogStyle = document.createElement('style');
+      dialogStyle.id = 'ci-dialog-styles';
+      dialogStyle.textContent = `
+        .ci-modal-overlay {
+          position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+          background: rgba(0,0,0,0.4); backdrop-filter: blur(2px);
+          display: flex; justify-content: center; align-items: center; z-index: 10000;
+        }
+        .ci-modal-box {
+          background: #fff; border-radius: 8px; width: 90%; max-width: 600px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 20px; overflow: hidden;
+          display: flex; flex-direction: column; max-height: 80vh;
+        }
+        .ci-modal-header { font-size: 16px; font-weight: bold; color: #2c3e50; border-bottom: 2px solid #f0f2f5; padding-bottom: 12px; margin-bottom: 16px; }
+        .ci-modal-body { overflow-y: auto; flex: 1; }
+        .ci-timeline-item { border-left: 2px solid #cbd5e1; padding-left: 15px; position: relative; margin-bottom: 15px; }
+        .ci-timeline-dot { position: absolute; left: -6px; top: 0; width: 10px; height: 10px; border-radius: 50%; background: #3b82f6; }
+        .ci-timeline-date { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+        .ci-timeline-status { font-weight: bold; font-size: 13px; color: #1e293b; margin-right: 8px; }
+        .ci-timeline-staff { font-size: 11px; color: #0284c7; background: #e0f2fe; padding: 2px 6px; border-radius: 4px; }
+        .ci-timeline-reason { margin-top: 6px; font-size: 12px; color: #334155; white-space: pre-wrap; background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0; }
+        .ci-modal-footer { margin-top: 15px; text-align: right; border-top: 1px solid #f0f2f5; padding-top: 15px; }
+        .ci-modal-close-btn { background: #64748b; color: #fff; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: background 0.2s; }
+        .ci-modal-close-btn:hover { background: #475569; }
+      `;
+      document.head.appendChild(dialogStyle);
+    }
+  };
+
+  // 経過ダイアログの表示
+  window.showProgressDialog = (index) => {
+    const rawJson = window._historyProgressData[index];
+    if (!rawJson) return;
+    try {
+      const data = JSON.parse(rawJson);
+      if (!data || data.length === 0) {
+        showCustomDialog('経過情報がありません。', 'alert', { ok: '閉じる' });
+        return;
+      }
+      const overlay = document.createElement('div');
+      overlay.className = 'ci-modal-overlay';
+      const box = document.createElement('div');
+      box.className = 'ci-modal-box';
+      // もっと幅を広くする (表を表示するため)
+      box.style.maxWidth = '800px';
+
+      const header = document.createElement('div');
+      header.className = 'ci-modal-header';
+      header.textContent = 'チケット対応経過';
+
+      const body = document.createElement('div');
+      body.className = 'ci-modal-body';
+      
+      let tableHtml = `
+        <table class="ci-progress-table" style="width:100%; border-collapse:collapse; font-size:12px;">
+          <thead>
+            <tr>
+              <th style="width: 140px; text-align:center; padding:6px; border:1px solid #e0e0e0; background:#f4f6f8;">対応日時</th>
+              <th style="width: 90px; text-align:center; padding:6px; border:1px solid #e0e0e0; background:#f4f6f8;">担当者</th>
+              <th style="width: 110px; text-align:center; padding:6px; border:1px solid #e0e0e0; background:#f4f6f8;">管理状態</th>
+              <th style="text-align:center; padding:6px; border:1px solid #e0e0e0; background:#f4f6f8;">対応内容・理由・備考</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      data.forEach(item => {
+        const reasonHtml = item.reason ? linkify(item.reason) : '-';
+        tableHtml += `
+          <tr>
+            <td style="white-space:nowrap; padding:4px 6px; border:1px solid #e0e0e0; text-align:center;">${escapeHtml(item.datetime)}</td>
+            <td style="white-space:nowrap; padding:4px 6px; border:1px solid #e0e0e0; text-align:center;">${escapeHtml(item.staff)}</td>
+            <td style="white-space:nowrap; padding:4px 6px; border:1px solid #e0e0e0; text-align:center; font-weight:bold; color:#0284c7;">${escapeHtml(item.status)}</td>
+            <td style="padding:4px 6px; border:1px solid #e0e0e0; text-align:left; word-break:break-word; white-space:pre-wrap;">${reasonHtml}</td>
+          </tr>
+        `;
+      });
+      
+      tableHtml += `</tbody></table>`;
+      body.innerHTML = tableHtml;
+
+      const footer = document.createElement('div');
+      footer.className = 'ci-modal-footer';
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'ci-modal-close-btn';
+      closeBtn.textContent = '閉じる';
+      closeBtn.onclick = () => document.body.removeChild(overlay);
+      footer.appendChild(closeBtn);
+
+      box.appendChild(header);
+      box.appendChild(body);
+      box.appendChild(footer);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
+  // カスタムツールチップの表示処理
+  window.ciShowTooltip = (event, contentHtml) => {
+    let tooltip = document.getElementById('ci-custom-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'ci-custom-tooltip';
+        tooltip.style.cssText = 'position:fixed; background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; box-shadow:0 4px 15px rgba(0,0,0,0.1); padding:10px; z-index:10000; font-size:11px; color:#1e293b; max-width:320px; line-height:1.4; pointer-events:none; transition:opacity 0.2s;';
+        document.body.appendChild(tooltip);
+    }
+    tooltip.innerHTML = contentHtml;
+    tooltip.style.display = 'block';
+    tooltip.style.opacity = '1';
+    
+    // 表示位置の計算 (マウスカーソルの少し下)
+    const rect = event.target.getBoundingClientRect();
+    let top = rect.bottom + 8;
+    // 画面下部にはみ出る場合は上に表示
+    if (top + tooltip.offsetHeight > window.innerHeight - 10) {
+        top = rect.top - tooltip.offsetHeight - 8;
+    }
+    
+    let left = rect.left - (tooltip.offsetWidth / 2) + (rect.width / 2);
+    if (left < 10) left = 10;
+    if (left + tooltip.offsetWidth > window.innerWidth - 10) left = window.innerWidth - tooltip.offsetWidth - 10;
+    
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+  };
+
+  window.ciHideTooltip = () => {
+    const tooltip = document.getElementById('ci-custom-tooltip');
+    if (tooltip) {
+        tooltip.style.opacity = '0';
+        setTimeout(() => { if (tooltip.style.opacity === '0') tooltip.style.display = 'none'; }, 200);
+    }
+  };
+
+  window.ciShowMemoTooltip = (event, idx) => {
+    const memo = window._historyMemoData[idx];
+    if (!memo) return;
+    const html = `<div style="font-weight:bold; color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:4px; margin-bottom:4px;">人物メモ</div>
+                  <div style="white-space:pre-wrap; color:#334155; font-size:11.5px;">${escapeHtml(memo)}</div>`;
+    window.ciShowTooltip(event, html);
   };
 
   // HTMLエスケープヘルパー
@@ -325,56 +469,120 @@
     const chartNo = getV('カルテNo');
     let historyHtml = '<div style="color: #94a3b8; font-style: italic; font-size: 12px;">過去の履歴はありません。</div>';
     let historyCount = 0;
+    window._historyProgressData = []; // 初期化
+    window._historyMemoData = []; // 初期化
+
+    const crmSettings = window.ShinryoApp?.ConfigManager?.getCrmSettings 
+        ? window.ShinryoApp.ConfigManager.getCrmSettings() 
+        : { crmAppId: 309, crmHistoryCount: 30 };
+    const CRM_APP_ID = crmSettings.crmAppId;
+    const maxRows = crmSettings.crmHistoryCount || 30;
 
     if (chartNo) {
       try {
-        const query = `カルテNo = "${chartNo}" order by 作成日時 desc limit 10`;
-        const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
-          app: kintone.app.getId(),
-          query: query,
-          fields: ['$id', '作成日時', '用件', '診療科', '対応方法', '申込者', '申込者補足', '共通評価', '人物メモ', '管理状況']
+        const patientId = `${kintone.app.getId()}_${chartNo}`;
+
+        const activeQuery = `カルテNo = "${chartNo}" order by 作成日時 desc limit ${maxRows}`;
+        const crmQuery = `患者ID = "${patientId}"`;
+
+        const [activeResp, crmResp] = await Promise.all([
+          kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+            app: kintone.app.getId(),
+            query: activeQuery,
+            fields: ['$id', '作成日時', '用件', '診療科', '対応方法', '申込者', '申込者補足', '共通評価', '人物メモ', '管理状況', '経過情報']
+          }),
+          kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+            app: CRM_APP_ID,
+            query: crmQuery,
+            fields: ['$id', '申込記録']
+          }).catch(e => {
+            console.warn('[CustomerInfoViewer] CRM fetch failed', e);
+            return { records: [] };
+          })
+        ]);
+
+        let combinedRecords = activeResp.records.map(r => {
+            const prog = r['経過情報']?.value || [];
+            const progArr = prog.map(p => ({
+                datetime: p.value['経過情報_日時']?.value,
+                staff: p.value['経過情報_担当者']?.value,
+                status: p.value['経過情報_管理状態']?.value,
+                reason: p.value['経過情報_理由']?.value
+            }));
+            return {
+                $id: { value: r.$id.value },
+                作成日時: r['作成日時'],
+                申込日: { value: r['作成日時'].value.split('T')[0] },
+                用件: r['用件'],
+                診療科: r['診療科'],
+                対応方法: r['対応方法'],
+                申込者: r['申込者'],
+                申込者補足: r['申込者補足'],
+                共通評価: r['共通評価'],
+                人物メモ: r['人物メモ'],
+                管理状況: r['管理状況'],
+                isCrm: false,
+                progressJson: JSON.stringify(progArr)
+            };
         });
 
-        const historyRecords = resp.records || [];
-        historyCount = historyRecords.length;
+        if (crmResp.records.length > 0) {
+            const applyTable = crmResp.records[0]['申込記録'].value || [];
+            const crmRecords = applyTable.map(row => {
+                const v = row.value;
+                let commonEval = [];
+                let memo = '';
+                try {
+                    const evalObj = JSON.parse(v['人物評価']?.value || '{}');
+                    commonEval = evalObj.common || [];
+                    memo = evalObj.memo || '';
+                } catch(e){}
 
-        if (historyRecords.length > 0) {
-          const rows = historyRecords.map(r => {
+                return {
+                    $id: { value: crmResp.records[0].$id.value },
+                    作成日時: { value: (v['申込日']?.value || '2000-01-01') + 'T00:00:00Z' },
+                    申込日: { value: v['申込日']?.value },
+                    用件: { value: v['用件']?.value },
+                    診療科: { value: v['診療科']?.value },
+                    対応方法: { value: v['対応方法']?.value || '-' },
+                    申込者: { value: v['申込者']?.value || v['申込者名']?.value || '' },
+                    申込者補足: { value: '' },
+                    共通評価: { value: commonEval },
+                    人物メモ: { value: memo },
+                    管理状況: { value: '終了' },
+                    isCrm: true,
+                    progressJson: v['経過情報']?.value || '[]'
+                };
+            });
+            combinedRecords = [...combinedRecords, ...crmRecords];
+        }
+
+        // 作成日時（申込日）の降順でソートして上位指定件数
+        combinedRecords.sort((a, b) => new Date(b.作成日時.value) - new Date(a.作成日時.value));
+        combinedRecords = combinedRecords.slice(0, maxRows);
+        historyCount = combinedRecords.length;
+
+        if (historyCount > 0) {
+          const rows = combinedRecords.map((r, idx) => {
             const id = r.$id.value;
             const url = window.location.pathname + '?record=' + id;
-            const isCurrent = (id === String(currentId));
+            const isCurrent = (!r.isCrm && id === String(currentId));
             const status = r['管理状況']?.value;
-            const isActive = !['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下'].includes(status);
-            const memoStr = r['人物メモ']?.value || '';
-            const hasConfirmedDup = memoStr.includes('[複数の用件を短期間に依頼:');
 
-            let activeLabel = '';
-            let rowStyle = '';
-            if (isCurrent) {
-              rowStyle = '';
-            } else if (isActive) {
-              if (!hasConfirmedDup) {
-                activeLabel = '<br><span style="background-color: #ef4444; color: white; font-size: 9px; padding: 1px 4px; border-radius: 3px; white-space: nowrap;">同時進行中</span>';
-                rowStyle = ' style="background-color: #fef2f2;"';
-              } else {
-                activeLabel = '<br><span style="background-color: #10b981; color: white; font-size: 9px; padding: 1px 4px; border-radius: 3px; white-space: nowrap;">別件進行中</span>';
-                rowStyle = ' style="background-color: #ecfdf5;"';
-              }
+            window._historyProgressData[idx] = r.progressJson || '[]';
+            window._historyMemoData[idx] = r['人物メモ']?.value || '';
+
+            let ticketDisplay = '';
+            if (r.isCrm) {
+                ticketDisplay = '<span style="color:#64748b; font-size:10px; white-space:nowrap;">済</span>';
+            } else if (isCurrent) {
+                ticketDisplay = '<span class="ci-current-ticket-badge">本チケット</span>';
+            } else {
+                ticketDisplay = `<a href="${url}" target="_blank" style="color: #3498db; text-decoration: underline; font-weight: bold;" title="チケット詳細を別タブで開く">${id}</a>`;
             }
 
-            // 「このチケット」以外の過去チケットは別タブ(_blank)で開くリンクを表示（シンプルに管理番号のみ）
-            const ticketDisplay = isCurrent 
-              ? '<span class="ci-current-ticket-badge">本チケット</span>' 
-              : `<a href="${url}" target="_blank" style="color: #3498db; text-decoration: underline; font-weight: bold;" title="チケット詳細を別タブで開く">${id}</a>`;
-
+            const applyDateStr = escapeHtml(r['申込日']?.value) || '-';
             const statusStr = escapeHtml(status) || '-';
-
-            const createdDate = new Date(r['作成日時'].value);
-            const y = createdDate.getFullYear();
-            const m = String(createdDate.getMonth() + 1).padStart(2, '0');
-            const d = String(createdDate.getDate()).padStart(2, '0');
-            const dateStr = `${y}/${m}/${d}`;
-
             const purpose = escapeHtml(r['用件']?.value) || '-';
 
             // 診療科の「診療分野/」省略処理
@@ -385,7 +593,7 @@
             }
             const dept = escapeHtml(rawDept) || '-';
 
-            // 対応方法判定（絵文字のみ表示）
+            // 対応方法判定
             const rawMethod = r['対応方法']?.value || '';
             const rawMethodLower = rawMethod.toLowerCase();
             let methodEmoji = '-';
@@ -393,10 +601,8 @@
               methodEmoji = '<span title="電話対応" style="font-size:14px; color:#1e293b;">&#x1F4DE;&#xFE0E;</span>';
             } else if (rawMethodLower.includes('メール') || rawMethodLower.includes('email') || (status && status.includes('メール'))) {
               methodEmoji = '<span title="メール対応" style="font-size:14px;">✉️</span>';
-            } else if (rawMethodLower.includes('staff') || rawMethodLower.includes('スタッフ')) {
-              methodEmoji = '<span title="スタッフ対応" style="display:inline-flex; align-items:center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" style="fill: #000000; vertical-align: middle;"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></span>';
-            } else if (rawMethod) {
-              methodEmoji = escapeHtml(rawMethod);
+            } else {
+              methodEmoji = '-';
             }
 
             const recApplicant = escapeHtml(r['申込者']?.value);
@@ -409,14 +615,25 @@
             const checkCancel1 = hasValue(r, '共通評価', '直前に受診キャンセル') ? '🔴' : '';
             const checkCancel2 = hasValue(r, '共通評価', '無断で受診キャンセル') ? '🔴' : '';
 
-            const memo = linkify(r['人物メモ']?.value);
+            // 人物メモ（カスタムツールチップ化）
+            const rawMemo = r['人物メモ']?.value;
+            let memoContent = '-';
+            if (rawMemo && rawMemo.trim()) {
+                memoContent = `<span onmouseenter="window.ciShowMemoTooltip(event, ${idx})" onmouseleave="window.ciHideTooltip()" style="cursor:help; font-size:14px; padding:2px;">💬</span>`;
+            }
+
+            // 経過（ボタンでダイアログ表示）
+            let progressContent = '-';
+            if (r.progressJson && r.progressJson !== '[]') {
+                progressContent = `<button type="button" onclick="window.showProgressDialog(${idx})" style="padding:1px 6px; font-size:10px; cursor:pointer; background:#f8fafc; border:1px solid #cbd5e1; border-radius:3px; color:#0f172a; line-height:1.2;">表示</button>`;
+            }
 
             return `
-              <tr${rowStyle}>
+              <tr>
                 <td style="white-space:nowrap; text-align:center;">${ticketDisplay}</td>
                 <td style="white-space:nowrap;">${purpose}</td>
                 <td style="white-space:nowrap; text-align:center;">${statusStr}</td>
-                <td style="white-space:nowrap;">${dateStr}</td>
+                <td style="white-space:nowrap;">${applyDateStr}</td>
                 <td style="white-space:nowrap; text-align:center;">${dept}</td>
                 <td style="white-space:nowrap; text-align:center;">${methodEmoji}</td>
                 <td style="white-space:nowrap;">${recApplicant}</td>
@@ -427,7 +644,8 @@
                 <td>${checkTalk}</td>
                 <td>${checkCancel1}</td>
                 <td>${checkCancel2}</td>
-                <td class="ci-col-memo">${memo}</td>
+                <td style="white-space:nowrap; text-align:center;">${memoContent}</td>
+                <td style="white-space:nowrap; text-align:center;">${progressContent}</td>
               </tr>
             `;
           }).join('');
@@ -446,7 +664,8 @@
                     <th rowspan="2" style="width:50px; white-space:nowrap;">申込者</th>
                     <th rowspan="2" style="width:50px; white-space:nowrap;">補足</th>
                     <th colspan="6">申込者の特徴・注意点</th>
-                    <th rowspan="2" style="min-width:160px;">メモ</th>
+                    <th rowspan="2" style="width:40px; white-space:nowrap;">メモ</th>
+                    <th rowspan="2" style="width:40px; white-space:nowrap;">経過</th>
                   </tr>
                   <tr>
                     <th style="white-space:nowrap; padding: 4px 1px; font-size: 9.5px; width: 32px; cursor:help;" title="未既読：送付したメールが既読にならない。迷惑メールになっていたり、IT関係の操作に不慣れの可能性あり。">未既読</th>
@@ -590,7 +809,7 @@
             </table>
 
             <!-- セクション4: この患者の特徴等 (同一カルテNo履歴) -->
-            <div class="ci-section-title">📜 この患者の特徴等（直近10件まで）</div>
+            <div class="ci-section-title">📜 この患者の特徴等</div>
             ${historyHtml}
 
             <!-- セクション5: 付帯情報・症状 -->

@@ -344,6 +344,39 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     const recordUrlToken = (record["URLトークン"] && record["URLトークン"].value) || "";
     const methodVal = (record["対応方法"] && record["対応方法"].value) || (record["応対方法"] && record["応対方法"].value) || "";
 
+    // 0.5 トークン検証 (URL再利用防止)
+    if (recordUrlToken && recordUrlToken !== token) {
+        console.warn(`[WARN] Token Mismatch: Record='${recordUrlToken}', Query='${token}'`);
+        res.status(200).send(getExpiredHtml(centerName, phoneNumber));
+        return;
+    }
+
+    // 0.6 既に無効ステータスの場合 (再設定、キャンセル済、終了等)
+    if (currentStatus === "キャンセル" || currentStatus === "URL取下" || currentStatus === "スタッフ取下" || currentStatus === "終了" || currentStatus === "担当設定") {
+        res.status(200).send(getAlreadyCancelledHtml(centerName, phoneNumber, currentStatus));
+        return;
+    }
+
+    // 0.7 確定予約日時の超過判定（診療予定日時を過ぎている場合は、ステータス未更新でも「終了」扱いにする）
+    const resDate = record["確定予約日"]?.value;
+    const resTime = record["確定予約時刻"]?.value;
+    if (resDate) {
+        let timeStr = "23:59:00";
+        if (resTime) {
+            const parts = resTime.includes(':') ? resTime.split(':') : [resTime.slice(0, 2), resTime.slice(2)];
+            const hh = String(parts[0] || '0').padStart(2, '0');
+            const mm = String(parts[1] || '00').padStart(2, '0');
+            timeStr = `${hh}:${mm}:00`;
+        }
+        const appointmentEnd = new Date(`${resDate}T${timeStr}+09:00`);
+        const now = new Date();
+        if (!isNaN(appointmentEnd.getTime()) && now > appointmentEnd) {
+            console.log(`[LOG] 診療日時通過済みのため終了画面を表示: RecordID=${recordId}, 確定日時=${resDate} ${timeStr}`);
+            res.status(200).send(getAlreadyCancelledHtml(centerName, phoneNumber, "終了"));
+            return;
+        }
+    }
+
     // ---------------------------------------------------------
     // POSTリクエスト処理 (キャンセル実行)
     // ---------------------------------------------------------

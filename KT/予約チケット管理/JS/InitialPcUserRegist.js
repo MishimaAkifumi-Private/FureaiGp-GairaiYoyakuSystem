@@ -521,15 +521,11 @@
       const styleEl = document.createElement('style');
       styleEl.id = 'custom-header-fade-style';
       styleEl.innerHTML = `
-        #staff-badge-wrapper, 
-        #custom-status-toggle-container, 
-        #custom-patient-search-container {
+        #staff-badge-wrapper {
             opacity: 0 !important;
             transition: opacity 0.15s ease-in-out;
         }
-        #staff-badge-wrapper.show-custom-header, 
-        #custom-status-toggle-container.show-custom-header, 
-        #custom-patient-search-container.show-custom-header {
+        #staff-badge-wrapper.show-custom-header {
             opacity: 1 !important;
         }
       `;
@@ -545,21 +541,15 @@
     // 400ms後に並び替えが落ち着いた段階で一斉表示
     setTimeout(() => {
         renderStaffBadge();
-        const ids = ['staff-badge-wrapper', 'custom-status-toggle-container', 'custom-patient-search-container'];
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.classList.add('show-custom-header');
-        });
+        const el = document.getElementById('staff-badge-wrapper');
+        if (el) el.classList.add('show-custom-header');
     }, 400);
 
     // 1200ms後に念押し
     setTimeout(() => {
         renderStaffBadge();
-        const ids = ['staff-badge-wrapper', 'custom-status-toggle-container', 'custom-patient-search-container'];
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.classList.add('show-custom-header');
-        });
+        const el = document.getElementById('staff-badge-wrapper');
+        if (el) el.classList.add('show-custom-header');
     }, 1200);
 
     return event;
