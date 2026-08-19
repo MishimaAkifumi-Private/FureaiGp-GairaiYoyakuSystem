@@ -598,11 +598,7 @@
               const sep = config.TICKET_API_URL.includes('?') ? '&' : '?';
               const url = `${config.TICKET_API_URL}${sep}${cacheBuster}`;
               const response = await fetch(url, {
-                  cache: 'no-store',
-                  headers: {
-                      'Pragma': 'no-cache',
-                      'Cache-Control': 'no-cache'
-                  }
+                  cache: 'no-store'
               });
               if (!response.ok) return;
               const data = await response.json();
@@ -996,13 +992,20 @@
           try {
               // 1. Cloud Functions による Kintone 直接データ取得（遅延ゼロ・エラーフリー）
               let matchingChartRecords = [];
+              let crmData = null; // ★ CRMデータを格納する変数
               try {
-                  const cfUrl = `https://checkduplicateticket-yoslzibmlq-uc.a.run.app/?chartNo=${encodeURIComponent(chartNo)}&_t=${Date.now()}`;
+                  const reqVal = config.state.requirement || '';
+                  const cfUrl = `https://checkduplicateticket-yoslzibmlq-uc.a.run.app/?chartNo=${encodeURIComponent(chartNo)}&requirement=${encodeURIComponent(reqVal)}&_t=${Date.now()}`;
                   const cfResp = await fetch(cfUrl, { cache: 'no-store' });
                   if (cfResp.ok) {
                       const cfData = await cfResp.json();
-                      if (cfData.status === 'success' && Array.isArray(cfData.records)) {
-                          matchingChartRecords = cfData.records;
+                      if (cfData.status === 'success') {
+                          if (Array.isArray(cfData.records)) {
+                              matchingChartRecords = cfData.records;
+                          }
+                          if (cfData.crmData) {
+                              crmData = cfData.crmData;
+                          }
                       }
                   }
               } catch (cfErr) {
@@ -1025,8 +1028,42 @@
               }
 
               // --- 生年月日照合（3分岐判定ロジック） ---
-              // 1. 同一カルテNoのチケットが存在しない場合 -> 誕生日の照合判定はなく通す
-              if (matchingChartRecords.length > 0) {
+              let isMatched = false;
+
+              if (crmData && crmData.dob) {
+                  // ★ CRMにデータが存在する場合は、CRMの生年月日を最優先で照合する
+                  const pastDob = crmData.dob; // YYYY-MM-DD
+                  // 和暦などの括弧内（例: "(昭和43年)"）を除去
+                  const cleanDob = pastDob.replace(/\(.*?\)|（.*?）/g, ' ');
+
+                  const match = cleanDob.match(/(\d{4})[^\d]+(\d{1,2})[^\d]+(\d{1,2})/);
+                  if (match) {
+                      const pastY = parseInt(match[1], 10);
+                      const pastM = parseInt(match[2], 10);
+                      const pastD = parseInt(match[3], 10);
+                      if (pastY === parseInt(yVal, 10) && pastM === parseInt(mVal, 10) && pastD === parseInt(dVal, 10)) {
+                          isMatched = true;
+                      }
+                  } else {
+                      const inputY = String(parseInt(yVal, 10));
+                      const inputM = String(mVal).padStart(2, '0');
+                      const inputD = String(dVal).padStart(2, '0');
+                      const isYearMatch = cleanDob.includes(inputY);
+                      const isMonthMatch = cleanDob.includes(`${mVal}月`) || cleanDob.includes(`-${inputM}-`) || cleanDob.includes(`/${inputM}/`);
+                      const isDayMatch = cleanDob.includes(`${dVal}日`) || cleanDob.endsWith(`-${inputD}`) || cleanDob.endsWith(`/${inputD}`) || cleanDob.includes(`-${inputD} `);
+                      if (isYearMatch && isMonthMatch && isDayMatch) {
+                          isMatched = true;
+                      }
+                  }
+                  
+                  if (!isMatched) {
+                      errorArea.innerHTML = '⚠️ 生年月日が一致しません。<br>診察券の表記をご確認ください。';
+                      errorArea.style.display = 'block';
+                      isCheckingAuth = false;
+                      return;
+                  }
+              } else if (matchingChartRecords.length > 0) {
+                  // CRMにデータがなく、App 142の過去チケットが存在する場合のフォールバック照合
                   // スタッフの確認前（未着手・担当設定）の未確定ステータス
                   const unverifiedStatuses = ['未着手', '担当設定'];
 
@@ -1105,6 +1142,78 @@
                   checkBtn.style.display = 'none';
               }
               
+              // ★ 対策1: 照合通過後は「用件」ラジオボタンをロック（変更不可）にする
+              const reqRadios = document.querySelectorAll(`input[name="requirement"]`);
+              reqRadios.forEach(r => {
+                  r.disabled = true;
+                  if (r.parentElement) {
+                      r.parentElement.classList.add('g-radio-label-disabled');
+                  }
+              });
+              
+              // ★ CRMデータが存在する場合は各項目をプレフィル
+              if (crmData) {
+                  const fieldMapping = {
+                      [config.uiIds.LAST_NAME_KANJI]: crmData.lastName,
+                      [config.uiIds.FIRST_NAME_KANJI]: crmData.firstName,
+                      [config.uiIds.LAST_NAME_KANA]: crmData.lastKana,
+                      [config.uiIds.FIRST_NAME_KANA]: crmData.firstKana,
+                  };
+
+                  if (crmData.contact) {
+                      fieldMapping[config.uiIds.POSTAL_CODE] = crmData.contact.zip;
+                      fieldMapping[config.uiIds.TEL1] = crmData.contact.phone1;
+                      fieldMapping[config.uiIds.TEL2] = crmData.contact.phone2;
+                      fieldMapping[config.uiIds.EMAIL] = crmData.contact.email;
+                      fieldMapping[config.uiIds.EMAIL_CONFIRM] = crmData.contact.email;
+
+                      // 住所の分離処理 (App142やCRMでは住所が1つの文字列になっているため)
+                      const fullAddress = crmData.contact.address || '';
+                      let baseAddress = '';
+                      let remainingAddress = fullAddress;
+
+                      if (crmData.contact.zip) {
+                          const res = await fetchAddress(crmData.contact.zip);
+                          if (res) {
+                              baseAddress = `${res.address1}${res.address2}${res.address3}`;
+                              if (fullAddress.startsWith(baseAddress)) {
+                                  remainingAddress = fullAddress.substring(baseAddress.length).trim();
+                              } else {
+                                  // 郵便番号からの住所と一致しない場合は、安全のため空にする
+                                  baseAddress = '';
+                                  remainingAddress = fullAddress;
+                              }
+                          }
+                      }
+                      
+                      // 郵便番号からAPI取得できなかった場合などは、STREETにフル住所を入れる（必須エラー回避のため）
+                      fieldMapping[config.uiIds.ADDRESS] = baseAddress;
+                      fieldMapping[config.uiIds.STREET] = remainingAddress;
+                  }
+
+                  // 1. 各テキストフィールドに値をセットして input イベント発火
+                  for (const [id, val] of Object.entries(fieldMapping)) {
+                      if (val) {
+                          const el = document.getElementById(id);
+                          if (el) {
+                              el.value = val;
+                              el.dispatchEvent(new Event('input', { bubbles: true }));
+                          }
+                      }
+                  }
+
+                  // 2. 性別（ラジオボタン）の設定
+                  if (crmData.gender) {
+                      const genderRadios = document.querySelectorAll(`input[name="${config.fbFields.GENDER}"]`);
+                      genderRadios.forEach(r => {
+                          if (r.value === crmData.gender) {
+                              r.checked = true;
+                              r.dispatchEvent(new Event('change', { bubbles: true }));
+                          }
+                      });
+                  }
+              }
+
               const currentReq = config.state.requirement;
               if (currentReq === '初診') {
                   toggleSection(config.uiIds.REFERRAL_AREA, true);

@@ -52,11 +52,11 @@
         const contacts = record['連絡先記録']?.value || [];
         for (let i = 0; i < contacts.length; i++) {
             const v = contacts[i].value;
-            const phone1 = normalize(v['電話番号1_0']?.value);
-            const phone2 = normalize(v['電話番号2_0']?.value);
-            const email = normalize(v['メール1_1']?.value);
-            const zip = normalize(v['文字列__1行_']?.value);
-            const addr = normalize(v['住所_0']?.value);
+            const phone1 = normalize(v['電話番号1']?.value);
+            const phone2 = normalize(v['電話番号2']?.value);
+            const email = normalize(v['メール1']?.value);
+            const zip = normalize(v['郵便番号']?.value);
+            const addr = normalize(v['住所']?.value);
             if (phone1.includes(target) || phone2.includes(target) || email.includes(target) || zip.includes(target) || addr.includes(target)) {
                 return true;
             }

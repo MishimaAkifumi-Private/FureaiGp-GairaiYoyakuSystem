@@ -1828,12 +1828,106 @@ exports.checkDuplicateTicket = functions.https.onRequest(async (req, res) => {
       }
     }
 
+
+    // ☁️CRM (App 309) から患者情報を取得する処理
+    const CRM_APP_ID = process.env.KINTONE_CRM_APP_ID || "309";
+    const CRM_API_TOKEN = process.env.KINTONE_CRM_API_TOKEN || "UNTPboSuWswgAoLJvmuCbAfd5wQ49Dz8oNxMtm6h"; // ★ユーザー提供のApp309のAPIトークン
+    
+    let crmData = null;
+    try {
+      const patientId = `${APP_ID}_${chartNo.trim()}`;
+      const crmQuery = `患者ID = "${patientId}"`;
+      const crmUri = `${BASE_URI}/records.json?app=${CRM_APP_ID}&query=${encodeURIComponent(crmQuery)}`;
+      
+      const crmResp = await fetch(crmUri, {
+        method: "GET",
+        headers: { "X-Cybozu-API-Token": CRM_API_TOKEN }
+      });
+
+      if (crmResp.ok) {
+        const crmDataJson = await crmResp.json();
+        if (crmDataJson.records && crmDataJson.records.length > 0) {
+          const crmRecord = crmDataJson.records[0];
+          const contactTable = crmRecord['連絡先記録']?.value || [];
+          let contactInfo = {};
+          if (contactTable.length > 0) {
+            const firstRow = contactTable[0].value;
+            contactInfo = {
+              zip: firstRow['郵便番号']?.value || '',
+              address: firstRow['住所']?.value || '',
+              phone1: firstRow['電話番号1']?.value || '',
+              phone2: firstRow['電話番号2']?.value || '',
+              email: firstRow['メール1']?.value || ''
+            };
+          }
+
+          crmData = {
+            lastName: crmRecord['氏名']?.value?.split(' ')[0] || crmRecord['氏名']?.value || '',
+            firstName: crmRecord['氏名']?.value?.split(' ').slice(1).join(' ') || '',
+            lastKana: crmRecord['かな']?.value?.split(' ')[0] || crmRecord['かな']?.value || '',
+            firstKana: crmRecord['かな']?.value?.split(' ').slice(1).join(' ') || '',
+            dob: crmRecord['生年月日']?.value || '',
+            gender: crmRecord['性別']?.value || '',
+            contact: contactInfo
+          };
+        }
+      } else {
+        console.warn('[checkDuplicateTicket] CRM API Error:', crmResp.status, await crmResp.text());
+      }
+    } catch (crmErr) {
+      console.warn('[checkDuplicateTicket] CRM fetch failed:', crmErr);
+    }
+
+    // ☁️CRMデータが取得できなかった場合、App 142の過去チケット（終了チケット）からフォールバック取得
+    if (!crmData && rawRecords && rawRecords.length > 0) {
+      const finishedRecords = rawRecords.filter(r => {
+        const status = (r['管理状況']?.value || '').trim();
+        return status === '終了' || status === '強制終了';
+      });
+
+      if (finishedRecords.length > 0) {
+        // 更新日時の降順（最新順）にソート
+        finishedRecords.sort((a, b) => new Date(b['更新日時']?.value) - new Date(a['更新日時']?.value));
+        const latestRec = finishedRecords[0];
+
+        const addr1 = latestRec['住所']?.value || '';
+        const addr2 = latestRec['丁目番地等']?.value || '';
+        const addr3 = latestRec['建物']?.value || '';
+        const fullAddress = `${addr1} ${addr2} ${addr3}`.trim();
+
+        // 日付フォーマットのヘルパー
+        const formatDob = (val) => {
+          if (!val) return '';
+          const match = val.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+          if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+          return val;
+        };
+
+        crmData = {
+          lastName: latestRec['姓漢字']?.value || '',
+          firstName: latestRec['名漢字']?.value || '',
+          lastKana: latestRec['姓かな']?.value || '',
+          firstKana: latestRec['名かな']?.value || '',
+          dob: formatDob(latestRec['生年月日']?.value || ''),
+          gender: latestRec['性別']?.value || '',
+          contact: {
+            zip: latestRec['郵便番号']?.value || latestRec['postal_code']?.value || '',
+            address: fullAddress,
+            phone1: latestRec['電話1']?.value || latestRec['電話番号']?.value || '',
+            phone2: latestRec['電話2']?.value || '',
+            email: latestRec['メールアドレス']?.value || ''
+          }
+        };
+      }
+    }
+
     res.status(200).json({
       status: 'success',
       blocked: blocked,
       message: message,
       activeCount: activeRecords.length,
       totalCount: rawRecords.length,
+      crmData: crmData,
       records: rawRecords.map(r => ({
         id: r.$id?.value,
         status: r['管理状況']?.value,

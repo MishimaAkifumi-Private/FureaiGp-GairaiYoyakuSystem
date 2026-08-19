@@ -119,11 +119,11 @@
             const newContactRow = {
                 value: {
                     '連絡先番号': { value: "1" },
-                    '文字列__1行_': { value: zip },
-                    '住所_0': { value: fullAddress },
-                    '電話番号1_0': { value: phone1 },
-                    '電話番号2_0': { value: phone2 },
-                    'メール1_1': { value: email1 }
+                    '郵便番号': { value: zip },
+                    '住所': { value: fullAddress },
+                    '電話番号1': { value: phone1 },
+                    '電話番号2': { value: phone2 },
+                    'メール1': { value: email1 }
                 }
             };
 
