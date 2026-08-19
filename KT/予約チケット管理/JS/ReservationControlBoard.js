@@ -384,12 +384,12 @@
                   if (allConfirmed) return false;
 
                   const banner = document.createElement('div');
-                  banner.style.cssText = 'background-color: #fff3f3; border: 2px solid #e74c3c; border-radius: 6px; padding: 15px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: flex-start; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); gap: 15px;';
+                  banner.style.cssText = 'background-color: #fff3f3; border: 2px solid #e74c3c; border-radius: 6px; padding: 15px; margin-top: 15px; margin-bottom: 20px; display: flex; flex-direction: column; align-items: flex-start; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); gap: 15px;';
                   
                   // 1. 案内メッセージ（ボタンの上）
                   const topNoticeDiv = document.createElement('div');
                   topNoticeDiv.style.cssText = 'color: #c0392b; font-weight: bold; line-height: 1.6; font-size: 14px;';
-                  topNoticeDiv.innerHTML = '⚠️この患者には他にも現在進行中のチケットがあります。<br>念のため、誤操作等の意図していないチケットの可能性がないかを確認し、<br>下の「このチケットを有効とする」または「このチケットを無効とする」<br>のいずれかをボタンでこのチケットの取り扱い方針を決定してください。';
+                  topNoticeDiv.innerHTML = '⚠️この患者には他にも現在進行中のチケットがあります。<br>念のため、誤操作等の意図していないチケットの可能性がないかを確認し、<br>下の「このチケットを有効とする」または「このチケットを無効とする」<br>のいずれかをボタンでこのチケットの取り扱い方針を決定してください。<br>特に重複状態に問題なければ「このチケットを有効とする」を選択してください。';
                   banner.appendChild(topNoticeDiv);
 
                   // 2. 対処ボタンエリア
@@ -400,7 +400,7 @@
                   btnArea.style.alignItems = 'center';
 
                   const okBtn = document.createElement('button');
-                  okBtn.textContent = 'このチケットを有効とする';
+                  okBtn.textContent = 'このチケットを有効とする（通常の手続きを行う）';
                   okBtn.style.cssText = 'background-color: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; transition: background-color 0.2s;';
                   if (isAssignedToOther) {
                       okBtn.disabled = true;
@@ -458,7 +458,7 @@
                       mergeBtn.style.cursor = 'not-allowed';
                       mergeBtn.title = '既に患者様が確認済みのため、このチケットは統合取下できません。';
                       mergeBtn.onclick = async () => {
-                          await showDialog('このチケットは既に患者様へ案内済み（または既読）のため、不用意に取り下げると患者様が混乱する恐れがあります。\n別の新しいチケットをこちらに統合するか、別途お電話でご案内ください。', 'error');
+                          await showDialog('このチケットは既に患者様へ案内済み（または既読）のため、不用意に取下げると患者様が混乱する恐れがあります。\n重複している他のチケットと合わせて、別途お電話等で対応をご相談ください。', 'error');
                       };
                   } else {
                       mergeBtn.onmouseover = () => mergeBtn.style.backgroundColor = '#d35400';
@@ -506,8 +506,12 @@
                   bottomNoticeDiv.style.cssText = 'font-size: 13px; color: #555;';
                   bottomNoticeDiv.innerHTML = `他に進行中のチケット番号: ${dupUrlsHtml}`;
                   banner.appendChild(bottomNoticeDiv);
-                  
-                  container.insertBefore(banner, container.firstChild);
+
+                  if (header.nextSibling) {
+                      container.insertBefore(banner, header.nextSibling);
+                  } else {
+                      container.appendChild(banner);
+                  }
                   
                   return true; // 重複未解決
               }
@@ -1801,7 +1805,7 @@
 
                 const deptNoteSpan = document.createElement('span');
                 deptNoteSpan.style.cssText = 'font-size: 11px; color: #888;';
-                deptNoteSpan.textContent = '※申込者選択値に間違いがある場合';
+                deptNoteSpan.textContent = '※申込者の選択内容に間違いがある場合には訂正してください';
 
                 deptCheckWrapper.appendChild(deptCorrectCheckbox);
                 deptCheckWrapper.appendChild(deptCorrectLabel);
@@ -2088,7 +2092,7 @@
 
                 const dateNoteSpan = document.createElement('span');
                 dateNoteSpan.style.cssText = 'font-size: 11px; color: #888;';
-                dateNoteSpan.textContent = '※申込者選択値に間違いがある場合';
+                dateNoteSpan.textContent = '※申込者の選択内容に間違いがある場合には訂正してください';
 
                 dateCheckWrapper.appendChild(dateCorrectCheckbox);
                 dateCheckWrapper.appendChild(dateCorrectLabel);
@@ -3110,20 +3114,24 @@
             btnContainer.appendChild(forceEndBtn);
         }
 
-        // --- リセットボタン (管理者のみ) ---
-        // 管理者チェック (Kintoneのアプリ設定ボタン「歯車マーク」がDOMに存在するかで同期的に判定)
-        // ※APIを使用すると権限がない場合にシステムエラーとして処理されるケースがあるため、確実なDOM判定に変更
-        const isAdmin = document.querySelector('.gaia-argoui-app-menu-settings') !== null;
+        // --- リセットボタン ---
+        // 担当設定前（担当者なし）なら誰でも実行可能。担当設定後は担当者本人のみ実行可能。
+        const isAssignedToOther = !!(staffName && staffName !== currentStaff);
 
-        if (isAdmin) {
-            const resetBtn = document.createElement('button');
-            resetBtn.id = 'rcb-reset-btn';
-            resetBtn.textContent = 'リセット';
-            resetBtn.className = 'rcb-btn-save';
-            resetBtn.style.padding = '4px 16px';
-            resetBtn.style.fontSize = '12px';
-            resetBtn.style.backgroundColor = '#95a5a6';
-            
+        const resetBtn = document.createElement('button');
+        resetBtn.id = 'rcb-reset-btn';
+        resetBtn.textContent = 'リセット';
+        resetBtn.className = 'rcb-btn-save';
+        resetBtn.style.padding = '4px 16px';
+        resetBtn.style.fontSize = '12px';
+        resetBtn.style.backgroundColor = '#95a5a6';
+
+        if (isAssignedToOther) {
+            resetBtn.disabled = true;
+            resetBtn.style.opacity = '0.5';
+            resetBtn.style.cursor = 'not-allowed';
+            resetBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+        } else {
             resetBtn.onclick = async () => {
                 const isResetOk = await showDialog('このレコードを初期状態にリセットしますか？\n入力された予約日時などのデータや経過情報もすべて消去されます。', 'confirm', 'リセット確認');
                 if (!isResetOk) return;
@@ -3152,8 +3160,8 @@
                 const success = await updateRecord(recordId, payload, [], true, false);
                 if (success) location.reload();
             };
-            btnContainer.appendChild(resetBtn);
         }
+        btnContainer.appendChild(resetBtn);
 
         // --- 不正レコード削除ボタン ---
         // 認証の境界を越えていない（本物として処理が進んだ実績のない）ステータスでのみ表示する

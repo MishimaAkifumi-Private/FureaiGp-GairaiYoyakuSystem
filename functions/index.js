@@ -240,6 +240,14 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
     return;
   }
 
+  // 初回アクセス時の即時ローディング画面返却 (体感待機ゼロ & 回転砂時計アニメーション)
+  const isDirect = req.query.view === 'direct' || req.query.load === '1';
+  const isAction = !!req.query.action || !!(req.body && req.body.action);
+  if (req.method === 'GET' && !isDirect && !isAction) {
+    res.status(200).send(getLoadingHtml());
+    return;
+  }
+
   // JST日時フォーマット関数
   const getJSTFormattedDate = () => {
     const d = new Date();
@@ -1200,6 +1208,147 @@ function getExpiredHtml(centerName, phoneNumber) {
   `;
 }
 
+/**
+ * 初回アクセス用 即時ローディング画面HTML（回転砂時計・通信中案内）
+ */
+function getLoadingHtml() {
+  return `
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>予約情報を確認中 | ふれあいグループ</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          background-color: #f8fafc;
+          color: #1e293b;
+          min-height: 100vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 20px;
+        }
+        .loading-card {
+          background: #ffffff;
+          max-width: 400px;
+          width: 100%;
+          padding: 42px 24px;
+          border-radius: 16px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+          text-align: center;
+          border: 1px solid #e2e8f0;
+        }
+        .icon-container {
+          width: 80px;
+          height: 80px;
+          margin: 0 auto 20px;
+          background: #eff6ff;
+          border-radius: 50%;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          position: relative;
+        }
+        .spinner-ring {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          border: 3px solid transparent;
+          border-top-color: #2563eb;
+          border-right-color: #3b82f6;
+          animation: spin-ring 1.3s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+        .hourglass {
+          font-size: 34px;
+          display: inline-block;
+          line-height: 1;
+          animation: rotate-hourglass 2.4s ease-in-out infinite;
+        }
+        @keyframes spin-ring {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes rotate-hourglass {
+          0% { transform: rotate(0deg) scale(1); }
+          40% { transform: rotate(180deg) scale(1.1); }
+          50% { transform: rotate(180deg) scale(1); }
+          90% { transform: rotate(360deg) scale(1.1); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+        .title {
+          font-size: 19px;
+          font-weight: 700;
+          color: #0f172a;
+          margin-bottom: 8px;
+        }
+        .desc {
+          font-size: 13px;
+          color: #64748b;
+          line-height: 1.6;
+          margin-bottom: 24px;
+        }
+        .progress-bar-container {
+          width: 100%;
+          height: 4px;
+          background: #e2e8f0;
+          border-radius: 2px;
+          overflow: hidden;
+          margin: 0 auto;
+        }
+        .progress-bar {
+          height: 100%;
+          background: linear-gradient(90deg, #2563eb, #60a5fa);
+          border-radius: 2px;
+          animation: indeterminate 1.5s infinite ease-in-out;
+        }
+        @keyframes indeterminate {
+          0% { transform: translateX(-100%); width: 30%; }
+          50% { transform: translateX(100%); width: 60%; }
+          100% { transform: translateX(300%); width: 30%; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="loading-card">
+        <div class="icon-container">
+          <div class="spinner-ring"></div>
+          <span class="hourglass">⏳</span>
+        </div>
+        <div class="title">予約情報を確認中です</div>
+        <div class="desc">
+          予約管理システムと通信しています。<br>
+          画面を閉じず、そのまま少々お待ちください。
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar"></div>
+        </div>
+      </div>
+      <script>
+        (function() {
+          var currentUrl = window.location.href;
+          var sep = currentUrl.indexOf('?') !== -1 ? '&' : '?';
+          var fetchUrl = currentUrl + sep + 'load=1';
+          fetch(fetchUrl)
+            .then(function(res) { return res.text(); })
+            .then(function(html) {
+              document.open();
+              document.write(html);
+              document.close();
+            })
+            .catch(function(err) {
+              window.location.replace(currentUrl + sep + 'view=direct');
+            });
+        })();
+      </script>
+    </body>
+    </html>
+  `;
+}
+
 // ======================================================================
 //  Function 4: リアルタイム重複・排他判定 (checkDuplicateTicket)
 // ======================================================================
@@ -1286,6 +1435,15 @@ exports.checkDuplicateTicket = functions.https.onRequest(async (req, res) => {
       if (activeCancelRecord) {
         blocked = true;
         message = '⚠️ 現在、予約取り消しのお申込みをスタッフが確認中です。<br>複数件のお取り消しやお急ぎの場合はお電話にてお問い合わせください。';
+      } else if (activeNormalRecord) {
+        const normalStatus = (activeNormalRecord['管理状況']?.value || '').trim();
+        if (normalStatus === 'メール送信済') {
+          blocked = true;
+          message = '⚠️ 当院より仮予約日時の案内メールをお送りしております。<br>お申込みを取り下げる場合は、<strong>メール記載のURL</strong>よりお手続きいただくか、お電話にてお問い合わせください。';
+        } else if (['未着手', '担当設定', '閲覧期限切れ', '申込者再依頼', 'スタッフ取下中止'].includes(normalStatus)) {
+          blocked = true;
+          message = '⚠️ 現在、以前のお申込み内容をスタッフが確認・調整中のため、Webからの取り消し手続きはお受けできません。<br>お急ぎの場合はお電話にてお問い合わせください。';
+        }
       }
     } else {
       if (activeCancelRecord) {

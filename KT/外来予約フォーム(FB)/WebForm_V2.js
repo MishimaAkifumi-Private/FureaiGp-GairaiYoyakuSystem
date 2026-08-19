@@ -846,9 +846,16 @@
           const isCancelRequest = (reqVal === '取消');
 
           if (isCancelRequest) {
-              // 取消申込み時：すでに未処理の取消チケットが存在する場合は多重取消をブロック
+              // 取消申込み時：すでに未処理の取消チケット、または未確定の初診/変更チケットが存在する場合はブロック
               if (activeCancelRecord) {
                   return '⚠️ 現在、予約取り消しのお申込みをスタッフが確認中です。<br>複数件のお取り消しやお急ぎの場合はお電話にてお問い合わせください。';
+              } else if (activeNormalRecord) {
+                  const normalStatus = (getFieldValue(activeNormalRecord, statusKeys) || '').trim();
+                  if (normalStatus === 'メール送信済') {
+                      return '⚠️ 当院より仮予約日時の案内メールをお送りしております。<br>お申込みを取り下げる場合は、<strong>メール記載のURL</strong>よりお手続きいただくか、お電話にてお問い合わせください。';
+                  } else if (['未着手', '担当設定', '閲覧期限切れ', '申込者再依頼', 'スタッフ取下中止'].includes(normalStatus)) {
+                      return '⚠️ 現在、以前のお申込み内容をスタッフが確認・調整中のため、Webからの取り消し手続きはお受けできません。<br>お急ぎの場合はお電話にてお問い合わせください。';
+                  }
               }
           } else {
               // 新規・変更申込み時
