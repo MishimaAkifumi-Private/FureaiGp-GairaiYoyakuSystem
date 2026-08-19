@@ -33,31 +33,51 @@
          * 設定データを取得する
          */
         fetchPublishedData: async function() {
-            const appId = getTargetAppId();
-            try {
-                // レコードを1件取得 (通常はレコードID=1、または最新のレコードを使用)
-                const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
-                    app: appId,
-                    query: 'order by $id desc limit 1',
-                    fields: ['$id', FIELD_CODE]
-                });
+            const STORAGE_APP_ID = 200;
+            const STORAGE_API_TOKEN = 'qGQAy2d3TcicQ8t73Oknv5BZU7gGO9aBvhAD9aY8';
+            const myMainAppId = '156';
 
+            const query = `AppID = "${myMainAppId}" limit 1`;
+            const apiPath = kintone.api.url('/k/v1/records', true);
+            const baseUrl = /^https?:\/\//.test(apiPath) ? apiPath : window.location.origin + apiPath;
+            const url = baseUrl + `?app=${STORAGE_APP_ID}&query=${encodeURIComponent(query)}&_t=${new Date().getTime()}`;
+            const headers = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN };
+
+            try {
+                const [body, status] = await kintone.proxy(url, 'GET', headers, {});
+                if (status === 200) {
+                    const resp = JSON.parse(body);
+                    if (resp.records && resp.records.length > 0) {
+                        const record = resp.records[0];
+                        const jsonStr = record['設定情報']?.value || record['設定情報2']?.value;
+                        cachedData = jsonStr ? JSON.parse(jsonStr) : {};
+                        cachedData._recordId = record.$id.value;
+                        return cachedData;
+                    }
+                }
+            } catch (proxyErr) {
+                console.warn('[ConfigManager] Proxy fetch failed, falling back to kintone.api:', proxyErr);
+            }
+
+            try {
+                // Fallback to kintone.api
+                const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+                    app: STORAGE_APP_ID,
+                    query: `AppID = "${myMainAppId}" limit 1`,
+                    fields: ['$id', '設定情報', '設定情報2']
+                });
                 if (resp.records.length > 0) {
                     const record = resp.records[0];
-                    const jsonStr = record[FIELD_CODE]?.value;
+                    const jsonStr = record['設定情報']?.value || record['設定情報2']?.value;
                     cachedData = jsonStr ? JSON.parse(jsonStr) : {};
-                    cachedData._recordId = record.$id.value; // 更新用にIDを保持
-                    return cachedData;
-                } else {
-                    // レコードが存在しない場合は空のオブジェクトを返す（初回）
-                    cachedData = {};
+                    cachedData._recordId = record.$id.value;
                     return cachedData;
                 }
             } catch (e) {
                 console.error('[ConfigManager] Fetch failed:', e);
-                // エラー時は空オブジェクトを返して動作を止めない
-                return {}; 
             }
+            cachedData = cachedData || {};
+            return cachedData;
         },
 
         /**
@@ -157,28 +177,36 @@
          * 内部メソッド: KintoneにJSONを保存
          */
         _saveToKintone: async function(data) {
-            const appId = getTargetAppId();
+            const STORAGE_APP_ID = 200;
+            const STORAGE_API_TOKEN = 'qGQAy2d3TcicQ8t73Oknv5BZU7gGO9aBvhAD9aY8';
             const jsonStr = JSON.stringify(data);
             
-            // 保存容量チェック
-            if (jsonStr.length > 1000000) {
-                console.warn('[ConfigManager] Data size is large:', jsonStr.length);
-            }
-
             try {
                 if (data._recordId) {
-                    // 既存レコード更新
-                    await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', {
-                        app: appId,
+                    const updateUrl = kintone.api.url('/k/v1/record', true);
+                    const apiUrl = /^https?:\/\//.test(updateUrl) ? updateUrl : window.location.origin + updateUrl;
+                    const updateBody = {
+                        app: STORAGE_APP_ID,
                         id: data._recordId,
                         record: {
-                            [FIELD_CODE]: { value: jsonStr }
+                            '設定情報': { value: jsonStr },
+                            '設定情報2': { value: jsonStr }
                         }
-                    });
+                    };
+                    const updateHeaders = { 'X-Cybozu-API-Token': STORAGE_API_TOKEN, 'Content-Type': 'application/json' };
+                    const [putBody, putStatus] = await kintone.proxy(apiUrl, 'PUT', updateHeaders, JSON.stringify(updateBody));
+                    if (putStatus !== 200) {
+                        await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', {
+                            app: STORAGE_APP_ID,
+                            id: data._recordId,
+                            record: {
+                                [FIELD_CODE]: { value: jsonStr }
+                            }
+                        });
+                    }
                 } else {
-                    // 新規レコード作成 (初回のみ)
                     await kintone.api(kintone.api.url('/k/v1/record', true), 'POST', {
-                        app: appId,
+                        app: STORAGE_APP_ID,
                         record: {
                             [FIELD_CODE]: { value: jsonStr }
                         }
@@ -205,17 +233,21 @@
             const settings = cachedData ? (cachedData.commonSettings || {}) : {};
             return {
                 crmAppId: CRM_APP_ID,
-                crmHistoryCount: settings.crmHistoryCount ? parseInt(settings.crmHistoryCount, 10) : DEFAULT_CRM_HISTORY_COUNT
+                crmHistoryCount: settings.crmHistoryCount ? parseInt(settings.crmHistoryCount, 10) : DEFAULT_CRM_HISTORY_COUNT,
+                finishedTicketLimit: settings.finishedTicketLimit ? parseInt(settings.finishedTicketLimit, 10) : 100
             };
         },
 
         /**
          * CRM設定を更新する (主にメインアプリ側から呼ばれる想定)
          */
-        updateCrmSettings: async function(historyCount) {
+        updateCrmSettings: async function(historyCount, finishedLimit) {
             const data = await this.fetchPublishedData();
             data.commonSettings = data.commonSettings || {};
             data.commonSettings.crmHistoryCount = historyCount;
+            if (finishedLimit !== undefined) {
+                data.commonSettings.finishedTicketLimit = finishedLimit;
+            }
             await this._saveToKintone(data);
         },
         
@@ -263,6 +295,5 @@
 
     // グローバル公開
     window.ShinryoApp.ConfigManager = ConfigManager;
-    console.log('[ConfigManager] Loaded.');
 
 })();

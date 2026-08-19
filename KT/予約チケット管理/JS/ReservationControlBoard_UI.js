@@ -6,7 +6,6 @@
     'use strict';
 
     if (window.RcbUI) return;
-    console.log('[RcbUI] Loading UI and Utilities...');
 
     const CONFIG = {
       SPACE_ID: 'RreservationContorlBoard',
@@ -604,21 +603,27 @@
             body.appendChild(textarea);
         }
 
-        let checkbox = null;
+        const checkboxes = [];
         if (checkboxLabel) {
+            const labels = Array.isArray(checkboxLabel) ? checkboxLabel : [checkboxLabel];
             const checkContainer = document.createElement('div');
-            checkContainer.style.cssText = 'margin-top: 15px; padding: 15px; background: #fff5f5; border: 1px dashed #e74c3c; border-radius: 4px; text-align: left;';
+            checkContainer.style.cssText = 'margin-top: 15px; padding: 12px 15px; background: #fff5f5; border: 1px dashed #e74c3c; border-radius: 6px; text-align: left; display: flex; flex-direction: column; gap: 10px;';
             
-            const label = document.createElement('label');
-            label.style.cssText = 'font-weight: bold; cursor: pointer; color: #c0392b; font-size: 14px; display: flex; align-items: center; gap: 8px; user-select: none;';
-            
-            checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer; accent-color: #e74c3c; margin: 0;';
-            
-            label.appendChild(checkbox);
-            label.appendChild(document.createTextNode(checkboxLabel));
-            checkContainer.appendChild(label);
+            labels.forEach(lblText => {
+                const label = document.createElement('label');
+                label.style.cssText = 'font-weight: bold; cursor: pointer; color: #c0392b; font-size: 13px; display: flex; align-items: flex-start; gap: 8px; user-select: none; line-height: 1.4;';
+                
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.style.cssText = 'width: 18px; height: 18px; cursor: pointer; accent-color: #e74c3c; margin: 0; flex-shrink: 0; margin-top: 1px;';
+                
+                label.appendChild(cb);
+                const span = document.createElement('span');
+                span.textContent = lblText;
+                label.appendChild(span);
+                checkContainer.appendChild(label);
+                checkboxes.push(cb);
+            });
             body.appendChild(checkContainer);
         }
 
@@ -651,12 +656,14 @@
           footer.appendChild(okBtn);
         }
 
-        if (checkbox && okBtn) {
+        if (checkboxes.length > 0 && okBtn) {
             okBtn.disabled = true;
             okBtn.style.opacity = '0.5';
             okBtn.style.cursor = 'not-allowed';
-            checkbox.onchange = () => {
-                if (checkbox.checked) {
+
+            const updateOkState = () => {
+                const allChecked = checkboxes.every(cb => cb.checked);
+                if (allChecked) {
                     okBtn.disabled = false;
                     okBtn.style.opacity = '1';
                     okBtn.style.cursor = 'pointer';
@@ -666,6 +673,10 @@
                     okBtn.style.cursor = 'not-allowed';
                 }
             };
+
+            checkboxes.forEach(cb => {
+                cb.onchange = updateOkState;
+            });
         }
         
         modal.appendChild(header);
@@ -912,26 +923,77 @@
           record: payload
         });
 
-        // --- ★追加: 終了/取下ステータスの場合はCRMへ退避し、元のレコードを削除する ---
+        // --- ★変更: 終了/強制終了ステータスの場合は保持上限を超えた古いレコードをCRMへ退避＆削除 ---
         const newStatus = payload[CONFIG.FIELDS.STATUS] ? payload[CONFIG.FIELDS.STATUS].value : null;
-        const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下'];
-        if (newStatus && inactiveStatuses.includes(newStatus) && window.CrmIntegration && window.CrmIntegration.transferToCrmAndDelete) {
+        const archiveStatuses = ['終了', '強制終了'];
+        if (newStatus && archiveStatuses.includes(newStatus) && window.CrmIntegration && window.CrmIntegration.transferToCrmAndDelete) {
             try {
-                showSpinner('CRMへアーカイブ中...');
-                const fullResp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
+                // ConfigManagerから上限件数を取得 (デフォルト100)
+                let limitCount = 100;
+                if (window.ShinryoApp?.ConfigManager) {
+                    try {
+                        if (window.ShinryoApp.ConfigManager.fetchPublishedData) {
+                            await window.ShinryoApp.ConfigManager.fetchPublishedData();
+                        }
+                        if (window.ShinryoApp.ConfigManager.getCrmSettings) {
+                            const crmSets = window.ShinryoApp.ConfigManager.getCrmSettings();
+                            if (crmSets.finishedTicketLimit !== undefined && !isNaN(crmSets.finishedTicketLimit)) {
+                                limitCount = parseInt(crmSets.finishedTicketLimit, 10);
+                            }
+                        }
+                    } catch (cfgErr) {
+                        console.warn('[RcbUI] Failed to load latest ConfigManager settings:', cfgErr);
+                    }
+                }
+                
+                // localStorage fallback
+                try {
+                    const localCfg = JSON.parse(localStorage.getItem('shinryo_ticket_config') || '{}');
+                    if (localCfg.finishedTicketLimit !== undefined && !isNaN(localCfg.finishedTicketLimit)) {
+                        limitCount = parseInt(localCfg.finishedTicketLimit, 10);
+                    }
+                } catch(e) {}
+                
+                showSpinner('データ上限チェック・退避中...');
+                
+                // 現在の終了・強制終了チケットのリストを取得 (古い順)
+                const finishedResp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
                     app: kintone.app.getId(),
-                    id: recordId
+                    query: '管理状況 in ("終了", "強制終了") order by 更新日時 asc limit 500',
+                    fields: ['$id']
                 });
-                await window.CrmIntegration.transferToCrmAndDelete(fullResp.record);
+                
+                const finishedRecords = finishedResp.records || [];
+                let isCurrentDeleted = false;
+                
+                if (finishedRecords.length > limitCount) {
+                    const excessCount = finishedRecords.length - limitCount;
+                    const recordsToArchive = finishedRecords.slice(0, excessCount);
+                    
+                    for (const target of recordsToArchive) {
+                        const fullRecResp = await kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
+                            app: kintone.app.getId(),
+                            id: target.$id.value
+                        });
+                        await window.CrmIntegration.transferToCrmAndDelete(fullRecResp.record);
+                        if (String(target.$id.value) === String(recordId)) {
+                            isCurrentDeleted = true;
+                        }
+                    }
+                }
                 hideSpinner();
-                // 削除後は元のレコード画面が存在しないため、一覧画面へ遷移する
-                const listUrl = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
-                window.location.href = listUrl;
+
+                if (isCurrentDeleted) {
+                    // 自身が削除された場合は一覧画面へ遷移する
+                    const listUrl = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
+                    window.location.replace(listUrl);
+                    await new Promise(() => {});
+                }
                 return true;
             } catch (crmError) {
                 hideSpinner();
                 console.error('[RcbUI] CRM Integration failed:', crmError);
-                await showDialog('CRMへのデータ退避中にエラーが発生しました。チケットは終了状態のままアプリ内に残ります。\n' + crmError.message, 'error');
+                await showDialog('上限チェックまたはCRMへのデータ退避中にエラーが発生しました。\n' + crmError.message, 'error');
             }
         }
         // ------------------------------------------------------------------------

@@ -1177,19 +1177,21 @@ window.ShinryoApp = window.ShinryoApp || {};
     const settings = publishedCommonSettings || {};
     return {
         crmAppId: 309,
-        crmHistoryCount: settings.crmHistoryCount ? parseInt(settings.crmHistoryCount, 10) : 30
+        crmHistoryCount: settings.crmHistoryCount ? parseInt(settings.crmHistoryCount, 10) : 30,
+        finishedTicketLimit: settings.finishedTicketLimit ? parseInt(settings.finishedTicketLimit, 10) : 100
     };
   }
 
   /**
    * ★追加: CRM設定を更新、本番データに保存
    */
-  async function updateCrmSettings(historyCount) {
+  async function updateCrmSettings(historyCount, finishedLimit) {
     try {
       await _updateCommonSettingField((common) => {
         common.crmHistoryCount = historyCount;
+        if (finishedLimit !== undefined) common.finishedTicketLimit = finishedLimit;
       });
-      console.log(`ConfigManager: CRM settings updated directly to production. Count: ${historyCount}`);
+      console.log(`ConfigManager: CRM settings updated directly to production. History: ${historyCount}, FinishedLimit: ${finishedLimit}`);
     } catch (e) {
       console.error('ConfigManager: Failed to update CRM settings.', e);
       throw e;

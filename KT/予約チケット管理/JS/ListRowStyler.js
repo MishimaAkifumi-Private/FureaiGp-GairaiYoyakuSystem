@@ -50,10 +50,8 @@
       const s = String(date.getSeconds()).padStart(2, '0');
       return `${y}/${m}/${d} ${h}:${min}:${s}`;
   };
-
   kintone.events.on('app.record.index.show', function(event) {
     const records = event.records;
-    
     if (!records || records.length === 0) return event;
 
     // 管理ステータスフィールドの要素を取得（一覧に表示されている必要があります）

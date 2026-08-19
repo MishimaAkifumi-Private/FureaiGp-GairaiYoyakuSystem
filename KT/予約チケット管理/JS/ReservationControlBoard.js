@@ -3085,7 +3085,11 @@
             forceEndBtn.style.backgroundColor = '#e74c3c';
             
             forceEndBtn.onclick = async () => {
-                const actionReason = await showDialog('このチケットを強制終了します。\n本当によろしいですか？\n強制終了の理由を入力してください。', 'prompt', '強制終了の確認', '強制終了の理由（必須）', '強制終了する', 'キャンセル');
+                const reminderCheckboxes = [
+                    'この操作をおこなうことで患者側を混乱させることはありませんか？',
+                    '電子カルテ側に関連する予約が入っている場合は事前に解除していますか？'
+                ];
+                const actionReason = await showDialog('このチケットを強制終了します。\n本当によろしいですか？\n強制終了の理由を入力してください。', 'prompt', '強制終了の確認', '強制終了の理由（必須）', '強制終了する', 'キャンセル', reminderCheckboxes);
                 if (actionReason === null) return;
                 if (actionReason.trim() === '') {
                     await showDialog('強制終了の理由を入力してください。', 'error');
@@ -3133,7 +3137,11 @@
             resetBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
         } else {
             resetBtn.onclick = async () => {
-                const isResetOk = await showDialog('このレコードを初期状態にリセットしますか？\n入力された予約日時などのデータや経過情報もすべて消去されます。', 'confirm', 'リセット確認');
+                const reminderCheckboxes = [
+                    'この操作をおこなうことで患者側を混乱させることはありませんか？',
+                    '電子カルテ側に関連する予約が入っている場合は事前に解除していますか？'
+                ];
+                const isResetOk = await showDialog('このレコードを初期状態にリセットしますか？\n入力された予約日時などのデータや経過情報もすべて消去されます。', 'confirm', 'リセット確認', '', 'リセットする', 'キャンセル', reminderCheckboxes);
                 if (!isResetOk) return;
                 
                 const newToken = Math.random().toString(36).substring(2, 10);

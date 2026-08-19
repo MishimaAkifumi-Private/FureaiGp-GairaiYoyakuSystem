@@ -5,19 +5,27 @@
 (function() {
     'use strict';
 
+    const VIEW_ID_ACTIVE = '8238699';
+    const VIEW_ID_FINISHED = '8247802';
     const STORAGE_KEY_STAFF_FILTER = 'shinryo_staff_filter_selected';
+    const STORAGE_KEY_STATUS_MODE = 'shinryo_ticket_status_mode';
     
     // Kintoneのレコード取得（件数集計用）
-    async function fetchRecordsForCount() {
+    async function fetchRecordsForCount(statusMode) {
         const appId = kintone.app.getId();
         let allRecords = [];
         let offset = 0;
         const limit = 500;
+        
+        const isFinishedMode = (statusMode === 'finished');
+        const queryStr = isFinishedMode 
+            ? '管理状況 in ("終了", "強制終了")'
+            : '管理状況 not in ("終了", "強制終了")';
 
         while (true) {
             const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', { 
                 app: appId, 
-                query: `limit ${limit} offset ${offset}`,
+                query: `${queryStr} order by 更新日時 desc limit ${limit} offset ${offset}`,
                 fields: ['担当者', '管理状況']
             });
             allRecords = allRecords.concat(resp.records);
@@ -28,21 +36,32 @@
     }
 
     // フィルターの適用（リダイレクト）
-    function applyStaffFilter(staffName) {
+    function applyStaffFilter(staffName, statusMode) {
         localStorage.setItem(STORAGE_KEY_STAFF_FILTER, staffName);
+        if (statusMode) localStorage.setItem(STORAGE_KEY_STATUS_MODE, statusMode);
+        
+        const mode = statusMode || localStorage.getItem(STORAGE_KEY_STATUS_MODE) || 'active';
+        const targetViewId = (mode === 'finished') ? VIEW_ID_FINISHED : VIEW_ID_ACTIVE;
+
+        // URLをオリジンとパスのみから再構築して、不要な 'q' や他のクエリパラメータを完全に除去する
+        const url = new URL(window.location.origin + window.location.pathname);
+        url.searchParams.set('view', targetViewId);
         
         let staffCondition = '';
-        if (staffName !== '全担当') {
-            // 選択した担当者 ＋ 未着手
-            staffCondition = `(担当者 in ("${staffName}") or 管理状況 in ("未着手")) `;
+        if (mode === 'active') {
+            if (staffName && staffName !== '全担当') {
+                staffCondition = `(担当者 in ("${staffName}") or 管理状況 in ("未着手")) and 管理状況 not in ("終了", "強制終了") order by 管理状況 desc, 更新日時 desc`;
+            }
+        } else {
+            if (staffName && staffName !== '全担当') {
+                staffCondition = `担当者 in ("${staffName}") and 管理状況 in ("終了", "強制終了") order by 更新日時 desc`;
+            }
         }
 
-        // 未着手を上にするためのソート
-        const orderClause = 'order by 管理状況 desc, 更新日時 desc';
-        const newQuery = staffCondition ? `${staffCondition}${orderClause}` : orderClause;
+        if (staffCondition) {
+            url.searchParams.set('query', staffCondition);
+        }
 
-        const url = new URL(window.location.href);
-        url.searchParams.set('query', newQuery);
         window.location.href = url.toString();
     }
 
@@ -53,17 +72,27 @@
         const pagerContent = document.querySelector('.gaia-argoui-app-index-pager-content');
         if (!pager || !pagerContent) return event;
 
+        // 現在のKintone一覧（ViewId）から進行中/終了を判定
+        const currentViewId = String(event.viewId);
+        let selectedStatusMode = (currentViewId === VIEW_ID_FINISHED) ? 'finished' : 'active';
+        localStorage.setItem(STORAGE_KEY_STATUS_MODE, selectedStatusMode);
+
         // 端末の担当者（自分）を取得
         const currentStaff = localStorage.getItem('shinryo_ticket_staff_name') || localStorage.getItem('customKey') || '';
         
-        // 現在選択中のフィルターを取得（初期値は自分、設定されていなければ全担当）
+        // 現在選択中のスタッフフィルターを取得
         let selectedFilter = localStorage.getItem(STORAGE_KEY_STAFF_FILTER);
         if (!selectedFilter) {
-            selectedFilter = currentStaff ? currentStaff : '全担当';
-            localStorage.setItem(STORAGE_KEY_STAFF_FILTER, selectedFilter);
-            // 初回アクセス時は自動でフィルターを適用してリロード
-            applyStaffFilter(selectedFilter);
-            return event; 
+            selectedFilter = '全担当';
+            localStorage.setItem(STORAGE_KEY_STAFF_FILTER, '全担当');
+        }
+
+        // URLに query がない場合は「全担当」表示状態に同期
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentQuery = urlParams.get('query') || '';
+        if (!currentQuery && selectedFilter !== '全担当') {
+            selectedFilter = '全担当';
+            localStorage.setItem(STORAGE_KEY_STAFF_FILTER, '全担当');
         }
 
         // --- スタッフリストと担当件数の集計 ---
@@ -104,7 +133,7 @@
             staffList.push(currentStaff);
         }
 
-        const targetRecords = await fetchRecordsForCount();
+        const targetRecords = await fetchRecordsForCount(selectedStatusMode);
         const counts = {};
         let totalCount = 0;
         targetRecords.forEach(r => {
@@ -184,6 +213,56 @@
             };
             return btn;
         };
+
+        // --- モード切替トグル (進行中 / 終了) ---
+        const modeToggleContainer = document.createElement('div');
+        modeToggleContainer.style.cssText = 'display: flex; background-color: #e9ecef; border-radius: 6px; padding: 2px; margin-right: 15px; flex-shrink: 0;';
+
+        const createModeBtn = (modeValue, text, isActive) => {
+            const btn = document.createElement('button');
+            btn.textContent = text;
+            btn.style.cssText = `
+                padding: 4px 14px;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: bold;
+                border: none;
+                cursor: pointer;
+                white-space: nowrap;
+                transition: all 0.2s ease-in-out;
+            `;
+            if (isActive) {
+                if (modeValue === 'active') {
+                    btn.style.backgroundColor = '#27ae60'; // 緑色
+                    btn.style.color = '#fff';
+                } else {
+                    btn.style.backgroundColor = '#7f8c8d'; // 濃いグレー
+                    btn.style.color = '#fff';
+                }
+                btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.15)';
+            } else {
+                btn.style.backgroundColor = 'transparent';
+                btn.style.color = '#777';
+                btn.onmouseover = () => {
+                    btn.style.color = '#333';
+                    btn.style.backgroundColor = '#d5d9dc';
+                };
+                btn.onmouseout = () => {
+                    btn.style.color = '#777';
+                    btn.style.backgroundColor = 'transparent';
+                };
+            }
+            btn.onclick = () => {
+                if (selectedStatusMode !== modeValue) {
+                    applyStaffFilter(selectedFilter, modeValue);
+                }
+            };
+            return btn;
+        };
+
+        modeToggleContainer.appendChild(createModeBtn('active', '進行中', selectedStatusMode === 'active'));
+        modeToggleContainer.appendChild(createModeBtn('finished', '終了', selectedStatusMode === 'finished'));
+        container.appendChild(modeToggleContainer);
 
         // 全担当ボタン (最左端)
         const allBtn = createBtn('全担当', totalCount, selectedFilter === '全担当');

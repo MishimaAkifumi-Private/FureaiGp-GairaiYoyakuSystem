@@ -875,8 +875,8 @@
           if (!chartNoInput || !resultArea || !fieldsWrapper) return;
 
           const chartNo = chartNoInput.value.trim();
-          if (chartNo.length !== 8 || !/^[a-zA-Z0-9]{8}$/.test(chartNo)) {
-              await scrollToAndHighlight(chartNoInput, '「カルテNo」は半角英数字8桁で入力してください。');
+          if (chartNo.length !== 8 || !/^\d{8}$/.test(chartNo)) {
+              await scrollToAndHighlight(chartNoInput, '「カルテNo」は半角数字8桁で入力してください。');
               return;
           }
 
@@ -1330,8 +1330,8 @@
           if (chartNo && chartNoSection && window.getComputedStyle(chartNoSection).display !== 'none') {
               if (!chartNo.value.trim()) {
                   errors.push({ element: chartNoSection, message: '「カルテNo」を入力してください。' });
-              } else if (!/^[a-zA-Z0-9]{8}$/.test(chartNo.value.trim())) {
-                  errors.push({ element: chartNoSection, message: '「カルテNo」は半角英数字8桁で入力してください。' });
+              } else if (!/^\d{8}$/.test(chartNo.value.trim())) {
+                  errors.push({ element: chartNoSection, message: '「カルテNo」は半角数字8桁で入力してください。' });
               }
           }
 
@@ -1423,6 +1423,11 @@
                       const hospitalTel = document.getElementById('referral_hospital_tel');
                       if (!hospitalTel || !hospitalTel.value.trim()) {
                           errors.push({ element: refArea, message: '「紹介元医療機関電話番号」を入力してください。' });
+                      } else {
+                          const telVal = hospitalTel.value.replace(/[-\s]/g, '').trim();
+                          if (!/^\d{10,11}$/.test(telVal)) {
+                              errors.push({ element: refArea, message: '「紹介元医療機関電話番号」は10桁または11桁の半角数字で入力してください。' });
+                          }
                       }
                       const cdRadio = document.querySelector('input[name="referral_cd"]:checked');
                       if (!cdRadio) {
@@ -1470,6 +1475,14 @@
                   if (lastNameKana && !lastNameKana.value.trim() && firstNameKana && firstNameKana.value.trim()) msg = '「お名前（ふりがな）の姓」を入力してください。';
                   else if (firstNameKana && !firstNameKana.value.trim() && lastNameKana && lastNameKana.value.trim()) msg = '「お名前（ふりがな）の名」を入力してください。';
                   errors.push({ element: nameKanaSection, message: msg });
+              } else {
+                  const isHiragana = (val) => /^[\u3040-\u309Fー\s]+$/.test(val);
+                  if (lastNameKana && !isHiragana(lastNameKana.value.trim())) {
+                      errors.push({ element: nameKanaSection, message: '「お名前（ふりがな）の姓」は全角ひらがなで入力してください。' });
+                  }
+                  if (firstNameKana && !isHiragana(firstNameKana.value.trim())) {
+                      errors.push({ element: nameKanaSection, message: '「お名前（ふりがな）の名」は全角ひらがなで入力してください。' });
+                  }
               }
 
               const genderRadio = document.querySelector(`input[name="${config.fbFields.GENDER}"]:checked`);
@@ -1873,7 +1886,11 @@
           detailArea.appendChild(cdGroup);
 
           document.getElementById('referral_hospital_name').addEventListener('input', (e) => updateFbField(config.fbFields.REFERRAL_HOSPITAL, e.target.value));
-          document.getElementById('referral_hospital_tel').addEventListener('input', (e) => updateFbField(config.fbFields.REFERRAL_TEL, e.target.value));
+          document.getElementById('referral_hospital_tel').addEventListener('input', (e) => {
+              let val = e.target.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^\d-]/g, '');
+              if (val !== e.target.value) e.target.value = val;
+              updateFbField(config.fbFields.REFERRAL_TEL, val);
+          });
           cdRadioContainer.addEventListener('change', (e) => updateFbField(config.fbFields.REFERRAL_CD, e.target.value));
 
           confirmRadioContainer.addEventListener('change', (e) => {
@@ -2843,7 +2860,7 @@
                 <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-start; justify-content: flex-start;">
                   <div style="flex: 1 1 280px; max-width: 380px;">
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="text" id="${config.uiIds.CHART_NO}" class="g-form-control" placeholder="半角英数字8桁" pattern="[a-zA-Z0-9]{8}" maxlength="8" required style="max-width: 200px;">
+                        <input type="text" id="${config.uiIds.CHART_NO}" class="g-form-control" placeholder="半角数字8桁" pattern="\\d{8}" inputmode="numeric" maxlength="8" required style="max-width: 200px;">
                         <button type="button" id="gemini-btn-check-duplicate" style="padding: 8px 16px; border: none; border-radius: 4px; background-color: #007bff; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap;">確認する</button>
                     </div>
                     <div class="g-form-note" style="margin-top: 10px; line-height: 1.5; color: #555; font-size: 13px;">
@@ -2973,24 +2990,69 @@
           }
           
 
+          const toHiragana = (str) => {
+              if (!str) return '';
+              return str.replace(/[\u30A1-\u30F6]/g, match => String.fromCharCode(match.charCodeAt(0) - 0x60));
+          };
+
+          const sanitizeEmail = (str) => {
+              if (!str) return '';
+              return str.trim().replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+          };
+
           document.getElementById(config.uiIds.LAST_NAME_KANJI)?.addEventListener('input', e => updateFbField(config.fbFields.LAST_NAME_KANJI, e.target.value));
           document.getElementById(config.uiIds.FIRST_NAME_KANJI)?.addEventListener('input', e => updateFbField(config.fbFields.FIRST_NAME_KANJI, e.target.value));
-          document.getElementById(config.uiIds.LAST_NAME_KANA)?.addEventListener('input', e => updateFbField(config.fbFields.LAST_NAME_KANA, e.target.value));
-          document.getElementById(config.uiIds.FIRST_NAME_KANA)?.addEventListener('input', e => updateFbField(config.fbFields.FIRST_NAME_KANA, e.target.value));
+          document.getElementById(config.uiIds.LAST_NAME_KANA)?.addEventListener('input', e => {
+              const val = toHiragana(e.target.value);
+              if (val !== e.target.value) e.target.value = val;
+              updateFbField(config.fbFields.LAST_NAME_KANA, val);
+          });
+          document.getElementById(config.uiIds.FIRST_NAME_KANA)?.addEventListener('input', e => {
+              const val = toHiragana(e.target.value);
+              if (val !== e.target.value) e.target.value = val;
+              updateFbField(config.fbFields.FIRST_NAME_KANA, val);
+          });
           
           document.getElementById(config.uiIds.POSTAL_CODE)?.addEventListener('input', e => {
-            updateFbField(config.fbFields.POSTAL_CODE, e.target.value);
-            if (e.target.value.length === 7) {
+            let val = e.target.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+            val = val.replace(/[-\s]/g, '').replace(/\D/g, '');
+            if (val.length > 7) val = val.slice(0, 7);
+            if (val !== e.target.value) e.target.value = val;
+            updateFbField(config.fbFields.POSTAL_CODE, val);
+            if (val.length === 7) {
                 handleAddressSearch();
             }
           });
           
           document.getElementById(config.uiIds.STREET)?.addEventListener('input', e => updateFbField(config.fbFields.STREET, e.target.value));
           document.getElementById(config.uiIds.BUILDING)?.addEventListener('input', e => updateFbField(config.fbFields.BUILDING, e.target.value));
-          document.getElementById(config.uiIds.TEL1)?.addEventListener('input', e => updateFbField(config.fbFields.TEL1, e.target.value));
-          document.getElementById(config.uiIds.TEL2)?.addEventListener('input', e => updateFbField(config.fbFields.TEL2, e.target.value));
+          document.getElementById(config.uiIds.TEL1)?.addEventListener('input', e => {
+              let val = e.target.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^\d-]/g, '');
+              if (val !== e.target.value) e.target.value = val;
+              updateFbField(config.fbFields.TEL1, val);
+          });
+          document.getElementById(config.uiIds.TEL2)?.addEventListener('input', e => {
+              let val = e.target.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^\d-]/g, '');
+              if (val !== e.target.value) e.target.value = val;
+              updateFbField(config.fbFields.TEL2, val);
+          });
           document.getElementById(config.uiIds.CONTACT_TIME)?.addEventListener('input', e => updateFbField(config.fbFields.CONTACT_TIME, e.target.value));
-          document.getElementById(config.uiIds.EMAIL)?.addEventListener('input', e => updateFbField(config.fbFields.EMAIL, e.target.value));
+          
+          const handleEmailInput = e => {
+              let val = sanitizeEmail(e.target.value);
+              if (val !== e.target.value) e.target.value = val;
+              updateFbField(config.fbFields.EMAIL, val);
+              handleEmailVerification();
+          };
+          const handleEmailConfirmInput = e => {
+              let val = sanitizeEmail(e.target.value);
+              if (val !== e.target.value) e.target.value = val;
+              handleEmailVerification();
+          };
+
+          document.getElementById(config.uiIds.EMAIL)?.addEventListener('input', handleEmailInput);
+          document.getElementById(config.uiIds.EMAIL_CONFIRM)?.addEventListener('input', handleEmailConfirmInput);
+          document.getElementById(config.uiIds.EMAIL_CONFIRM)?.addEventListener('paste', e => { e.preventDefault(); });
           document.getElementById('gemini-other-notes')?.addEventListener('input', e => updateFbField(config.fbFields.OTHER_NOTES, e.target.value));
           
           // ★修正: document.querySelectorAll -> container.querySelectorAll に変更して範囲を限定
@@ -3001,7 +3063,13 @@
           const chartNoInputEl = document.getElementById(config.uiIds.CHART_NO);
           if (chartNoInputEl) {
               chartNoInputEl.addEventListener('input', e => {
-                  updateFbField(config.fbFields.CHART_NO, e.target.value);
+                  // 全角数字を半角数字に変換し、数字以外は除去
+                  let val = e.target.value;
+                  val = val.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g, '');
+                  if (val !== e.target.value) {
+                      e.target.value = val;
+                  }
+                  updateFbField(config.fbFields.CHART_NO, val);
                   // 入力変更時は結果エリアを消す
                   const resultArea = document.getElementById('gemini-section-duplicate-check-result');
                   if (resultArea) {

@@ -6,7 +6,6 @@
     'use strict';
 
     if (window.CrmIntegration) return;
-    console.log('[CrmIntegration] Loading...');
 
     /**
      * チケット完了時にCRMへ転送し、元レコードを削除する
@@ -14,8 +13,6 @@
      */
     async function transferToCrmAndDelete(app142Record) {
         try {
-            console.log('[CrmIntegration] Transferring to CRM...', app142Record);
-
             // 1. 環境設定の取得
             const crmSettings = window.ShinryoApp?.ConfigManager?.getCrmSettings 
                 ? window.ShinryoApp.ConfigManager.getCrmSettings() 
@@ -27,14 +24,10 @@
             // 2. マッピング用データの抽出・整形
             const ticketId = app142Record['$id'].value;
             const chartNo = app142Record['カルテNo'] ? app142Record['カルテNo'].value : '';
-            if (!chartNo) {
-                console.warn('[CrmIntegration] No Chart No. CRM transfer skipped.');
-                return false;
-            }
 
-            // 患者ID生成 (施設ID_カルテNo -> 今回はApp142_カルテNo)
+            // 患者ID生成 (カルテNoがある場合は 施設ID_カルテNo、ない場合は 施設ID_TEMP_チケットID)
             const facilityId = kintone.app.getId();
-            const patientId = `${facilityId}_${chartNo}`;
+            const patientId = chartNo ? `${facilityId}_${chartNo}` : `${facilityId}_TEMP_${ticketId}`;
 
             // 日付・日時のフォーマットヘルパー (Kintone DATE / DATETIME 型準拠)
             const formatToDateOnly = (val) => {
@@ -183,9 +176,7 @@
                         '申込記録': { value: applyTable }
                     }
                 };
-                console.log('[CrmIntegration] PUT Payload:', JSON.stringify(putPayload));
                 await kintone.api(kintone.api.url('/k/v1/record', true), 'PUT', putPayload);
-                console.log('[CrmIntegration] CRM Record UPDATED');
             } else {
                 // 新規患者 -> POST
                 newContactRow.value['連絡先番号'] = { value: "1" };
@@ -203,9 +194,7 @@
                         '申込記録': { value: [newApplyRow] }
                     }
                 };
-                console.log('[CrmIntegration] POST Payload:', JSON.stringify(postPayload));
                 await kintone.api(kintone.api.url('/k/v1/record', true), 'POST', postPayload);
-                console.log('[CrmIntegration] CRM Record CREATED');
             }
 
             // 4. 元のチケットを削除する
@@ -213,7 +202,6 @@
                 app: kintone.app.getId(),
                 ids: [ticketId]
             });
-            console.log('[CrmIntegration] Original Ticket DELETED');
 
             return true;
         } catch (e) {

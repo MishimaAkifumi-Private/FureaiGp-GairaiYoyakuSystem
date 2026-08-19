@@ -240,8 +240,8 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
   };
 
   // クエリパラメータの取得 (?id=xxx)
-  let recordId = req.query.id || req.body.id;
-  const token = req.query.token; // トークン取得
+  let recordId = req.query.id || (req.body && req.body.id);
+  const token = req.query.token || (req.body && req.body.token);
   let mode = req.query.mode; // URLパラメータがあれば優先
   let centerName = req.query.cn || req.body.cn || "ふれあいグループ 湘南東部病院予約センター";
   let phoneNumber = req.query.tel || req.body.tel || "";
@@ -590,7 +590,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
 
         if (sendDateStr === nowDateStr) {
             // 当日中なら再依頼ボタンを表示
-            res.status(200).send(getTimeoutRetryHtml(recordId, centerName, phoneNumber));
+            res.status(200).send(getTimeoutRetryHtml(recordId, centerName, phoneNumber, recordUrlToken || token));
         } else {
             // 翌日以降なら無効/フォーム誘導
             if (currentStatus === "要電話対応") {
@@ -664,7 +664,7 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             const nowDateStr = fmt.format(new Date());
 
             if (sendDateStr === nowDateStr) {
-                res.status(200).send(getTimeoutRetryHtml(recordId, centerName, phoneNumber));
+                res.status(200).send(getTimeoutRetryHtml(recordId, centerName, phoneNumber, recordUrlToken || token));
             } else {
                 res.status(200).send(getTimeoutHtml(centerName, phoneNumber));
             }
@@ -774,14 +774,81 @@ function getConfirmedHtml(record, recordId, showCancel, mode) {
     // フッター注釈の出し分け
     const footerNote = showCancel ? '※キャンセルは上記ボタン、またはお電話にてご連絡ください。' : '';
 
-    // キャンセルボタンのHTML (POSTフォーム)
+    // キャンセルボタンと確認モーダルのHTML
+    const recordUrlToken = (record["URLトークン"] && record["URLトークン"].value) || "";
+    const tokenParam = recordUrlToken ? `&token=${encodeURIComponent(recordUrlToken)}` : '';
     const cancelBtnHtml = showCancel ? `
         <div class="btn-area">
-            <form method="POST" action="?id=${recordId}" onsubmit="return confirm('本当に予約を取り下げますか？');">
-                <input type="hidden" name="action" value="cancel">
-                <button type="submit" class="btn-cancel">予約をキャンセルする</button>
-            </form>
+            <button type="button" class="btn-cancel" id="openCancelModalBtn">予約をキャンセルする</button>
         </div>
+
+        <!-- モダン確認ダイアログ (モーダル) -->
+        <div id="cancelModal" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-backdrop" id="modalBackdrop"></div>
+            <div class="custom-modal-card">
+                <div class="custom-modal-icon-wrap">
+                    <span class="custom-modal-icon">⚠️</span>
+                </div>
+                <h2 class="custom-modal-title">予約の取り下げ確認</h2>
+                <div class="custom-modal-body">
+                    <p class="custom-modal-desc">
+                        <strong>現在確定しているご予約枠を取り下げます。</strong><br>
+                        この操作を行うと予約はキャンセル扱いとなり、予約枠は解除されます。本当によろしいですか？
+                    </p>
+                    <div class="custom-modal-alert">
+                        ※ 取り下げ後に再度予約を希望される場合は、改めてWeb予約フォームよりお申し込みいただく必要がございます。
+                    </div>
+                </div>
+                <div class="custom-modal-footer">
+                    <button type="button" class="btn-modal-cancel" id="closeCancelModalBtn">戻る</button>
+                    <form id="cancelForm" method="POST" action="?id=${recordId}${tokenParam}" style="margin: 0; flex: 1;">
+                        <input type="hidden" name="action" value="cancel">
+                        <input type="hidden" name="id" value="${recordId}">
+                        <input type="hidden" name="token" value="${recordUrlToken}">
+                        <button type="submit" class="btn-modal-confirm" id="confirmCancelSubmitBtn">取り下げる</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <script>
+          (function() {
+            var openBtn = document.getElementById('openCancelModalBtn');
+            var modal = document.getElementById('cancelModal');
+            var backdrop = document.getElementById('modalBackdrop');
+            var closeBtn = document.getElementById('closeCancelModalBtn');
+            var form = document.getElementById('cancelForm');
+            var submitBtn = document.getElementById('confirmCancelSubmitBtn');
+
+            if (openBtn && modal) {
+              function openModal() {
+                modal.style.display = 'flex';
+                requestAnimationFrame(function() {
+                  modal.classList.add('active');
+                });
+              }
+              function closeModal() {
+                modal.classList.remove('active');
+                setTimeout(function() {
+                  modal.style.display = 'none';
+                }, 250);
+              }
+
+              openBtn.addEventListener('click', openModal);
+              if (backdrop) backdrop.addEventListener('click', closeModal);
+              if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+              if (form && submitBtn) {
+                form.addEventListener('submit', function() {
+                  submitBtn.disabled = true;
+                  submitBtn.textContent = '処理中...';
+                  submitBtn.style.opacity = '0.7';
+                  submitBtn.style.cursor = 'not-allowed';
+                });
+              }
+            }
+          })();
+        </script>
     ` : '';
 
     return `
@@ -802,11 +869,136 @@ function getConfirmedHtml(record, recordId, showCancel, mode) {
           .label { width: 100px; font-weight: bold; color: #777; font-size: 14px; }
           .value { flex: 1; font-weight: bold; font-size: 15px; color: #333; }
           .btn-area { text-align: center; margin-top: 20px; }
-          .btn-cancel { display: inline-block; padding: 12px 24px; background-color: #e74c3c; color: white; text-decoration: none; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; transition: background-color 0.3s; }
-          .btn-cancel:hover { background-color: #c0392b; }
+          .btn-cancel { display: inline-block; padding: 12px 28px; background-color: #e74c3c; color: white; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; transition: all 0.2s ease; box-shadow: 0 2px 5px rgba(231,76,60,0.25); }
+          .btn-cancel:hover { background-color: #c0392b; box-shadow: 0 4px 8px rgba(231,76,60,0.35); transform: translateY(-1px); }
           .footer { margin-top: 30px; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
           .footer-signature { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; }
           .footer-note { font-size: 12px; color: #aaa; }
+
+          /* モダンモーダルスタイル */
+          .custom-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          .custom-modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+          }
+          .custom-modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+          }
+          .custom-modal-card {
+            position: relative;
+            width: 100%;
+            max-width: 440px;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 32px 28px 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transform: scale(0.95) translateY(10px);
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-sizing: border-box;
+          }
+          .custom-modal-overlay.active .custom-modal-card {
+            transform: scale(1) translateY(0);
+          }
+          .custom-modal-icon-wrap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #fee2e2;
+            margin-bottom: 16px;
+          }
+          .custom-modal-icon {
+            font-size: 26px;
+            line-height: 1;
+          }
+          .custom-modal-title {
+            margin: 0 0 12px;
+            font-size: 19px;
+            font-weight: 700;
+            color: #1e293b;
+          }
+          .custom-modal-body {
+            margin-bottom: 24px;
+            text-align: left;
+          }
+          .custom-modal-desc {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #475569;
+            margin: 0 0 12px;
+          }
+          .custom-modal-alert {
+            font-size: 12px;
+            line-height: 1.5;
+            color: #991b1b;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 10px 12px;
+          }
+          .custom-modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+          }
+          .btn-modal-cancel {
+            flex: 1;
+            padding: 12px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+          }
+          .btn-modal-cancel:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+          }
+          .btn-modal-confirm {
+            width: 100%;
+            padding: 12px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            background: #dc2626;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.2);
+            transition: all 0.15s ease;
+          }
+          .btn-modal-confirm:hover {
+            background: #b91c1c;
+            box-shadow: 0 6px 10px -1px rgba(220, 38, 38, 0.3);
+          }
         </style>
       </head>
       <body>
@@ -999,7 +1191,8 @@ function getWithdrawnHtml() {
 /**
  * タイムアウト時の再依頼可能画面 (当日用)
  */
-function getTimeoutRetryHtml(recordId) {
+function getTimeoutRetryHtml(recordId, centerName, phoneNumber, token) {
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
     return `
       <!DOCTYPE html>
       <html lang="ja">
@@ -1017,6 +1210,122 @@ function getTimeoutRetryHtml(recordId) {
           .btn-cancel { display: inline-block; padding: 15px 40px; background-color: #95a5a6; color: #fff; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
           .btn-cancel:hover { background-color: #7f8c8d; }
           .btn-group { display: flex; justify-content: center; gap: 15px; margin-top: 30px; flex-wrap: wrap; }
+
+          /* モダンモーダルスタイル */
+          .custom-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          .custom-modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+          }
+          .custom-modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+          }
+          .custom-modal-card {
+            position: relative;
+            width: 100%;
+            max-width: 440px;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 32px 28px 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transform: scale(0.95) translateY(10px);
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-sizing: border-box;
+          }
+          .custom-modal-overlay.active .custom-modal-card {
+            transform: scale(1) translateY(0);
+          }
+          .custom-modal-icon-wrap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #fee2e2;
+            margin-bottom: 16px;
+          }
+          .custom-modal-icon {
+            font-size: 26px;
+            line-height: 1;
+          }
+          .custom-modal-title {
+            margin: 0 0 12px;
+            font-size: 19px;
+            font-weight: 700;
+            color: #1e293b;
+          }
+          .custom-modal-body {
+            margin-bottom: 24px;
+            text-align: left;
+          }
+          .custom-modal-desc {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #475569;
+            margin: 0 0 12px;
+          }
+          .custom-modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+          }
+          .btn-modal-cancel {
+            flex: 1;
+            padding: 12px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+          }
+          .btn-modal-cancel:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+          }
+          .btn-modal-confirm {
+            width: 100%;
+            padding: 12px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            background: #dc2626;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.2);
+            transition: all 0.15s ease;
+          }
+          .btn-modal-confirm:hover {
+            background: #b91c1c;
+            box-shadow: 0 6px 10px -1px rgba(220, 38, 38, 0.3);
+          }
         </style>
       </head>
       <body>
@@ -1026,15 +1335,79 @@ function getTimeoutRetryHtml(recordId) {
           <p>本日中であれば以下のボタンから<strong>再依頼</strong>を行うことが可能です。<br>再依頼を行うと、すでに頂ている希望内容をもとに再調整してご連絡いたします。</p>
           <p>再依頼を行わない場合は「再依頼しない」を選択してください。<br>この予約はキャンセル扱いとなりますが、明日まで待つことなくWEBフォームから新たな予約を行うことができます。</p>
           <div class="btn-group">
-            <form method="POST" action="?id=${recordId}">
+            <form method="POST" action="?id=${recordId}${tokenParam}">
               <input type="hidden" name="action" value="re_request">
+              <input type="hidden" name="id" value="${recordId}">
+              <input type="hidden" name="token" value="${token || ''}">
               <button type="submit" class="btn-retry">再依頼する</button>
             </form>
-            <form method="POST" action="?id=${recordId}" onsubmit="return confirm('再依頼を行わずに終了しますか？\\nこの予約はキャンセル扱いとなります。');">
-              <input type="hidden" name="action" value="cancel_timeout">
-              <button type="submit" class="btn-cancel">再依頼しない</button>
-            </form>
+            <button type="button" class="btn-cancel" id="openTimeoutCancelModalBtn">再依頼しない</button>
           </div>
+
+          <!-- モダン確認ダイアログ (タイムアウト終了用モーダル) -->
+          <div id="timeoutCancelModal" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-backdrop" id="modalBackdrop"></div>
+            <div class="custom-modal-card">
+              <div class="custom-modal-icon-wrap">
+                <span class="custom-modal-icon">⚠️</span>
+              </div>
+              <h2 class="custom-modal-title">再依頼の終了確認</h2>
+              <div class="custom-modal-body">
+                <p class="custom-modal-desc">
+                  <strong>再依頼を行わずにこの予約を終了します。</strong><br>
+                  この予約はキャンセル扱いとなりますが、改めて新規予約としてお申し込みいただくことができます。
+                </p>
+              </div>
+              <div class="custom-modal-footer">
+                <button type="button" class="btn-modal-cancel" id="closeTimeoutCancelModalBtn">戻る</button>
+                <form id="timeoutCancelForm" method="POST" action="?id=${recordId}${tokenParam}" style="margin: 0; flex: 1;">
+                  <input type="hidden" name="action" value="cancel_timeout">
+                  <input type="hidden" name="id" value="${recordId}">
+                  <input type="hidden" name="token" value="${token || ''}">
+                  <button type="submit" class="btn-modal-confirm" id="confirmTimeoutCancelSubmitBtn">終了してキャンセル</button>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <script>
+            (function() {
+              var openBtn = document.getElementById('openTimeoutCancelModalBtn');
+              var modal = document.getElementById('timeoutCancelModal');
+              var backdrop = document.getElementById('modalBackdrop');
+              var closeBtn = document.getElementById('closeTimeoutCancelModalBtn');
+              var form = document.getElementById('timeoutCancelForm');
+              var submitBtn = document.getElementById('confirmTimeoutCancelSubmitBtn');
+
+              if (openBtn && modal) {
+                function openModal() {
+                  modal.style.display = 'flex';
+                  requestAnimationFrame(function() {
+                    modal.classList.add('active');
+                  });
+                }
+                function closeModal() {
+                  modal.classList.remove('active');
+                  setTimeout(function() {
+                    modal.style.display = 'none';
+                  }, 250);
+                }
+
+                openBtn.addEventListener('click', openModal);
+                if (backdrop) backdrop.addEventListener('click', closeModal);
+                if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+                if (form && submitBtn) {
+                  form.addEventListener('submit', function() {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = '処理中...';
+                    submitBtn.style.opacity = '0.7';
+                    submitBtn.style.cursor = 'not-allowed';
+                  });
+                }
+              }
+            })();
+          </script>
         </div>
       </body>
       </html>

@@ -1342,7 +1342,9 @@
         const inputRefs = {};
 
         const checkDirty = (action) => {
-            const isDirty = inputRefs.appId.value != (config.appId || '') || inputRefs.crmHistoryCount.value != (crmSettings.crmHistoryCount || '');
+            const isDirty = inputRefs.appId.value != (config.appId || '') || 
+                            inputRefs.crmHistoryCount.value != (crmSettings.crmHistoryCount || '') ||
+                            inputRefs.finishedTicketLimit.value != (crmSettings.finishedTicketLimit || '');
             checkDirtyAndConfirm(isDirty, action);
         };
 
@@ -1388,11 +1390,32 @@
         const inpCrm = document.createElement('input');
         inpCrm.className = 'custom-modal-input';
         inpCrm.type = 'number';
-        inpCrm.value = config.crmHistoryCount || '30';
+        inpCrm.value = crmSettings.crmHistoryCount || '30';
         inpCrm.style.marginBottom = '0';
         divCrm.appendChild(inpCrm);
         content.appendChild(divCrm);
         inputRefs.crmHistoryCount = inpCrm;
+
+        // ★追加: 終了チケット保持件数
+        const divFinish = document.createElement('div');
+        divFinish.style.marginBottom = '15px';
+        divFinish.style.marginTop = '15px';
+        const lblFinish = document.createElement('label');
+        lblFinish.textContent = '終了チケット保持件数 (App 142内)';
+        lblFinish.style.display = 'block';
+        lblFinish.style.fontSize = '12px';
+        lblFinish.style.fontWeight = 'bold';
+        lblFinish.style.marginBottom = '4px';
+        divFinish.appendChild(lblFinish);
+
+        const inpFinish = document.createElement('input');
+        inpFinish.className = 'custom-modal-input';
+        inpFinish.type = 'number';
+        inpFinish.value = crmSettings.finishedTicketLimit || '100';
+        inpFinish.style.marginBottom = '0';
+        divFinish.appendChild(inpFinish);
+        content.appendChild(divFinish);
+        inputRefs.finishedTicketLimit = inpFinish;
 
         const desc = document.createElement('p');
         desc.textContent = '※通常は「142」が設定されています。アプリを移行した場合のみ変更してください。';
@@ -1413,11 +1436,13 @@
         saveBtn.textContent = '保存';
         saveBtn.onclick = async () => {
             config.appId = inp.value;
+            config.crmHistoryCount = parseInt(inpCrm.value, 10);
+            config.finishedTicketLimit = parseInt(inpFinish.value, 10);
             localStorage.setItem('shinryo_ticket_config', JSON.stringify(config));
             
             if (window.ShinryoApp?.ConfigManager?.updateCrmSettings) {
                 try {
-                    await window.ShinryoApp.ConfigManager.updateCrmSettings(parseInt(inpCrm.value, 10));
+                    await window.ShinryoApp.ConfigManager.updateCrmSettings(parseInt(inpCrm.value, 10), parseInt(inpFinish.value, 10));
                 } catch (e) {
                     console.error('Failed to save CRM settings:', e);
                 }
