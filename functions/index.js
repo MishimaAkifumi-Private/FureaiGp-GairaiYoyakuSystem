@@ -1783,7 +1783,7 @@ exports.checkDuplicateTicket = functions.https.onRequest(async (req, res) => {
       }
     };
 
-    const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
+    const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'WEB取下', '完了', '対応完了'];
     const activeRecords = rawRecords.filter(r => {
       const status = (r['管理状況']?.value || '').trim();
       if (inactiveStatuses.includes(status)) return false;

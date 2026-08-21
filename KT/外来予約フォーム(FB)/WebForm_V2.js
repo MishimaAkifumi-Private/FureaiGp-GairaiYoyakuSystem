@@ -817,7 +817,7 @@
               return cNo && cNo.trim().toUpperCase() === chartNo.toUpperCase();
           });
 
-          const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
+          const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'WEB取下', '完了', '対応完了'];
           const activeRecords = matchingChartRecords.filter(r => {
               const status = (getFieldValue(r, statusKeys) || '').trim();
               if (inactiveStatuses.includes(status)) return false;

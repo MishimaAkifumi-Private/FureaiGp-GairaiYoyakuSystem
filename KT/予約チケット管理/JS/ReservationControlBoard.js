@@ -70,7 +70,7 @@
     // ヘルパー: 全多重チケットの担当一括更新
     const updateAllDuplicateTicketsStaff = async (chartNo, newStaffName, excludeRecordId) => {
         if (!chartNo) return;
-        const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+        const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "WEB取下")';
         const query = `カルテNo = "${chartNo}" and 管理状況 not in ${activeStatuses}`;
         try {
             const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
@@ -279,7 +279,7 @@
           // 未着手なら担当者変更・アサインボタンを表示
           const chartNo = record['カルテNo']?.value;
           if (chartNo) {
-              const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+              const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "WEB取下")';
               const query = `カルテNo = "${chartNo}" and 管理状況 not in ${activeStatuses} and $id != "${recordId}" and 管理状況 not in ("未着手") order by 作成日時 desc limit 1`;
               try {
                   const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
@@ -363,10 +363,10 @@
           const currentMemoStr = record['人物メモ']?.value || '';
 
           // 自分がすでに無効なステータスなら重複警告は出さない
-          const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下'];
+          const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'WEB取下'];
           if (inactiveStatuses.includes(currentStatus)) return false;
 
-          const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+          const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "WEB取下")';
           const query = `カルテNo = "${chartNo}" and 管理状況 not in ${activeStatuses} and $id != "${recordId}" order by 作成日時 desc`;
           try {
               const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {

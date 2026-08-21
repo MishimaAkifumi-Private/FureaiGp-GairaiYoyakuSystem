@@ -181,7 +181,7 @@
         
         if (uniqueChartNos.length > 0) {
             try {
-                const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "スタッフ取下", "WEB取下")';
+                const activeStatuses = '("終了", "強制終了", "キャンセル", "URL取下", "WEB取下")';
                 const query = `カルテNo in ("${uniqueChartNos.join('","')}") and 管理状況 not in ${activeStatuses}`;
                 const resp = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
                     app: kintone.app.getId(),
@@ -279,7 +279,7 @@
             const currentMemo = getVal('人物メモ') || '';
             const hasConfirmedDup = currentMemo.includes('[複数の用件を短期間に依頼:');
 
-            const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'スタッフ取下', 'WEB取下', '完了', '対応完了'];
+            const inactiveStatuses = ['終了', '強制終了', 'キャンセル', 'URL取下', 'WEB取下', '完了', '対応完了'];
             const isSelfActive = !inactiveStatuses.includes(status);
 
             // 多重チケットの警告表示 (DOM操作) - 自身が進行中チケットの場合のみ表示
