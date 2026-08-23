@@ -380,6 +380,7 @@
       case '要電話対応': return '#ea580c';
       case 'メール送信済': return '#f59e0b';
       case 'メール既読': return '#10b981';
+      case '電話不通': return '#d97706';
       case '電話合意済': return '#16a34a';
       case '閲覧期限切れ': return '#dc2626';
       case '申込者再依頼': return '#8b5cf6';

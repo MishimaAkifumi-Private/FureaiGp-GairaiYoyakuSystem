@@ -5,6 +5,55 @@
 (function() {
     'use strict';
 
+    // ★ コメント機能無効時 (GAIA_RE12) に他社プラグインが落ちるのを防ぐ安全ラッパーおよびエラー抑制
+    (function() {
+        try {
+            window.addEventListener('unhandledrejection', function(event) {
+                if (event && event.reason) {
+                    const str = String(event.reason.message || event.reason.stack || event.reason.code || JSON.stringify(event.reason));
+                    if (str.includes('GAIA_RE12') || str.includes('ddnojomjaglckldiioiafniahjaenfok') || str.includes("reading 'length'")) {
+                        event.preventDefault();
+                        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+                    }
+                }
+            }, true);
+
+            window.addEventListener('error', function(event) {
+                const str = String(event.message || event.filename || '');
+                if (str.includes('GAIA_RE12') || str.includes('ddnojomjaglckldiioiafniahjaenfok') || str.includes("reading 'length'")) {
+                    event.preventDefault();
+                    if (typeof event.stopPropagation === 'function') event.stopPropagation();
+                }
+            }, true);
+
+            if (window.kintone && kintone.api && !kintone.api._isPatchedForComments) {
+                const origApi = kintone.api;
+                const patchedApi = function(url, method, params, opt_success, opt_error) {
+                    const urlStr = String(url || '');
+                    if (urlStr.includes('/k/v1/record/comments') || urlStr.includes('/k/v1/comments')) {
+                        const promise = origApi.apply(this, arguments);
+                        if (promise && typeof promise.then === 'function') {
+                            return promise.catch(function(err) {
+                                if (err && (err.code === 'GAIA_RE12' || (err.message && String(err.message).includes('コメント')))) {
+                                    return { comments: [] };
+                                }
+                                return Promise.reject(err);
+                            });
+                        }
+                    }
+                    return origApi.apply(this, arguments);
+                };
+                for (let prop in origApi) {
+                    if (Object.prototype.hasOwnProperty.call(origApi, prop)) {
+                        patchedApi[prop] = origApi[prop];
+                    }
+                }
+                patchedApi._isPatchedForComments = true;
+                kintone.api = patchedApi;
+            }
+        } catch (e) {}
+    })();
+
     if (window.RcbUI) return;
 
     const CONFIG = {
@@ -17,6 +66,7 @@
       STATUS_TIMEOUT_VALUE: '閲覧期限切れ', // タイムアウト後のステータス
       STATUS_RE_REQUEST_VALUE: '申込者再依頼', // 再依頼ステータス
       STATUS_PHONE_VALUE: '電話合意済', // 電話合意後のステータス
+      STATUS_PHONE_NO_ANSWER_VALUE: '電話不通', // 電話不通（折り返し待ち）ステータス
       STATUS_WITHDRAWN_VALUE: 'スタッフ取下', // 取下後のステータス
       STATUS_WEB_WITHDRAWN_VALUE: 'WEB取下', // WEB取下後のステータス
       STATUS_REVIVED_VALUE: 'スタッフ取下中止', // 取消中止後のステータス
@@ -765,6 +815,8 @@
         let evalOptions = [];
         if (method === 'phone_after_call' || method === 'phone') {
             evalOptions = ['電話が繫がりにくい', '長電話になりやすい', '話が噛み合いにくい'];
+        } else if (method === 'phone_no_answer') {
+            evalOptions = ['電話が繫がりにくい'];
         } else {
             evalOptions = []; // 電話以外は通常のアンケート項目はなし
         }

@@ -106,6 +106,8 @@
       let currentMethod = record[CONFIG.FIELDS.METHOD]?.value || '未設定';
       if (currentStatus === CONFIG.STATUS_RE_REQUEST_VALUE || currentStatus === '申込者再依頼') {
           currentMethod = 'email';
+      } else if (currentStatus === CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || currentStatus === '電話不通') {
+          currentMethod = 'phone';
       }
   
       const purpose = record[CONFIG.FIELDS.PURPOSE]?.value || '';
@@ -228,6 +230,12 @@
       }
       const statusBadge = createBadge('管理状況', currentStatus, statusBadgeColor);
       header.appendChild(statusBadge);
+
+      const updateHeaderStatusBadge = (displayStatus, displayColor) => {
+          const valEl = statusBadge.querySelector('.rcb-badge-value');
+          if (valEl) valEl.textContent = displayStatus;
+          statusBadge.style.borderLeftColor = displayColor;
+      };
 
       const methodIconDiv = document.createElement('div');
       methodIconDiv.style.marginRight = '0px';
@@ -935,14 +943,24 @@
           const encodedPreviewHtml = encodeURIComponent(previewHtml).replace(/'/g, "\\'");
           const previewWindowScript = `const win = window.open('', 'previewWindow', 'width=550,height=600,scrollbars=yes'); win.document.open(); win.document.write(decodeURIComponent('${encodedPreviewHtml}')); win.document.close(); const okBtn = document.querySelector('.rcb-modal-btn-ok'); if (okBtn) { okBtn.disabled = true; okBtn.style.opacity = '0.5'; okBtn.style.cursor = 'not-allowed'; const originalText = okBtn.textContent; okBtn.textContent = 'プレビュー確認中...'; const timer = setInterval(function() { if (win.closed) { clearInterval(timer); okBtn.disabled = false; okBtn.style.opacity = '1'; okBtn.style.cursor = 'pointer'; okBtn.textContent = originalText; } }, 500); } return false;`;
 
+          // ★ 不通案内・取下案内時はボタン・URL表示を削除しメッセージのみにする
+          const isNonConfirmNotice = (effectiveMethod === 'phone' && selectedNoticeMailType !== 'confirm');
+
           // ボタン表示用HTML (プレビュー用)
-          const btnHtml = `
+          const btnHtml = isNonConfirmNotice ? '' : `
             <div style="margin: 20px 0;">
               <a href="javascript:void(0);" onclick="${previewWindowScript}" style="display: inline-block; padding: 12px 24px; background-color: #005a9e; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold; cursor: pointer;">ご予約情報</a>
             </div>
             <p style="font-size: 12px; color: #777;">※上記ボタンがクリックできない場合は、以下のURLをご確認ください。<br><a href="javascript:void(0);" onclick="${previewWindowScript}" style="color:#005a9e; cursor: pointer;">${targetUrlPreview}</a></p>
           `;
-          if (purpose === '初診') {
+
+          if (isNonConfirmNotice) {
+              if (selectedNoticeMailType === 'no_answer') {
+                  subject = '【お知らせ】外来予約センターからのご連絡';
+              } else {
+                  subject = '【お知らせ】ご依頼の取り下げ（見送り）について';
+              }
+          } else if (purpose === '初診') {
               subject = '【予約確定】診療のご予約（初診/再診）について';
           } else if (purpose === '変更') {
               subject = '【予約変更】診療予約の変更について';
@@ -965,7 +983,14 @@
             ${getNoReplyFooterHtml()}
           `;
 
-          const targetStatus = (effectiveMethod === 'phone') ? CONFIG.STATUS_PHONE_VALUE : CONFIG.STATUS_SENT_VALUE;
+          let targetStatus = (effectiveMethod === 'phone') ? CONFIG.STATUS_PHONE_VALUE : CONFIG.STATUS_SENT_VALUE;
+          if (isNonConfirmNotice) {
+              if (selectedNoticeMailType === 'no_answer') {
+                  targetStatus = CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || '電話不通';
+              } else if (selectedNoticeMailType === 'withdraw') {
+                  targetStatus = CONFIG.STATUS_WITHDRAWN_VALUE || 'スタッフ取下';
+              }
+          }
 
           const confirmMsg = `
             <div class="rcb-confirm-msg">以下のメールを送信します。よろしいですか？</div>
@@ -986,16 +1011,16 @@
           `;
 
           const isSendOk = await showDialog(confirmMsg, 'confirm', '送信確認');
-          if (!isSendOk) return;
+          if (!isSendOk) return false;
 
           showSpinner('メールを送信しています...');
 
           try {
             // URL生成
             // IDやモードを削除し、トークンのみのシンプルなURLにする
-            let targetUrl = `${CONFIG.CONFIRM_BASE_URL}?token=${token}`;
+            let targetUrl = isNonConfirmNotice ? '' : `${CONFIG.CONFIRM_BASE_URL}?token=${token}`;
             // 電話対応の場合は、パラメータにmode=phoneを付与し、受診者画面の表示を切り替える(キャンセル可能にするなど)
-            if (effectiveMethod === 'phone') {
+            if (!isNonConfirmNotice && effectiveMethod === 'phone') {
                 targetUrl += '&mode=phone';
             }
 
@@ -1052,8 +1077,20 @@
                 
                 // 電話対応の場合は送信完了後に特徴ダイアログを表示
                 if (effectiveMethod === 'phone') {
-                    const initialData = { common: currentCommonEval, memo: currentMemo };
-                    const evalData = await showEvaluationDialog('電話対応お疲れ様でした。<br>申込者の特徴を入力してください。', '申込者の特徴', 'phone_after_call', initialData, null, 'OK', null);
+                    const isConfirmNotice = (selectedNoticeMailType === 'confirm');
+                    const evalMethod = isConfirmNotice ? 'phone_after_call' : 'phone_no_answer';
+                    const evalMessage = isConfirmNotice ? 
+                        '電話対応お疲れ様でした。<br>申込者の特徴を入力してください。' : 
+                        'お疲れ様でした。<br>必要に応じてメモを入力してください。';
+
+                    // 不通案内・取下案内時は「電話が繫がりにくい」を自動付与・チェックON
+                    let initialCommon = Array.isArray(currentCommonEval) ? [...currentCommonEval] : [];
+                    if (!isConfirmNotice && !initialCommon.includes('電話が繫がりにくい')) {
+                        initialCommon.push('電話が繫がりにくい');
+                    }
+
+                    const initialData = { common: initialCommon, memo: currentMemo };
+                    const evalData = await showEvaluationDialog(evalMessage, '申込者の特徴', evalMethod, initialData, null, 'OK', null);
                     
                     if (evalData) {
                         const evalPayload = {
@@ -1065,11 +1102,14 @@
                 }
 
                 location.reload();
+                return true;
             }
+            return false;
           } catch (e) {
             console.error(e);
             hideSpinner();
             await showDialog('送信に失敗しました: ' + e.message, 'error');
+            return false;
           }
       };
 
@@ -1079,16 +1119,23 @@
       dateSection.style.marginTop = '10px';
       dateSection.style.paddingTop = '0';
   
-      const dateTitle = document.createElement('div');
-      dateTitle.className = 'rcb-section-title';
-      dateTitle.textContent = '仮予約日時の設定';
+      const createEditorTitleWithBar = (text) => {
+          const tDiv = document.createElement('div');
+          tDiv.style.cssText = 'font-size: 14px; font-weight: bold; color: #555; margin-bottom: 10px; display: flex; align-items: center;';
+          const bar = document.createElement('span');
+          bar.style.cssText = 'display: inline-block; width: 4px; height: 16px; background-color: #3498db; margin-right: 8px; border-radius: 2px; flex-shrink: 0;';
+          tDiv.appendChild(bar);
+          tDiv.appendChild(document.createTextNode(text));
+          return tDiv;
+      };
 
       // エディタ描画関数
       const renderEditorView = () => {
         // 対応方法セクションの表示・有効化 (再設定時用)
+        const isPhoneNoAnswer = (currentStatus === CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || currentStatus === '電話不通');
         const methodSection = container.querySelector('.rcb-method-section');
         if (methodSection) {
-            if (!staffName || currentStatus === '未着手') {
+            if (!staffName || currentStatus === '未着手' || isPhoneNoAnswer) {
                 methodSection.style.display = 'none';
             } else {
                 methodSection.style.display = 'block'; // 再設定時に表示
@@ -1117,11 +1164,268 @@
         }
 
         const targetBody = container.querySelector('.rcb-body') || container;
+        
+        // 既存の不通/取下用案内メッセージセクションがあればクリア
+        const existingNoticeMsgSection = container.querySelector('.rcb-notice-msg-section');
+        if (existingNoticeMsgSection) {
+            existingNoticeMsgSection.remove();
+        }
+
+        const isPhoneNoAnswerStatus = (currentStatus === CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || currentStatus === '電話不通');
+
+        // ★ ステータスが「電話不通」の場合の特別な画面表示コントロール (連絡待ち / タイムアウト後取下)
+        if (isPhoneNoAnswerStatus && !isSelectingConfirmDate) {
+            if (dateSection.parentElement) {
+                dateSection.style.display = 'none';
+            }
+
+            // タイムアウト超過判定
+            let isTimeoutDone = false;
+            const sendDateVal = record[CONFIG.FIELDS.SEND_DATE]?.value;
+            const timeoutVal = record[CONFIG.FIELDS.TIMEOUT]?.value;
+            if (sendDateVal) {
+                const sendTime = new Date(sendDateVal).getTime();
+                let timeoutMs = 24 * 60 * 60 * 1000;
+                if (timeoutVal) {
+                    if (timeoutVal.includes('12時間') || timeoutVal.includes('半日')) timeoutMs = 12 * 60 * 60 * 1000;
+                    else if (timeoutVal.includes('36時間') || timeoutVal.includes('1.5日')) timeoutMs = 36 * 60 * 60 * 1000;
+                    else if (timeoutVal.includes('48時間') || timeoutVal.includes('2日')) timeoutMs = 48 * 60 * 60 * 1000;
+                    else if (timeoutVal.includes('24時間') || timeoutVal.includes('1日')) timeoutMs = 24 * 60 * 60 * 1000;
+                }
+                if (Date.now() - sendTime >= timeoutMs) {
+                    isTimeoutDone = true;
+                }
+            }
+
+            const noticeMsgSection = document.createElement('div');
+            noticeMsgSection.className = 'rcb-section rcb-notice-msg-section';
+            noticeMsgSection.style.marginTop = '10px';
+
+            if (!isTimeoutDone) {
+                // --- A. タイムアウト前: 連絡待ち画面 ---
+                const sectionTitle = createEditorTitleWithBar('連絡待ち');
+                noticeMsgSection.appendChild(sectionTitle);
+
+                const waitCard = document.createElement('div');
+                waitCard.className = 'rcb-date-editor';
+                waitCard.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 15px; width: 100%; max-width: 550px; margin: 15px 0 30px 0; padding: 20px; background-color: #f4f9fd; border: 1px solid #bee5eb; border-radius: 8px; box-sizing: border-box;';
+
+                const msgP = document.createElement('p');
+                msgP.style.cssText = 'margin: 0; font-size: 14.5px; color: #0c5460; line-height: 1.6; font-weight: bold;';
+                msgP.innerHTML = '依頼者（患者）からの折り返し連絡を待っている状態です。<br>連絡が来たら下のボタンを押してください。';
+
+                const confirmActionBtn = document.createElement('button');
+                confirmActionBtn.className = 'rcb-btn-save';
+                confirmActionBtn.textContent = '確定案内をする';
+                confirmActionBtn.style.cssText = 'padding: 12px 28px; font-size: 16px; background-color: #007bff; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 5px;';
+
+                confirmActionBtn.onclick = () => {
+                    isSelectingConfirmDate = true;
+                    selectedNoticeMailType = 'confirm';
+                    noticeMsgSection.remove();
+                    renderEditorView();
+                };
+
+                waitCard.appendChild(msgP);
+                waitCard.appendChild(confirmActionBtn);
+                noticeMsgSection.appendChild(waitCard);
+                targetBody.appendChild(noticeMsgSection);
+                return;
+            } else {
+                // --- B. タイムアウト経過後: 患者からの連絡がきませんでした ＋ 取下案内の送信画面 ---
+                selectedNoticeMailType = 'withdraw';
+
+                const alertBox = document.createElement('div');
+                alertBox.style.cssText = 'padding: 12px 18px; background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; font-size: 14.5px; font-weight: bold; border-radius: 6px; margin-bottom: 15px; max-width: 550px; display: flex; align-items: center; gap: 8px;';
+                alertBox.innerHTML = '<span>⚠️</span> <span>患者からの連絡が来ませんでした。</span>';
+                noticeMsgSection.appendChild(alertBox);
+
+                const sectionTitle = createEditorTitleWithBar('取下案内の送信');
+                noticeMsgSection.appendChild(sectionTitle);
+
+                const msgEditor = document.createElement('div');
+                msgEditor.className = 'rcb-date-editor';
+                msgEditor.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 20px; width: 100%; max-width: 500px; margin: 15px 0 30px 0;';
+
+                const msgWrapper = document.createElement('div');
+                msgWrapper.style.cssText = 'width: 100%; border: 1px solid #ccc; border-radius: 4px; overflow: hidden;';
+
+                const msgHeader = document.createElement('div');
+                msgHeader.style.cssText = 'background-color: #123049; color: white; padding: 6px; font-size: 13px; font-weight: bold; text-align: center; letter-spacing: 1px;';
+                msgHeader.textContent = 'メール本文メッセージ挿入内容';
+
+                const sendMsgInput = document.createElement('textarea');
+                sendMsgInput.className = 'rcb-modal-textarea';
+                sendMsgInput.style.cssText = 'width: 100%; height: 120px; margin: 0; padding: 10px; border: none; border-radius: 0; resize: vertical; box-sizing: border-box; outline: none; box-shadow: none; font-size: 14px;';
+                sendMsgInput.value = `度々お電話にてご連絡を差し上げましたが、ご都合が合わなかったようでお繋ぎできませんでした。\n誠に勝手ながら、今回のご依頼（お申し込み）につきましては、一旦取り下げ（見送り）の扱いとさせていただきます。`;
+
+                msgWrapper.appendChild(msgHeader);
+                msgWrapper.appendChild(sendMsgInput);
+                msgEditor.appendChild(msgWrapper);
+
+                const sendMailBtn = document.createElement('button');
+                sendMailBtn.className = 'rcb-btn-save';
+                sendMailBtn.textContent = '案内を送信する';
+                sendMailBtn.style.cssText = 'width: 100%; max-width: 400px; padding: 12px; font-size: 16px; background-color: #27ae60; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;';
+
+                sendMailBtn.onclick = async () => {
+                    sendMailBtn.disabled = true;
+                    const originalText = sendMailBtn.textContent;
+                    sendMailBtn.textContent = '送信中...';
+                    try {
+                        const ok = await processSendMail(currentDate, currentTime, sendMsgInput.value);
+                        if (!ok) {
+                            sendMailBtn.disabled = false;
+                            sendMailBtn.textContent = originalText;
+                        }
+                    } catch (e) {
+                        sendMailBtn.disabled = false;
+                        sendMailBtn.textContent = originalText;
+                    }
+                };
+
+                msgEditor.appendChild(sendMailBtn);
+                noticeMsgSection.appendChild(msgEditor);
+                targetBody.appendChild(noticeMsgSection);
+                return;
+            }
+        }
+
+        // ★ 電話対応かつ「不通案内」または「取下案内」選択時は「仮予約日時の設定」エレメント (dateSection) を完全に非表示にし、メッセージ作成セクションを表示
+        if (currentMethod === 'phone' && selectedNoticeMailType !== 'confirm') {
+            if (dateSection.parentElement) {
+                dateSection.style.display = 'none'; // 仮予約日時の設定エレメントを非表示
+            }
+
+            const noticeMsgSection = document.createElement('div');
+            noticeMsgSection.className = 'rcb-section rcb-notice-msg-section';
+            noticeMsgSection.style.marginTop = '10px';
+
+            const sectionTitle = createEditorTitleWithBar(selectedNoticeMailType === 'no_answer' ? '不通案内の送信' : '取下案内の送信');
+            noticeMsgSection.appendChild(sectionTitle);
+
+            const msgEditor = document.createElement('div');
+            msgEditor.className = 'rcb-date-editor';
+            msgEditor.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 20px; width: 100%; max-width: 500px; margin: 20px 0 30px 0;';
+
+            // ★ 不通案内選択時のみ「折り返し待ち期限」プルダウンを配置
+            let noAnswerTimeoutSelect = null;
+            if (selectedNoticeMailType === 'no_answer') {
+                const timeoutWrapper = document.createElement('div');
+                timeoutWrapper.style.cssText = 'display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: bold; color: #495057; width: 100%; margin-bottom: 5px;';
+                
+                const timeoutLabel = document.createElement('span');
+                timeoutLabel.textContent = '折り返し待ち期限:';
+                
+                noAnswerTimeoutSelect = document.createElement('select');
+                noAnswerTimeoutSelect.className = 'rcb-no-answer-timeout-select';
+                noAnswerTimeoutSelect.style.cssText = 'padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13.5px; font-weight: bold; color: #333; background: #fff; cursor: pointer;';
+                
+                const timeoutOptions = [
+                    { label: '12時間 (半日)', value: '12時間' },
+                    { label: '24時間 (1日)', value: '24時間' },
+                    { label: '36時間 (1.5日)', value: '36時間' },
+                    { label: '48時間 (2日)', value: '48時間' }
+                ];
+                
+                timeoutOptions.forEach(opt => {
+                    const optEl = document.createElement('option');
+                    optEl.value = opt.value;
+                    optEl.textContent = opt.label;
+                    if (opt.value === '24時間') optEl.selected = true; // デフォルト1日
+                    noAnswerTimeoutSelect.appendChild(optEl);
+                });
+                
+                timeoutWrapper.appendChild(timeoutLabel);
+                timeoutWrapper.appendChild(noAnswerTimeoutSelect);
+                msgEditor.appendChild(timeoutWrapper);
+            }
+
+            const msgWrapper = document.createElement('div');
+            msgWrapper.style.cssText = 'width: 100%; border: 1px solid #ccc; border-radius: 4px; overflow: hidden;';
+
+            const msgHeader = document.createElement('div');
+            msgHeader.style.cssText = 'background-color: #123049; color: white; padding: 6px; font-size: 13px; font-weight: bold; text-align: center; letter-spacing: 1px;';
+            msgHeader.textContent = 'メール本文メッセージ挿入内容';
+
+            const sendMsgInput = document.createElement('textarea');
+            sendMsgInput.className = 'rcb-modal-textarea';
+            sendMsgInput.style.cssText = 'width: 100%; height: 120px; margin: 0; padding: 10px; border: none; border-radius: 0; resize: vertical; box-sizing: border-box; outline: none; box-shadow: none; font-size: 14px;';
+            
+            if (selectedNoticeMailType === 'no_answer') {
+                sendMsgInput.value = `何度かお電話を差し上げましたが、ご都合が合わなかったようでお繋ぎできませんでした。\nお忙しいところ恐れ入りますが、外来予約センターまで折り返しご連絡をいただけますでしょうか。`;
+            } else {
+                sendMsgInput.value = `度々お電話にてご連絡を差し上げましたが、ご都合が合わなかったようでお繋ぎできませんでした。\n誠に勝手ながら、今回のご依頼（お申し込み）につきましては、一旦取り下げ（見送り）の扱いとさせていただきます。`;
+            }
+
+            msgWrapper.appendChild(msgHeader);
+            msgWrapper.appendChild(sendMsgInput);
+            msgEditor.appendChild(msgWrapper);
+
+            // 案内送信ボタン
+            const sendMailBtn = document.createElement('button');
+            sendMailBtn.className = 'rcb-btn-save';
+            sendMailBtn.textContent = '案内を送信する';
+            sendMailBtn.style.cssText = 'width: 100%; max-width: 400px; padding: 12px; font-size: 16px; background-color: #27ae60; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;';
+            
+            sendMailBtn.onclick = async () => {
+                sendMailBtn.disabled = true;
+                const originalText = sendMailBtn.textContent;
+                sendMailBtn.textContent = '送信中...';
+                try {
+                    const ok = await processSendMail(currentDate, currentTime, sendMsgInput.value);
+                    if (!ok) {
+                        sendMailBtn.disabled = false;
+                        sendMailBtn.textContent = originalText;
+                    }
+                } catch (e) {
+                    sendMailBtn.disabled = false;
+                    sendMailBtn.textContent = originalText;
+                }
+            };
+
+            msgEditor.appendChild(sendMailBtn);
+            noticeMsgSection.appendChild(msgEditor);
+            targetBody.appendChild(noticeMsgSection);
+            return;
+        }
+
+        // 確定案内（デフォルト）の場合は日時設定エレメントを表示（電話対応時は「確定予約日時の設定」、メール対応時は「仮予約日時の設定」）
+        dateSection.style.display = 'block';
         if (!dateSection.parentElement) {
             targetBody.appendChild(dateSection);
         }
 
-        dateSection.appendChild(dateTitle);
+        // ★ バッジ表記の動的切り替え
+        if (isSelectingConfirmDate) {
+            updateHeaderStatusBadge(CONFIG.STATUS_PHONE_VALUE || '電話合意済', '#27ae60');
+        } else {
+            updateHeaderStatusBadge(currentStatus, statusBadgeColor);
+        }
+
+        const editorTitleText = (currentMethod === 'phone') ? '確定予約日時の設定' : '仮予約日時の設定';
+        
+        const titleRow = document.createElement('div');
+        titleRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;';
+
+        const dynamicDateTitle = createEditorTitleWithBar(editorTitleText);
+        titleRow.appendChild(dynamicDateTitle);
+
+        // ★ 電話不通から「確定案内をする」を押して入力画面に来た場合は「前の画面に戻る」ボタンを配置
+        if (isPhoneNoAnswerStatus && isSelectingConfirmDate) {
+            const backBtn = document.createElement('button');
+            backBtn.className = 'rcb-btn-back';
+            backBtn.textContent = '← 前の画面に戻る';
+            backBtn.style.cssText = 'padding: 6px 14px; font-size: 13px; font-weight: bold; background: #ffffff; border: 1px solid #ced4da; border-radius: 4px; color: #495057; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);';
+            backBtn.onclick = () => {
+                isSelectingConfirmDate = false;
+                updateHeaderStatusBadge(currentStatus, statusBadgeColor);
+                renderEditorView();
+            };
+            titleRow.appendChild(backBtn);
+        }
+
+        dateSection.appendChild(titleRow);
     
         let initialDate = currentDate;
         let initialTime = currentTime;
@@ -1385,23 +1689,116 @@
       };
 
       // ① 対応方法選択 (用件が「変更」または「初診」の場合)
+      let isSelectingConfirmDate = false;
+      let selectedNoticeMailType = 'confirm'; // デフォルト: 確定案内
+
+      // ★ 「電話不通」ステータスでタイムアウト時間が経過している場合は初期選択を「取下案内」にする
+      if (currentStatus === CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || currentStatus === '電話不通') {
+          const sendDateVal = record[CONFIG.FIELDS.SEND_DATE]?.value;
+          const timeoutVal = record[CONFIG.FIELDS.TIMEOUT]?.value;
+          if (sendDateVal) {
+              const sendTime = new Date(sendDateVal).getTime();
+              let timeoutMs = 24 * 60 * 60 * 1000; // デフォルト24時間
+              if (timeoutVal) {
+                  if (timeoutVal.includes('12時間') || timeoutVal.includes('半日')) timeoutMs = 12 * 60 * 60 * 1000;
+                  else if (timeoutVal.includes('36時間') || timeoutVal.includes('1.5日')) timeoutMs = 36 * 60 * 60 * 1000;
+                  else if (timeoutVal.includes('48時間') || timeoutVal.includes('2日')) timeoutMs = 48 * 60 * 60 * 1000;
+                  else if (timeoutVal.includes('24時間') || timeoutVal.includes('1日')) timeoutMs = 24 * 60 * 60 * 1000;
+              }
+              const nowMs = new Date().getTime();
+              if (nowMs - sendTime >= timeoutMs) {
+                  selectedNoticeMailType = 'withdraw'; // タイムアウト経過時は「取下案内」を自動準備！
+              }
+          }
+      }
+
       if (purpose === '変更' || purpose === '初診') {
         const methodSection = document.createElement('div');
         methodSection.className = 'rcb-section rcb-method-section'; // クラス追加
         
-        // 確定済み、または「要電話対応」、各種取下・キャンセル済み、または未担当・未着手の場合は初期非表示（電話対応固定または担当設定前のため）
-        if (isConfirmed || currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || isWithdrawn || isWebWithdrawn || isUrlWithdrawn || !staffName || currentStatus === '未着手') {
+        // 確定済み、または「要電話対応」、電話不通、各種取下・キャンセル済み、または未担当・未着手の場合は初期非表示（電話対応固定または担当設定前のため）
+        if (isConfirmed || currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || currentStatus === CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || currentStatus === '電話不通' || isWithdrawn || isWebWithdrawn || isUrlWithdrawn || !staffName || currentStatus === '未着手') {
             methodSection.style.display = 'none';
         }
         
-        const methodTitle = document.createElement('div');
-        methodTitle.className = 'rcb-section-title';
-        methodTitle.textContent = '対応方法の選択';
+        const createTitleWithBar = (text) => {
+            const tDiv = document.createElement('div');
+            tDiv.style.cssText = 'font-size: 14px; font-weight: bold; color: #555; margin-bottom: 10px; display: flex; align-items: center;';
+            const bar = document.createElement('span');
+            bar.style.cssText = 'display: inline-block; width: 4px; height: 16px; background-color: #3498db; margin-right: 8px; border-radius: 2px; flex-shrink: 0;';
+            tDiv.appendChild(bar);
+            tDiv.appendChild(document.createTextNode(text));
+            return tDiv;
+        };
+
+        const methodTitle = createTitleWithBar('対応方法の選択');
         methodSection.appendChild(methodTitle);
   
+        // ★ 「案内選択」セクション（青バー付き独立タイトル ＋ コンパクトラジオボタンコンテナ）
+        const isPhoneNoAnswer = (currentStatus === CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || currentStatus === '電話不通');
+        const noticeTypeWrapper = document.createElement('div');
+        noticeTypeWrapper.style.cssText = 'width: 100%; margin-top: 20px;';
+        noticeTypeWrapper.style.display = (currentMethod === 'phone' && !isPhoneNoAnswer) ? 'block' : 'none';
+
+        const radioTitle = createTitleWithBar('案内選択');
+        noticeTypeWrapper.appendChild(radioTitle);
+
+        const noticeRadioGroup = document.createElement('div');
+        noticeRadioGroup.className = 'rcb-radio-group';
+        noticeRadioGroup.style.cssText = 'display: flex; gap: 15px; flex-wrap: wrap; margin-top: 5px;';
+
+        let options = [
+            { id: 'notice-type-confirm', value: 'confirm', label: '確定案内' },
+            { id: 'notice-type-no-answer', value: 'no_answer', label: '不通案内' },
+            { id: 'notice-type-withdraw', value: 'withdraw', label: '取下案内' }
+        ];
+
+        // ★ 管理ステータスが「電話不通」の場合は「不通案内」を除外し「確定案内」「取下案内」の2つのみにする
+        if (currentStatus === CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || currentStatus === '電話不通') {
+            options = [
+                { id: 'notice-type-confirm', value: 'confirm', label: '確定案内' },
+                { id: 'notice-type-withdraw', value: 'withdraw', label: '取下案内' }
+            ];
+        }
+
+        options.forEach(opt => {
+            const isSelected = (selectedNoticeMailType === opt.value);
+            const labelEl = document.createElement('label');
+            labelEl.className = 'rcb-radio-label' + (isSelected ? ' checked' : '');
+            labelEl.style.cssText = 'padding: 10px 18px; border-radius: 6px; cursor: pointer; user-select: none; font-size: 14px; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
+            
+            if (isSelected) {
+                labelEl.style.backgroundColor = '#e8f4fe';
+                labelEl.style.border = '1px solid #007bff';
+                labelEl.style.color = '#0056b3';
+            } else {
+                labelEl.style.backgroundColor = '#ffffff';
+                labelEl.style.border = '1px solid #ced4da';
+                labelEl.style.color = '#495057';
+            }
+
+            const radioInput = document.createElement('input');
+            radioInput.type = 'radio';
+            radioInput.name = 'rcb-notice-mail-type-select';
+            radioInput.value = opt.value;
+            if (isSelected) radioInput.checked = true;
+            radioInput.style.cssText = 'cursor: pointer; width: 16px; height: 16px; accent-color: #007bff;';
+
+            radioInput.onchange = () => {
+                selectedNoticeMailType = opt.value;
+                renderEditorView(); // モード切り替え再描画
+            };
+
+            labelEl.appendChild(radioInput);
+            labelEl.appendChild(document.createTextNode(opt.label));
+            noticeRadioGroup.appendChild(labelEl);
+        });
+
+        noticeTypeWrapper.appendChild(noticeRadioGroup);
+
         const radioGroup = document.createElement('div');
         radioGroup.className = 'rcb-radio-group';
-  
+
         const createRadio = (label, value, updateValue) => {
           const labelEl = document.createElement('label');
           labelEl.className = 'rcb-radio-label';
@@ -1443,9 +1840,12 @@
                 record[CONFIG.FIELDS.METHOD] = { value: updateValue };
             }
 
+            // 「案内選択」の表示・非表示連動
+            noticeTypeWrapper.style.display = (updateValue === 'phone' && !isPhoneNoAnswer) ? 'block' : 'none';
+
             // アイコン更新
             methodIconDiv.innerHTML = getMethodIconHtml(updateValue);
-            renderEditorView(); // 日時設定エリアを更新（表示）
+            renderEditorView(); // 日時設定エリアまたは案内メール編集エリアを更新（表示）
           };
   
           labelEl.appendChild(input);
@@ -1457,6 +1857,8 @@
         radioGroup.appendChild(createRadio('メールで対応', 'email', 'email'));
         
         methodSection.appendChild(radioGroup);
+        methodSection.appendChild(noticeTypeWrapper);
+
         container.appendChild(methodSection);
       }
   
@@ -2574,7 +2976,7 @@
             const mainActionRow = document.createElement('div');
             mainActionRow.style.cssText = 'display: flex; width: 100%; gap: 10px;';
 
-            // ★追加: 送信用メッセージ入力欄
+            // ★追加: 電話対応時の案内メール種別選択ラジオボタンと送信用メッセージ入力欄
             let sendMsgInput = null;
             if (!isSent && !isPhoneConfirmed && !isWithdrawn && !isWebWithdrawn && !isUrlWithdrawn && !isRead && !isTimeoutStatus && purpose !== '取消') {
                 const msgWrapper = document.createElement('div');
@@ -2586,7 +2988,7 @@
 
                 sendMsgInput = document.createElement('textarea');
                 sendMsgInput.className = 'rcb-modal-textarea';
-                sendMsgInput.style.cssText = 'width: 100%; height: 80px; margin: 0; padding: 10px; border: none; border-radius: 0; resize: vertical; box-sizing: border-box; outline: none; box-shadow: none; font-size: 14px;';
+                sendMsgInput.style.cssText = 'width: 100%; height: 120px; margin: 0; padding: 10px; border: none; border-radius: 0; resize: vertical; box-sizing: border-box; outline: none; box-shadow: none; font-size: 14px;';
                 
                 if (purpose === '初診' || purpose === '再診') {
                     sendMsgInput.value = `診療のご予約（初診/再診）についてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
@@ -2631,7 +3033,7 @@
             } else if (isTimeoutStatus) {
                 sendMailBtn.style.display = 'none'; // ボタンを非表示にする
             } else if ((currentStatus === CONFIG.STATUS_REQUIRE_PHONE_VALUE || (currentMethod === 'phone' && purpose !== '取消')) && !isReRequest) {
-                sendMailBtn.textContent = '電話対応を完了する';
+                sendMailBtn.textContent = '案内を送信する';
                 sendMailBtn.style.backgroundColor = '#27ae60'; // 緑色
                 sendMailBtn.onclick = () => processSendMail(currentDate, currentTime, sendMsgInput ? sendMsgInput.value : '');
             } else {
