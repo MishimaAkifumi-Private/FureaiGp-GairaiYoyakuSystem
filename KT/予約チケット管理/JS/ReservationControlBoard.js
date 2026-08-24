@@ -144,7 +144,7 @@
       }
 
       // URL生成ヘルパー (無効後の理由欄記録用)
-      const getConfirmUrlString = (prefix = 'URL: ') => {
+      const getConfirmUrlString = (prefix = '') => {
           if (!urlToken || purpose === '取消' || isWebWithdrawn || isUrlWithdrawn) return '';
           let url = `${CONFIG.CONFIRM_BASE_URL}?token=${urlToken}`;
           if (currentMethod === 'phone') url += '&mode=phone';
@@ -828,11 +828,22 @@
                 updateData[CONFIG.FIELDS.DEPT] = { value: dept };
             }
             
-            // メール送信先とメッセージがあれば理由欄に記録（取消はURL不要）
-            let reasonText = email ? `送信先: ${email}` : '';
-            if (finalMsg && finalMsg.trim()) {
-                reasonText = reasonText ? `${reasonText}\n【メッセージ】\n${finalMsg.trim()}` : `【メッセージ】\n${finalMsg.trim()}`;
+            // メール送信先、診療科、予約日時、メッセージがあれば理由欄に記録
+            let reasonParts = [];
+            if (email) {
+                reasonParts.push(`送信先: ${email}`);
             }
+            if (dept) {
+                reasonParts.push(`診療科: ${dept}`);
+            }
+            if (targetDate) {
+                const formattedDateTime = (targetDate && targetTime) ? `${targetDate} ${targetTime}` : targetDate;
+                reasonParts.push(`予約日時: ${formattedDateTime}`);
+            }
+            if (finalMsg && finalMsg.trim()) {
+                reasonParts.push(`【メッセージ】\n${finalMsg.trim()}`);
+            }
+            const reasonText = reasonParts.join('\n');
             const success = await updateRecord(recordId, updateData, [], false, false, reasonText);
 
             if (success) {
@@ -1065,11 +1076,28 @@
                 updatePayload['ReserveLock'] = { value: 'unlock' };
             }
 
-            // 送信成功後、ステータス等を更新 (メール送信先とメッセージを理由欄に記録)
-            let reasonText = `送信先: ${email}`;
-            if (optionalMsg && optionalMsg.trim()) {
-                reasonText += `\n【メッセージ】\n${optionalMsg.trim()}`;
+            // 送信成功後、ステータス等を更新 (メール送信先、URL先情報、メッセージ等を理由欄に記録)
+            let reasonParts = [`送信先: ${email}`];
+
+            // URL付メール送信時はURL先の情報（診療科、仮予約/確定日時、有効期限、URL）を経過情報に記載
+            if (targetUrl) {
+                if (dept) {
+                    reasonParts.push(`診療科: ${dept}`);
+                }
+                const dateLabel = (effectiveMethod === 'phone') ? '確定予約日時' : '仮予約日時';
+                const formattedDateTime = (targetDate && targetTime) ? `${targetDate} ${targetTime}` : (targetDate || '（日付未定）');
+                reasonParts.push(`${dateLabel}: ${formattedDateTime}`);
+                
+                if (selectedTimeout) {
+                    reasonParts.push(`有効期限: ${selectedTimeout}`);
+                }
+                reasonParts.push(`${targetUrl}`);
             }
+
+            if (optionalMsg && optionalMsg.trim()) {
+                reasonParts.push(`【メッセージ】\n${optionalMsg.trim()}`);
+            }
+            const reasonText = reasonParts.join('\n');
             
             const success = await updateRecord(recordId, updatePayload, [], false, false, reasonText);
 
@@ -2024,8 +2052,22 @@
                     if (respStatus !== 200 && respStatus !== 204) throw new Error(`Email API Error: ${respStatus} ${respBody}`);
                 }
 
-                // レコード更新 (取下げ理由とURLを記録)
-                const reasonText = actionReason.trim() + (getConfirmUrlString() ? '\n' + getConfirmUrlString() : '');
+                // レコード更新 (取下げ理由、診療科、日時、URLを記録)
+                let reasonParts = [actionReason.trim()];
+                const deptVal = record[CONFIG.FIELDS.DEPT]?.value || '';
+                if (deptVal) {
+                    reasonParts.push(`診療科: ${deptVal}`);
+                }
+                if (currentDate) {
+                    const dateLabel = (currentMethod === 'phone') ? '確定予約日時' : '仮予約日時';
+                    const formattedDateTime = (currentDate && currentTime) ? `${currentDate} ${currentTime}` : currentDate;
+                    reasonParts.push(`${dateLabel}: ${formattedDateTime}`);
+                }
+                const confirmUrlStr = getConfirmUrlString();
+                if (confirmUrlStr) {
+                    reasonParts.push(confirmUrlStr);
+                }
+                const reasonText = reasonParts.join('\n');
                 await updateRecord(recordId, payload, [], false, false, reasonText);
 
                 await showDialog('予約を取り下げました。', 'success');
@@ -3589,7 +3631,7 @@
                     payload['人物メモ'] = { value: evalData.memo };
                 }
                 
-                const confirmUrlStr = urlToken ? `\nURL: ${CONFIG.CONFIRM_BASE_URL}?token=${urlToken}${currentMethod === 'phone' ? '&mode=phone' : ''}` : '';
+                const confirmUrlStr = urlToken ? `\n${CONFIG.CONFIRM_BASE_URL}?token=${urlToken}${currentMethod === 'phone' ? '&mode=phone' : ''}` : '';
                 const reasonText = actionReason.trim() + confirmUrlStr;
                 const success = await updateRecord(recordId, payload, [], false, false, reasonText);
                 if (success) location.reload();
@@ -3759,7 +3801,7 @@
                             const cm = latestRecord[CONFIG.FIELDS.METHOD]?.value || '';
                             let confirmUrlStr = '';
                             if (tk) {
-                                confirmUrlStr = `URL: ${CONFIG.CONFIRM_BASE_URL}?token=${tk}`;
+                                confirmUrlStr = `${CONFIG.CONFIRM_BASE_URL}?token=${tk}`;
                                 if (cm === 'phone') confirmUrlStr += '&mode=phone';
                             }
                             // タイムアウト確定 -> ステータス更新実行

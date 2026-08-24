@@ -398,7 +398,7 @@
                     const tokenVal = getVal(CONFIG.URL_TOKEN_FIELD);
                     let confirmUrlStr = '';
                     if (tokenVal) {
-                        confirmUrlStr = `URL: ${CONFIG.CONFIRM_BASE_URL}?token=${tokenVal}`;
+                        confirmUrlStr = `${CONFIG.CONFIRM_BASE_URL}?token=${tokenVal}`;
                         if (getVal(CONFIG.METHOD_FIELD) === 'phone') confirmUrlStr += '&mode=phone';
                     }
 

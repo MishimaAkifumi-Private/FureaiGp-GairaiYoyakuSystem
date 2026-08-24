@@ -415,11 +415,36 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
         const nowISO = new Date().toISOString();
 
         const currentHistories = record["経過情報"]?.value || [];
+        let confirmUrlStr = '';
+        if (recordUrlToken || token) {
+            const CONFIRM_BASE_URL = 'https://confirmreservation-yoslzibmlq-uc.a.run.app/';
+            confirmUrlStr = `${CONFIRM_BASE_URL}?token=${recordUrlToken || token}`;
+            if (methodVal === 'phone' || methodVal === '電話対応' || mode === 'phone') {
+                confirmUrlStr += '&mode=phone';
+            }
+        }
+        
+        let cancelReasonParts = [];
+        const deptVal = record["診療科"]?.value || "";
+        if (deptVal) {
+            cancelReasonParts.push(`診療科: ${deptVal}`);
+        }
+        const resDateVal = record["確定予約日"]?.value || "";
+        const resTimeVal = record["確定予約時刻"]?.value || "";
+        const formattedDateTime = (resDateVal && resTimeVal) ? `${resDateVal} ${resTimeVal}` : (resDateVal || "（日付未定）");
+        const dateLabel = (methodVal === 'phone' || mode === 'phone') ? '確定予約日時' : '仮予約日時';
+        cancelReasonParts.push(`${dateLabel}: ${formattedDateTime}`);
+
+        if (confirmUrlStr) {
+            cancelReasonParts.push(`${confirmUrlStr}`);
+        }
+
         currentHistories.push({
             value: {
                 "経過情報_日時": { value: getJSTFormattedDate() },
                 "経過情報_担当者": { value: currentStaff },
-                "経過情報_管理状態": { value: "URL取下" }
+                "経過情報_管理状態": { value: "URL取下" },
+                "経過情報_理由": { value: cancelReasonParts.join('\n') }
             }
         });
 
@@ -704,19 +729,33 @@ exports.confirmReservation = functions.https.onRequest(async (req, res) => {
             let confirmUrlStr = '';
             if (recordUrlToken || token) {
                 const CONFIRM_BASE_URL = 'https://confirmreservation-yoslzibmlq-uc.a.run.app/';
-                confirmUrlStr = `URL: ${CONFIRM_BASE_URL}?token=${recordUrlToken || token}`;
+                confirmUrlStr = `${CONFIRM_BASE_URL}?token=${recordUrlToken || token}`;
                 if (methodVal === 'phone' || methodVal === '電話対応' || mode === 'phone') {
                     confirmUrlStr += '&mode=phone';
                 }
             }
+
+            let readReasonParts = [];
+            const deptVal = record["診療科"]?.value || "";
+            if (deptVal) {
+                readReasonParts.push(`診療科: ${deptVal}`);
+            }
+            const resDateVal = record["確定予約日"]?.value || "";
+            const resTimeVal = record["確定予約時刻"]?.value || "";
+            const formattedDateTime = (resDateVal && resTimeVal) ? `${resDateVal} ${resTimeVal}` : (resDateVal || "（日付未定）");
+            const dateLabel = (methodVal === 'phone' || mode === 'phone') ? '確定予約日時' : '仮予約日時';
+            readReasonParts.push(`${dateLabel}: ${formattedDateTime}`);
+
+            if (confirmUrlStr) {
+                readReasonParts.push(`${confirmUrlStr}`);
+            }
+
             const newHistory = {
                 "経過情報_日時": { value: getJSTFormattedDate() },
                 "経過情報_担当者": { value: currentStaff },
-                "経過情報_管理状態": { value: "メール既読" }
+                "経過情報_管理状態": { value: "メール既読" },
+                "経過情報_理由": { value: readReasonParts.join('\n') }
             };
-            if (confirmUrlStr) {
-                newHistory["経過情報_理由"] = { value: confirmUrlStr };
-            }
             currentHistories.push({ value: newHistory });
             updateBody.record["経過情報"] = { value: currentHistories };
         }
