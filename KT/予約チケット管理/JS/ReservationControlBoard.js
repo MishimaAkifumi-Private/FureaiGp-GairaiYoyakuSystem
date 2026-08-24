@@ -828,10 +828,10 @@
                 updateData[CONFIG.FIELDS.DEPT] = { value: dept };
             }
             
-            // メール送信先とカスタムメッセージがあれば理由欄に記録（取消はURL不要）
-            let reasonText = email || '';
-            if (finalMsg && finalMsg !== defaultCancelMsg) {
-                reasonText = reasonText ? `${reasonText}\n【カスタムメッセージ】\n${finalMsg}` : `【カスタムメッセージ】\n${finalMsg}`;
+            // メール送信先とメッセージがあれば理由欄に記録（取消はURL不要）
+            let reasonText = email ? `送信先: ${email}` : '';
+            if (finalMsg && finalMsg.trim()) {
+                reasonText = reasonText ? `${reasonText}\n【メッセージ】\n${finalMsg.trim()}` : `【メッセージ】\n${finalMsg.trim()}`;
             }
             const success = await updateRecord(recordId, updateData, [], false, false, reasonText);
 
@@ -861,7 +861,7 @@
           }
 
           // タイムアウト値取得 (プルダウンがあれば取得、なければデフォルト)
-          const timeoutSelect = container.querySelector('select');
+          const timeoutSelect = container.querySelector('.rcb-no-answer-timeout-select, .rcb-timeout-select, select');
           const selectedTimeout = timeoutSelect ? timeoutSelect.value : null;
 
           // 1メール1URLの原則: 新規メール送信ごとに常に新しいURLトークンを発行（旧メールのURLは自動的に失効）
@@ -988,7 +988,7 @@
               if (selectedNoticeMailType === 'no_answer') {
                   targetStatus = CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || '電話不通';
               } else if (selectedNoticeMailType === 'withdraw') {
-                  targetStatus = CONFIG.STATUS_WITHDRAWN_VALUE || 'スタッフ取下';
+                  targetStatus = '強制終了';
               }
           }
 
@@ -1024,10 +1024,17 @@
                 targetUrl += '&mode=phone';
             }
 
+            let sendType = purpose;
+            if (isNonConfirmNotice) {
+                sendType = (selectedNoticeMailType === 'no_answer') ? '不通案内' : '取下案内';
+            }
+
             const payload = {
               to: email,
               name: fullName,
-              type: purpose,
+              subject: subject,
+              type: sendType,
+              message: optionalMsg,
               reservationDate: targetDate,
               reservationTime: targetTime,
               department: dept,
@@ -1054,25 +1061,30 @@
             if (effectiveMethod === 'phone') {
                 updatePayload[CONFIG.FIELDS.PHONE_CONFIRM] = { value: new Date().toISOString() };
             }
-
-            // 送信成功後、ステータス等を更新 (メール送信先を理由欄に記録)
-            let defaultMsg = `下記より内容をご確認ください。`;
-            if (purpose === '初診' || purpose === '再診') {
-                defaultMsg = `診療のご予約（初診/再診）についてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
-            } else if (purpose === '変更') {
-                defaultMsg = `診療のご予約（変更）につきましてお知らせします。\nご予約情報のボタンをクリックして内容をご確認ください。`;
+            if (targetStatus === '強制終了') {
+                updatePayload['ReserveLock'] = { value: 'unlock' };
             }
 
+            // 送信成功後、ステータス等を更新 (メール送信先とメッセージを理由欄に記録)
             let reasonText = `送信先: ${email}`;
-            if (optionalMsg && optionalMsg.trim() !== defaultMsg.trim()) {
-                reasonText += `\n【カスタムメッセージ】\n${optionalMsg}`;
+            if (optionalMsg && optionalMsg.trim()) {
+                reasonText += `\n【メッセージ】\n${optionalMsg.trim()}`;
             }
             
             const success = await updateRecord(recordId, updatePayload, [], false, false, reasonText);
 
             if (success) {
                 hideSpinner();
-                const successMsg = (effectiveMethod === 'phone') ? '電話にて調整した予約日時についてメールを送信しました' : 'メールを送信しました。';
+                let successMsg = 'メールを送信しました。';
+                if (effectiveMethod === 'phone') {
+                    if (selectedNoticeMailType === 'no_answer') {
+                        successMsg = '電話不通案内メールを送信しました。';
+                    } else if (selectedNoticeMailType === 'withdraw') {
+                        successMsg = '取下案内メールを送信し、チケットを強制終了しました。';
+                    } else {
+                        successMsg = '電話にて調整した予約日時についてメールを送信しました。';
+                    }
+                }
                 await showDialog(successMsg, 'success');
                 
                 // 電話対応の場合は送信完了後に特徴ダイアログを表示
@@ -1083,21 +1095,29 @@
                         '電話対応お疲れ様でした。<br>申込者の特徴を入力してください。' : 
                         'お疲れ様でした。<br>必要に応じてメモを入力してください。';
 
-                    // 不通案内・取下案内時は「電話が繫がりにくい」を自動付与・チェックON
+                    // 不通案内・取下案内時は「電話が繫がりにくい」を自動付与
                     let initialCommon = Array.isArray(currentCommonEval) ? [...currentCommonEval] : [];
-                    if (!isConfirmNotice && !initialCommon.includes('電話が繫がりにくい')) {
+                    if (!isConfirmNotice && !initialCommon.includes('電話が繫がりにくい') && !initialCommon.includes('電話が繋がりにくい')) {
                         initialCommon.push('電話が繫がりにくい');
                     }
 
-                    const initialData = { common: initialCommon, memo: currentMemo };
-                    const evalData = await showEvaluationDialog(evalMessage, '申込者の特徴', evalMethod, initialData, null, 'OK', null);
-                    
-                    if (evalData) {
+                    if (selectedNoticeMailType === 'no_answer' || selectedNoticeMailType === 'withdraw') {
+                        // ★ 不通案内・取下案内の場合はダイアログを表示せず、自動的に「電話が繫がりにくい」のみ内部登録して進める
                         const evalPayload = {
-                            '共通評価': { value: evalData.common },
-                            '人物メモ': { value: evalData.memo }
+                            '共通評価': { value: initialCommon }
                         };
                         await updateRecord(recordId, evalPayload, [], false, true); // ステータス履歴には残さない
+                    } else {
+                        const initialData = { common: initialCommon, memo: currentMemo };
+                        const evalData = await showEvaluationDialog(evalMessage, '申込者の特徴', evalMethod, initialData, null, 'OK', null);
+                        
+                        if (evalData) {
+                            const evalPayload = {
+                                '共通評価': { value: evalData.common },
+                                '人物メモ': { value: evalData.memo }
+                            };
+                            await updateRecord(recordId, evalPayload, [], false, true); // ステータス履歴には残さない
+                        }
                     }
                 }
 
@@ -1181,17 +1201,18 @@
 
             // タイムアウト超過判定
             let isTimeoutDone = false;
+            let timeoutMs = 24 * 60 * 60 * 1000; // デフォルト24時間
             const sendDateVal = record[CONFIG.FIELDS.SEND_DATE]?.value;
             const timeoutVal = record[CONFIG.FIELDS.TIMEOUT]?.value;
+            if (timeoutVal) {
+                if (timeoutVal.includes('1分')) timeoutMs = 1 * 60 * 1000;
+                else if (timeoutVal.includes('12時間') || timeoutVal.includes('半日')) timeoutMs = 12 * 60 * 60 * 1000;
+                else if (timeoutVal.includes('36時間') || timeoutVal.includes('1.5日')) timeoutMs = 36 * 60 * 60 * 1000;
+                else if (timeoutVal.includes('48時間') || timeoutVal.includes('2日')) timeoutMs = 48 * 60 * 60 * 1000;
+                else if (timeoutVal.includes('24時間') || timeoutVal.includes('1日')) timeoutMs = 24 * 60 * 60 * 1000;
+            }
             if (sendDateVal) {
                 const sendTime = new Date(sendDateVal).getTime();
-                let timeoutMs = 24 * 60 * 60 * 1000;
-                if (timeoutVal) {
-                    if (timeoutVal.includes('12時間') || timeoutVal.includes('半日')) timeoutMs = 12 * 60 * 60 * 1000;
-                    else if (timeoutVal.includes('36時間') || timeoutVal.includes('1.5日')) timeoutMs = 36 * 60 * 60 * 1000;
-                    else if (timeoutVal.includes('48時間') || timeoutVal.includes('2日')) timeoutMs = 48 * 60 * 60 * 1000;
-                    else if (timeoutVal.includes('24時間') || timeoutVal.includes('1日')) timeoutMs = 24 * 60 * 60 * 1000;
-                }
                 if (Date.now() - sendTime >= timeoutMs) {
                     isTimeoutDone = true;
                 }
@@ -1200,6 +1221,12 @@
             const noticeMsgSection = document.createElement('div');
             noticeMsgSection.className = 'rcb-section rcb-notice-msg-section';
             noticeMsgSection.style.marginTop = '10px';
+
+            // 既存のカウントダウンタイマーがあればクリア
+            if (window._rcbPhoneCountTimer) {
+                clearInterval(window._rcbPhoneCountTimer);
+                window._rcbPhoneCountTimer = null;
+            }
 
             if (!isTimeoutDone) {
                 // --- A. タイムアウト前: 連絡待ち画面 ---
@@ -1214,12 +1241,51 @@
                 msgP.style.cssText = 'margin: 0; font-size: 14.5px; color: #0c5460; line-height: 1.6; font-weight: bold;';
                 msgP.innerHTML = '依頼者（患者）からの折り返し連絡を待っている状態です。<br>連絡が来たら下のボタンを押してください。';
 
+                // ★ 折り返し期限情報＆リアルタイムカウントダウン表示
+                if (sendDateVal) {
+                    const sendTime = new Date(sendDateVal).getTime();
+                    const deadlineTime = new Date(sendTime + timeoutMs);
+                    const deadlineStr = `${String(deadlineTime.getHours()).padStart(2, '0')}:${String(deadlineTime.getMinutes()).padStart(2, '0')}:${String(deadlineTime.getSeconds()).padStart(2, '0')}`;
+                    
+                    const timeInfoDiv = document.createElement('div');
+                    timeInfoDiv.style.cssText = 'font-size: 13.5px; color: #0c5460; background: #e3f2fd; padding: 10px 14px; border-radius: 6px; border-left: 4px solid #007bff; width: 100%; box-sizing: border-box; font-weight: bold;';
+                    
+                    const updateTimeDisplay = (isInitial = false) => {
+                        const now = Date.now();
+                        const remMs = (sendTime + timeoutMs) - now;
+                        const remSec = Math.max(0, Math.floor(remMs / 1000));
+                        if (remSec <= 0) {
+                            if (window._rcbPhoneCountTimer) {
+                                clearInterval(window._rcbPhoneCountTimer);
+                                window._rcbPhoneCountTimer = null;
+                            }
+                            if (!isInitial) {
+                                // タイマー到達時のみ非同期で再描画して「取下案内の送信」画面へ切り替え
+                                setTimeout(() => { renderEditorView(); }, 50);
+                            }
+                            return;
+                        }
+                        const m = Math.floor(remSec / 60);
+                        const s = remSec % 60;
+                        const remText = (m > 0) ? `${m}分${s}秒` : `${s}秒`;
+                        timeInfoDiv.innerHTML = `<span>⏳ 折り返し待ち期限: <strong>${timeoutVal || '24時間'}</strong>（期限: ${deadlineStr} / 残り約 ${remText}）</span>`;
+                    };
+                    
+                    updateTimeDisplay(true);
+                    window._rcbPhoneCountTimer = setInterval(() => updateTimeDisplay(false), 1000);
+                    waitCard.appendChild(timeInfoDiv);
+                }
+
                 const confirmActionBtn = document.createElement('button');
                 confirmActionBtn.className = 'rcb-btn-save';
                 confirmActionBtn.textContent = '確定案内をする';
                 confirmActionBtn.style.cssText = 'padding: 12px 28px; font-size: 16px; background-color: #007bff; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 5px;';
 
                 confirmActionBtn.onclick = () => {
+                    if (window._rcbPhoneCountTimer) {
+                        clearInterval(window._rcbPhoneCountTimer);
+                        window._rcbPhoneCountTimer = null;
+                    }
                     isSelectingConfirmDate = true;
                     selectedNoticeMailType = 'confirm';
                     noticeMsgSection.remove();
@@ -1233,6 +1299,10 @@
                 return;
             } else {
                 // --- B. タイムアウト経過後: 患者からの連絡がきませんでした ＋ 取下案内の送信画面 ---
+                if (window._rcbPhoneCountTimer) {
+                    clearInterval(window._rcbPhoneCountTimer);
+                    window._rcbPhoneCountTimer = null;
+                }
                 selectedNoticeMailType = 'withdraw';
 
                 const alertBox = document.createElement('div');
@@ -1315,13 +1385,14 @@
                 timeoutWrapper.style.cssText = 'display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: bold; color: #495057; width: 100%; margin-bottom: 5px;';
                 
                 const timeoutLabel = document.createElement('span');
-                timeoutLabel.textContent = '折り返し待ち期限:';
+                timeoutLabel.textContent = '依頼者からの連絡を待つ期限:';
                 
                 noAnswerTimeoutSelect = document.createElement('select');
                 noAnswerTimeoutSelect.className = 'rcb-no-answer-timeout-select';
                 noAnswerTimeoutSelect.style.cssText = 'padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13.5px; font-weight: bold; color: #333; background: #fff; cursor: pointer;';
                 
                 const timeoutOptions = [
+                    { label: '1分(テスト用)', value: '1分' },
                     { label: '12時間 (半日)', value: '12時間' },
                     { label: '24時間 (1日)', value: '24時間' },
                     { label: '36時間 (1.5日)', value: '36時間' },
@@ -1700,7 +1771,8 @@
               const sendTime = new Date(sendDateVal).getTime();
               let timeoutMs = 24 * 60 * 60 * 1000; // デフォルト24時間
               if (timeoutVal) {
-                  if (timeoutVal.includes('12時間') || timeoutVal.includes('半日')) timeoutMs = 12 * 60 * 60 * 1000;
+                  if (timeoutVal.includes('1分')) timeoutMs = 1 * 60 * 1000;
+                  else if (timeoutVal.includes('12時間') || timeoutVal.includes('半日')) timeoutMs = 12 * 60 * 60 * 1000;
                   else if (timeoutVal.includes('36時間') || timeoutVal.includes('1.5日')) timeoutMs = 36 * 60 * 60 * 1000;
                   else if (timeoutVal.includes('48時間') || timeoutVal.includes('2日')) timeoutMs = 48 * 60 * 60 * 1000;
                   else if (timeoutVal.includes('24時間') || timeoutVal.includes('1日')) timeoutMs = 24 * 60 * 60 * 1000;
@@ -1739,6 +1811,11 @@
         const noticeTypeWrapper = document.createElement('div');
         noticeTypeWrapper.style.cssText = 'width: 100%; margin-top: 20px;';
         noticeTypeWrapper.style.display = (currentMethod === 'phone' && !isPhoneNoAnswer) ? 'block' : 'none';
+
+        const noticeGuideText = document.createElement('div');
+        noticeGuideText.style.cssText = 'font-size: 13px; color: #495057; font-weight: bold; margin-bottom: 12px; line-height: 1.5;';
+        noticeGuideText.textContent = '依頼者と電話で調整し、以下のいずれかの案内にするか選択してください。';
+        noticeTypeWrapper.appendChild(noticeGuideText);
 
         const radioTitle = createTitleWithBar('案内選択');
         noticeTypeWrapper.appendChild(radioTitle);
@@ -3095,7 +3172,7 @@
                     timeoutSelect.innerHTML = '';
                     
                     const allTimeOptions = [
-                        { label: '1分間', min: 1 },
+                        { label: '1分(テスト用)', min: 1 },
                         { label: '15分間', min: 15 },
                         { label: '30分間', min: 30 },
                         { label: '45分間', min: 45 },
@@ -3129,7 +3206,7 @@
                         const optVal = optObj.label;
                         let displayText = optVal;
                         
-                        if (optObj.min !== null) {
+                        if (optObj.min !== null && !optVal.includes('テスト用')) {
                             const targetTime = new Date(now.getTime() + optObj.min * 60 * 1000);
                             const targetH = String(targetTime.getHours()).padStart(2, '0');
                             const targetM = String(targetTime.getMinutes()).padStart(2, '0');
@@ -3488,8 +3565,8 @@
             
             forceEndBtn.onclick = async () => {
                 const reminderCheckboxes = [
-                    'この操作をおこなうことで患者側を混乱させることはありませんか？',
-                    '電子カルテ側に関連する予約が入っている場合は事前に解除していますか？'
+                    'この操作をおこなうことで患者を混乱させることはありません',
+                    '電子カルテ側でこの予約に関連する予約を事前に解除しました（予約が入っている場合のみ）'
                 ];
                 const actionReason = await showDialog('このチケットを強制終了します。\n本当によろしいですか？\n強制終了の理由を入力してください。', 'prompt', '強制終了の確認', '強制終了の理由（必須）', '強制終了する', 'キャンセル', reminderCheckboxes);
                 if (actionReason === null) return;
@@ -3540,8 +3617,8 @@
         } else {
             resetBtn.onclick = async () => {
                 const reminderCheckboxes = [
-                    'この操作をおこなうことで患者側を混乱させることはありませんか？',
-                    '電子カルテ側に関連する予約が入っている場合は事前に解除していますか？'
+                    'この操作をおこなうことで患者側を混乱させることはありません',
+                    '電子カルテ側に関連する予約を事前に解除しています（予約が入っている場合のみ）'
                 ];
                 const isResetOk = await showDialog('このレコードを初期状態にリセットしますか？\n入力された予約日時などのデータや経過情報もすべて消去されます。', 'confirm', 'リセット確認', '', 'リセットする', 'キャンセル', reminderCheckboxes);
                 if (!isResetOk) return;
@@ -3611,7 +3688,7 @@
 
     // ポーリング管理用
     let pollingTimer = null;
-    const POLLING_INTERVAL = 10000; // 10秒間隔
+    const POLLING_INTERVAL = 20000; // 20秒間隔
 
     // ポーリング開始関数
     const startPolling = (recordId, initialRecord) => {
@@ -3693,6 +3770,29 @@
                             // 更新通知を出してリロードを促す
                             latestStatus = CONFIG.STATUS_TIMEOUT_VALUE; // ステータスを更新後のものとして扱う
                             // ※ここでリビジョンが変わるため、下のif文には入らず、強制的に通知を出すフローへ
+                        }
+                    }
+                }
+
+                // 2. 電話不通時のタイムアウト自動検知（連絡待ち画面を表示中の場合、自動で取下案内に切り替え）
+                if (latestStatus === CONFIG.STATUS_PHONE_NO_ANSWER_VALUE || latestStatus === '電話不通') {
+                    const sendDateVal = latestRecord[CONFIG.FIELDS.SEND_DATE]?.value;
+                    const timeoutVal = latestRecord[CONFIG.FIELDS.TIMEOUT]?.value;
+                    if (sendDateVal) {
+                        const sendTime = new Date(sendDateVal).getTime();
+                        let timeoutMs = 24 * 60 * 60 * 1000;
+                        if (timeoutVal) {
+                            if (timeoutVal.includes('1分')) timeoutMs = 1 * 60 * 1000;
+                            else if (timeoutVal.includes('12時間') || timeoutVal.includes('半日')) timeoutMs = 12 * 60 * 60 * 1000;
+                            else if (timeoutVal.includes('36時間') || timeoutVal.includes('1.5日')) timeoutMs = 36 * 60 * 60 * 1000;
+                            else if (timeoutVal.includes('48時間') || timeoutVal.includes('2日')) timeoutMs = 48 * 60 * 60 * 1000;
+                            else if (timeoutVal.includes('24時間') || timeoutVal.includes('1日')) timeoutMs = 24 * 60 * 60 * 1000;
+                        }
+                        if (Date.now() - sendTime >= timeoutMs) {
+                            const waitCard = document.querySelector('.rcb-notice-msg-section');
+                            if (waitCard && waitCard.textContent.includes('連絡待ち')) {
+                                location.reload();
+                            }
                         }
                     }
                 }

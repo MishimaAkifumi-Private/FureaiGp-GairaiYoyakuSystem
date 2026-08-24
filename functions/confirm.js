@@ -120,32 +120,44 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
     }
 
     const recipientName = data.name;
-    const targetUrl = data.url || "(URL生成未定)";
-    let subject = "";
+    const targetUrl = data.url || "";
+    const centerName = data.centerName || "ふれあいグループ 湘南東部病院予約センター";
+    const phoneNumber = data.phoneNumber || "";
+    let subject = data.subject || "";
     let htmlBody = "";
     
     const headerHtml = `<p>${recipientName} 様</p><p>当病院をご利用いただきありがとうございます。</p>`;
-    const footerHtml = `<br><p style="font-size: 12px; color: #777;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p><hr><p>湘南東部病院 予約センター</p>`;
+    const phoneHtml = phoneNumber ? `<br>TEL: ${phoneNumber}` : "";
+    const footerHtml = `<br><p style="font-size: 12px; color: #777;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p><hr><p>${centerName}${phoneHtml}</p>`;
+
+    // ボタン表示用HTML (インラインスタイル) - targetUrl がある場合のみ生成
+    const btnHtml = targetUrl ? `
+      <div style="margin: 20px 0;">
+        <a href="${targetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #005a9e; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold;">ご予約情報</a>
+      </div>
+      <p style="font-size: 12px; color: #777;">※上記ボタンがクリックできない場合は、以下のURLをご確認ください。<br><a href="${targetUrl}">${targetUrl}</a></p>
+    ` : "";
+
+    const userMessage = (data.message || "").trim();
+    const userMessageHtml = userMessage ? `<p>${userMessage.replace(/\n/g, '<br>')}</p>` : "";
 
     switch (data.type) {
       case "初診":
-        subject = "【予約確定】診療のご予約（初診/再診）について";
+        if (!subject) subject = "【予約確定】診療のご予約（初診/再診）について";
         htmlBody = `
           ${headerHtml}
-          <p>診療のご予約（初診/再診）につきまして確定しましたので<br>
-          以下のURLをクリックしてご確認ください。</p>
-          <p><a href="${targetUrl}">${targetUrl}</a></p>
+          ${userMessageHtml}
+          ${targetUrl ? `<p>診療のご予約（初診/再診）につきましてお知らせします。<br>以下のボタンをクリックして内容をご確認ください。</p>${btnHtml}` : ''}
           ${footerHtml}
         `;
         break;
 
       case "変更":
-        subject = "【予約変更】診療予約の変更について";
+        if (!subject) subject = "【予約変更】診療予約の変更について";
         htmlBody = `
           ${headerHtml}
-          <p>診療のご予約（変更）につきまして確定しましたので<br>
-          以下のURLをクリックしてご確認ください。</p>
-          <p><a href="${targetUrl}">${targetUrl}</a></p>
+          ${userMessageHtml}
+          ${targetUrl ? `<p>診療のご予約（変更）につきましてお知らせします。<br>以下のボタンをクリックして内容をご確認ください。</p>${btnHtml}` : ''}
           ${footerHtml}
         `;
         break;

@@ -120,10 +120,10 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
     }
 
     const recipientName = data.name;
-    const targetUrl = data.url || "(URL生成未定)";
+    const targetUrl = data.url || "";
     const centerName = data.centerName || "ふれあいグループ 湘南東部病院予約センター";
     const phoneNumber = data.phoneNumber || "";
-    let subject = "";
+    let subject = data.subject || "";
     let htmlBody = "";
     let textBody = ""; // テキストメール用変数を追加
     
@@ -131,51 +131,54 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
     const phoneHtml = phoneNumber ? `<br>TEL: ${phoneNumber}` : "";
     const footerHtml = `<br><p style="font-size: 12px; color: #777;">※本メールは送信専用アドレスから配信されています。<br>ご返信いただいてもお答えできませんのでご了承ください。</p><hr><p>${centerName}${phoneHtml}</p>`;
 
-    // ボタン表示用HTML (インラインスタイル)
-    const btnHtml = `
+    // ボタン表示用HTML (インラインスタイル) - targetUrl がある場合のみ生成
+    const btnHtml = targetUrl ? `
       <div style="margin: 20px 0;">
         <a href="${targetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #005a9e; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold;">ご予約情報</a>
       </div>
       <p style="font-size: 12px; color: #777;">※上記ボタンがクリックできない場合は、以下のURLをご確認ください。<br><a href="${targetUrl}">${targetUrl}</a></p>
-    `;
+    ` : "";
 
     // テキストメール用ヘッダー・フッター
     const headerText = `${recipientName} 様\n\n当病院をご利用いただきありがとうございます。\n`;
     const phoneText = phoneNumber ? `\nTEL: ${phoneNumber}` : "";
     const footerText = `\n\n※本メールは送信専用アドレスから配信されています。\nご返信いただいてもお答えできませんのでご了承ください。\n--------------------------------------------------\n${centerName}${phoneText}`;
+    const urlText = targetUrl ? `\n以下のURLより内容をご確認ください。\n\n${targetUrl}` : "";
+
+    const userMessage = (data.message || "").trim();
+    const userMessageHtml = userMessage ? `<p>${userMessage.replace(/\n/g, '<br>')}</p>` : "";
+    const userMessageText = userMessage ? `\n${userMessage}\n` : "";
 
     switch (data.type) {
       case "初診":
-        subject = "【予約確定】診療のご予約（初診/再診）について";
+        if (!subject) subject = "【予約確定】診療のご予約（初診/再診）について";
         htmlBody = `
-          ${headerHtml} 
-          <p>診療のご予約（初診/再診）についてお知らせします。<br>
-          以下のボタンをクリックして内容をご確認ください。</p>
-          ${btnHtml}
+          ${headerHtml}
+          ${userMessageHtml}
+          ${targetUrl ? `<p>診療のご予約（初診/再診）についてお知らせします。<br>以下のボタンをクリックして内容をご確認ください。</p>${btnHtml}` : ''}
           ${footerHtml}
         `;
-        textBody = `${headerText}\n診療のご予約（初診/再診）についてお知らせします。\n以下のURLより内容をご確認ください。\n\n${targetUrl}${footerText}`;
+        textBody = `${headerText}${userMessageText}${targetUrl ? `\n診療のご予約（初診/再診）についてお知らせします。${urlText}` : ''}${footerText}`;
         break;
 
       case "変更":
-        subject = "【予約変更】診療予約の変更について";
+        if (!subject) subject = "【予約変更】診療予約の変更について";
         htmlBody = `
           ${headerHtml}
-          <p>診療のご予約（変更）につきましてお知らせします。<br>
-          以下のボタンをクリックして内容をご確認ください。</p>
-          ${btnHtml}
+          ${userMessageHtml}
+          ${targetUrl ? `<p>診療のご予約（変更）につきましてお知らせします。<br>以下のボタンをクリックして内容をご確認ください。</p>${btnHtml}` : ''}
           ${footerHtml}
         `;
-        textBody = `${headerText}\n診療のご予約（変更）につきましてお知らせします。\n以下のURLより内容をご確認ください。\n\n${targetUrl}${footerText}`;
+        textBody = `${headerText}${userMessageText}${targetUrl ? `\n診療のご予約（変更）につきましてお知らせします。${urlText}` : ''}${footerText}`;
         break;
 
       case "取消":
         const resDate = data.reservationDate || "（日付未定）";
         const resTime = data.reservationTime || "";
         const resDept = data.department || "（診療科不明）";
-        const resMessage = (data.message || "").trim() || "以下の通り、ご予約を取消しさせていただきました。";
+        const resMessage = userMessage || "以下の通り、ご予約を取消しさせていただきました。";
 
-        subject = "【予約取消】診療予約の取り消しについて";
+        if (!subject) subject = "【予約取消】診療予約の取り消しについて";
         htmlBody = `
           ${headerHtml}
           <p>${resMessage.replace(/\n/g, '<br>')}</p>
@@ -190,16 +193,40 @@ exports.sendReservationMail = functions.https.onRequest(async (req, res) => {
         textBody = `${headerText}\n${resMessage}\n\n[取り消したご予約]\n日時: ${resDate} ${resTime}\n診療科: ${resDept}\n\n本メールは手続き完了の通知のみとなります。\n別途お手続きは不要です。\n\nお大事になさってください。${footerText}`;
         break;
 
-      default:
-        console.warn(`[WARN] 未定義の用件タイプ: ${data.type}`);
-        subject = `【お知らせ】${centerName}からのご連絡`;
+      case "不通案内":
+      case "phone_no_answer":
+        if (!subject) subject = "【お知らせ】外来予約センターからのご連絡";
+        const noAnswerMsg = userMessage || "何度かお電話を差し上げましたが、ご都合が合わなかったようでお繋ぎできませんでした。<br>お忙しいところ恐れ入りますが、外来予約センターまで折り返しご連絡をいただけますでしょうか。";
         htmlBody = `
           ${headerHtml}
-          <p>下記より内容をご確認ください。</p>
+          <p>${noAnswerMsg.replace(/\n/g, '<br>')}</p>
+          ${footerHtml}
+        `;
+        textBody = `${headerText}\n${noAnswerMsg.replace(/<br>/g, '\n')}${footerText}`;
+        break;
+
+      case "取下案内":
+      case "withdraw":
+        if (!subject) subject = "【お知らせ】ご依頼の取り下げ（見送り）について";
+        const withdrawMsg = userMessage || "度々お電話にてご連絡を差し上げましたが、ご都合が合わなかったようでお繋ぎできませんでした。<br>誠に勝手ながら、今回のご依頼（お申し込み）につきましては、一旦取り下げ（見送り）の扱いとさせていただきます。";
+        htmlBody = `
+          ${headerHtml}
+          <p>${withdrawMsg.replace(/\n/g, '<br>')}</p>
+          ${footerHtml}
+        `;
+        textBody = `${headerText}\n${withdrawMsg.replace(/<br>/g, '\n')}${footerText}`;
+        break;
+
+      default:
+        console.warn(`[WARN] 未定義の用件タイプ: ${data.type}`);
+        if (!subject) subject = `【お知らせ】${centerName}からのご連絡`;
+        htmlBody = `
+          ${headerHtml}
+          ${userMessageHtml ? userMessageHtml : '<p>下記より内容をご確認ください。</p>'}
           ${btnHtml}
           ${footerHtml}
         `;
-        textBody = `${headerText}\n下記より内容をご確認ください。\n\n${targetUrl}${footerText}`;
+        textBody = `${headerText}${userMessageText ? userMessageText : '\n下記より内容をご確認ください。\n'}${urlText}${footerText}`;
         break;
     }
 
