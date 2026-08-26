@@ -268,7 +268,7 @@
       `;
       
       data.forEach(item => {
-        const reasonHtml = item.reason ? linkify(item.reason) : '-';
+        const reasonHtml = item.reason ? linkify(item.reason, item.status) : '-';
         tableHtml += `
           <tr>
             <td style="white-space:nowrap; padding:4px 6px; border:1px solid #e0e0e0; text-align:center;">${escapeHtml(item.datetime)}</td>
@@ -394,19 +394,26 @@
   };
 
   // URLおよびチケットIDの自動ハイパーリンク化ヘルパー (別タブ target="_blank" で開く)
-  const linkify = (text) => {
+  const linkify = (text, status = '') => {
     if (!text || !text.trim()) return '<span class="ci-empty-val">-</span>';
     let escaped = escapeHtml(text);
     
     // 1. URLの自動ハイパーリンク化
+    // ※「メール送信済」など既読になる前の確認URLは、スタッフの誤クリックによる既読化事故を防ぐためハイパーリンク化せずプレーンテキストのまま保持する
+    // ※「メール既読」検出時およびそれ以降の経過情報はハイパーリンク化する
+    const isPreReadStatus = (status === 'メール送信済' || status === 'メール対応' || status === '担当設定' || status === '未着手' || status === '仮予約日時確保' || status === '電話対応');
+
     const urlRegex = /(https?:\/\/[^\s<]+)/g;
     escaped = escaped.replace(urlRegex, (url) => {
+      if (isPreReadStatus && (url.includes('confirmreservation') || url.includes('token='))) {
+        return url;
+      }
       return `<a href="${url}" target="_blank" class="ci-link" rel="noopener noreferrer">${url}</a>`;
     });
 
     // 2. チケットID (例: ID:82, ID: 82, 83, 比較対象チケットID:82, [複数の用件を短期間に依頼:82]) の自動ハイパーリンク化
     const appBaseUrl = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
-    const ticketBlockRegex = /(ID[:：\s]*|チケットID[:：\s]*|[:：])([\d\s,]+)/gi;
+    const ticketBlockRegex = /((?:比較対象チケットID|関連チケットID|チケットID|複数の用件を短期間に依頼|ID)[:：\s]*)([\d\s,]+)/gi;
     escaped = escaped.replace(ticketBlockRegex, (match, prefix, idListStr) => {
       const linkedIds = idListStr.replace(/\b(\d+)\b/g, (id) => {
         const url = `${appBaseUrl}show#record=${id}`;
@@ -702,7 +709,7 @@
         const pStatus = escapeHtml(row.value['経過情報_管理状態']?.value);
         const rawReason = row.value['経過情報_理由']?.value;
 
-        const reasonHtml = linkify(rawReason);
+        const reasonHtml = linkify(rawReason, row.value['経過情報_管理状態']?.value);
 
         return `
           <tr>
@@ -862,7 +869,7 @@
         const text = td.innerText || td.textContent;
         if (text && (text.includes('ID:') || text.includes('ID：') || text.includes('比較対象チケットID') || text.includes('関連チケットID') || text.includes('複数の用件を短期間に依頼'))) {
           if (!td.querySelector('a')) {
-            const ticketBlockRegex = /(ID[:：\s]*|チケットID[:：\s]*|[:：])([\d\s,]+)/gi;
+            const ticketBlockRegex = /((?:比較対象チケットID|関連チケットID|チケットID|複数の用件を短期間に依頼|ID)[:：\s]*)([\d\s,]+)/gi;
             const html = text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(ticketBlockRegex, (match, prefix, idListStr) => {
               const linkedIds = idListStr.replace(/\b(\d+)\b/g, (id) => {
                 const url = `${appBaseUrl}show#record=${id}`;

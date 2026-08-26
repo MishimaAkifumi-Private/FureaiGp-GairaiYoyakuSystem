@@ -625,6 +625,4 @@ window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
   function hideTooltip() {
       hideTimer = setTimeout(() => { tooltipEl.style.display = 'none'; }, 200);
   }
-
-  console.log('ShinryoViewer_UI.js: Loaded successfully.');
 })(window.ShinryoApp.Viewer);

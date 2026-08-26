@@ -6,7 +6,6 @@ window.ShinryoApp = window.ShinryoApp || {};
 
 (function() {
   'use strict';
-  console.log('ConfigManager.js: Loading...');
 
   // 共通設定保管アプリ(App200)の設定
   const STORAGE_APP_ID = 200; 
@@ -79,7 +78,6 @@ window.ShinryoApp = window.ShinryoApp || {};
   };
 
   function initConfigManager() {
-    console.log('ConfigManager initialized.');
   }
 
   // ★追加: レコード圧縮ヘルパー (保存用)
@@ -192,7 +190,6 @@ window.ShinryoApp = window.ShinryoApp || {};
                 const val = resp.records[0][key];
                 // 文字列（複数行）で、かつJSONっぽい（{で始まる）値を探す
                 if (val && val.type === 'MULTI_LINE_TEXT' && val.value && val.value.trim().startsWith('{')) {
-                    console.log(`ConfigManager: Found potential JSON in field '${key}'`);
                     jsonField = val;
                     break;
                 }
@@ -224,7 +221,6 @@ window.ShinryoApp = window.ShinryoApp || {};
             const normGet = JSON.stringify(canonicalize(data));
             const normCache = JSON.stringify(canonicalize(cachedDraftData));
             if (normGet !== normCache) {
-                console.log('ConfigManager: Kintone GET data is older than memory cache (replication lag detected). Using cached draft data for diff comparison.');
                 draftData = cachedDraftData;
             } else {
                 cachedDraftData = data; // GETが追いついたので同期
@@ -241,12 +237,6 @@ window.ShinryoApp = window.ShinryoApp || {};
         const norm1 = JSON.stringify(canonicalize(compareDraft));
         const norm2 = JSON.stringify(canonicalize(compareProd));
         isProductionDiff = (norm1 !== norm2);
-        
-        // ★★★ デバッグ用ログ出力（取得データ） ★★★
-        console.group('ConfigManager: fetchPublishedData Debug');
-        console.log('[[DEBUG]] Raw JSON fetched from App 200 (Length):', jsonStr ? jsonStr.length : 0);
-        console.log('[[DEBUG]] Parsed Data from App 200:', data);
-        console.groupEnd();
 
         let records = [];
         if (Array.isArray(data)) {
@@ -270,18 +260,8 @@ window.ShinryoApp = window.ShinryoApp || {};
 
         publishedRecordsMap = new Map(records.map(r => [String(r.$id.value), r])); // ★変更: IDを文字列に統一
 
-        // ★デバッグ: 読込直後のデータ確認（診療分野のみ）
-        console.groupCollapsed('ConfigManager: [DEBUG] Read Data (診療分野)');
-        records.forEach(r => {
-            const v = r['診療分野']?.value || '';
-            console.log(`ID:${r.$id.value} Val:'${v}' (len:${v.length})`);
-        });
-        console.groupEnd();
-
         // ★追加: 本番環境(設定情報)のレコードも復元して比較用に返却する
         const productionRecords = (prodData.records || []).map(inflateRecord);
-
-        console.log('ConfigManager: Published data fetched.', data);
 
         // ★修正: 取得成功時にデータを返却する
         return { 
@@ -395,22 +375,9 @@ window.ShinryoApp = window.ShinryoApp || {};
                     if (arrDate > now) {
                         const minDays = Math.ceil((arrDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                         if (s < minDays) {
-                            console.warn(`[ConfigManager] Force correction for ${r['医師名']?.value}: s=${s} -> ${minDays} (Arrival: ${r['着任日'].value})`);
                             s = minDays;
                         }
                     }
-                }
-
-                // デバッグログ（鈴木医師など）
-                if (r['医師名']?.value?.indexOf('鈴木') > -1) {
-                    console.group(`[ConfigManager] Debug: ${r['医師名'].value}`);
-                    console.log(`Arrival Date: ${r['着任日']?.value}`);
-                    console.log(`Base Start Date: ${baseStartDate.toLocaleString()}`);
-                    console.log(`Actual Start Date: ${actualStartDate.toLocaleString()}`);
-                    console.log(`Today: ${today.toLocaleString()}`);
-                    console.log(`Calculated s (offset): ${s}`);
-                    console.log(`Calculated d (duration): ${d}`);
-                    console.groupEnd();
                 }
             }
 
@@ -443,20 +410,6 @@ window.ShinryoApp = window.ShinryoApp || {};
     cachedDraftData = data; // ★メモリキャッシュに保存 (更新ラグ対策用)
     const jsonStr = JSON.stringify(data);
     lastJsonLength = jsonStr.length;
-
-    // ★★★ デバッグ用ログ出力（保存データ） ★★★
-    console.group('ConfigManager: saveConfig Debug');
-    console.log('[[DEBUG]] Data Object to be saved (Local):', data);
-    console.log('[[DEBUG]] JSON String to be saved (Length):', jsonStr.length);
-    console.groupEnd();
-
-    // ★デバッグ: 保存直前のデータ確認（診療分野のみ）
-    console.groupCollapsed('ConfigManager: [DEBUG] Write Data (診療分野)');
-    currentRecords.forEach(r => {
-        const v = r['診療分野']?.value || '';
-        console.log(`ID:${r.$id.value} Val:'${v}' (len:${v.length})`);
-    });
-    console.groupEnd();
 
     try {
       let recordId = targetRecordId;
@@ -503,8 +456,6 @@ window.ShinryoApp = window.ShinryoApp || {};
             [STORAGE_JSON_FIELD]: { value: jsonStr }
           }
         };
-      } else {
-        console.log('ConfigManager: Target record not found in App 200. Creating new record.');
       }
 
       const [saveBody, saveStatus] = await kintone.proxy(apiUrl, method, saveHeaders, JSON.stringify(bodyParams));
@@ -512,8 +463,6 @@ window.ShinryoApp = window.ShinryoApp || {};
 
       // ★追加: 保存成功時に最終更新日時を現在時刻で更新
       lastPublishedAt = new Date().toISOString();
-      
-      console.log('ConfigManager: Config saved successfully. Calculating production diff locally (anti-lag)...');
       
       // ★修正: kintoneのGET更新ラグに対応するため、自分が今保存したばかりの最新下書きデータ(data)と
       // キャッシュされている本番データを使って isProductionDiff をローカルで正確に計算する
@@ -543,15 +492,9 @@ window.ShinryoApp = window.ShinryoApp || {};
       const norm2 = JSON.stringify(canonicalize(compareProdData));
       const calculatedDiff = (norm1 !== norm2);
 
-      console.log('[[ConfigManager saveConfig Anti-Lag Debug]]');
-      console.log('  norm1 (draft):', norm1);
-      console.log('  norm2 (prod):', norm2);
-      console.log('  calculatedDiff:', calculatedDiff);
-
       // 最新キャッシュ取得処理（インデックス反映ラグによる上書きを考慮し、ローカルの計算値を優先）
       await fetchPublishedData();
       isProductionDiff = calculatedDiff;
-      console.log('  Final isProductionDiff after fetch:', isProductionDiff);
     } catch (e) {
       console.error('ConfigManager: Failed to save config.', e);
       throw e;
@@ -562,7 +505,6 @@ window.ShinryoApp = window.ShinryoApp || {};
    * ★追加: 「設定情報2」(プレビュー) の内容を 「設定情報」(本番) に上書きコピーする
    */
   async function deployToProduction() {
-    console.log('ConfigManager: Deploying to Production (Copying 設定情報2 to 設定情報)...');
     const myAppId = kintone.app.getId();
     const query = `${STORAGE_KEY_FIELD} = "${myAppId}" limit 1`;
     const apiPath = kintone.api.url('/k/v1/records', true);
@@ -595,7 +537,6 @@ window.ShinryoApp = window.ShinryoApp || {};
       const [putBody, putStatus] = await kintone.proxy(updateUrl, 'PUT', updateHeaders, JSON.stringify(updateBody));
       if (putStatus !== 200) throw new Error(`Update failed. Status: ${putStatus}`);
       
-      console.log('ConfigManager: Deployed to Production successfully.');
       cachedDraftData = null; // キャッシュリセット
     } catch (e) {
       console.error('ConfigManager: Deploy failed.', e);
@@ -608,7 +549,6 @@ window.ShinryoApp = window.ShinryoApp || {};
    * さらに現在のアプリ(App156)のレコードも本番データに合わせて復元する (Revert)
    */
   async function revertFromProduction() {
-    console.log('ConfigManager: Reverting from Production...');
     const myAppId = kintone.app.getId();
     
     // 1. App200から本番データ(設定情報)を取得
@@ -637,8 +577,6 @@ window.ShinryoApp = window.ShinryoApp || {};
       await syncAppRecords(prodRecords);
 
       // 3. 同期後の最新レコードをApp156から再取得
-      // ※ syncAppRecordsでレコードが再作成された場合、IDが変わっているため、
-      //    prodRecords(旧ID)ではなく、実際のアプリ上のレコード(新ID)を保存する必要がある
       let currentRecords = [];
       let offset = 0;
       while(true) {
@@ -657,7 +595,6 @@ window.ShinryoApp = window.ShinryoApp || {};
       });
 
       // 4. 設定情報2(プレビュー)を最新のアプリ状態で上書き保存
-      // ※ 本番データの設定値でプレビューを上書きする (undefinedの場合は空オブジェクトで上書き)
       await saveConfig(
           currentRecords, 
           prodData.descriptions || {}, 
@@ -668,7 +605,6 @@ window.ShinryoApp = window.ShinryoApp || {};
           recId // ★追加: 特定したレコードIDを渡して更新を強制する
       );
       
-      console.log('ConfigManager: Reverted from Production successfully.');
       cachedDraftData = null; // キャッシュリセット
     } catch (e) {
       console.error('ConfigManager: Revert failed.', e);
@@ -681,7 +617,6 @@ window.ShinryoApp = window.ShinryoApp || {};
    */
   async function syncAppRecordsToPreview() {
     return enqueueUpdate(async () => {
-      console.log('ConfigManager: Checking for sync between App156 records and Preview JSON...');
       const myAppId = kintone.app.getId();
       
       let currentRecords = [];
@@ -717,13 +652,10 @@ window.ShinryoApp = window.ShinryoApp || {};
       const normDraft = JSON.stringify(canonicalize(compDraft));
 
       if (normApp !== normDraft) {
-        console.log('ConfigManager: Records in App156 differ from Preview JSON. Saving updated 設定情報2...');
         await saveConfig(currentRecords, descriptions, deptSettings, commonSettings, labelSettings, labelVisibility);
-        console.log('ConfigManager: 設定情報2 successfully updated.');
         await fetchPublishedData();
         return true;
       } else {
-        console.log('ConfigManager: App156 records match Preview JSON.');
         return false;
       }
     });
@@ -878,7 +810,6 @@ window.ShinryoApp = window.ShinryoApp || {};
           targetRecord['掲載'].value = newStatus;
           // 書き換えたJSONを保存 (descriptionsはそのまま維持)
           await saveConfig(currentPublished.records, currentPublished.descriptions);
-          console.log(`ConfigManager: Status updated immediately for record ${recordId} to ${newStatus}`);
         }
       }
     } catch (e) {
@@ -923,7 +854,6 @@ window.ShinryoApp = window.ShinryoApp || {};
 
         if (changed) {
             await saveConfig(currentPublished.records, currentPublished.descriptions);
-            console.log(`ConfigManager: Batch status update completed for ${updates.length} records.`);
         }
       }
     } catch (e) {
@@ -946,7 +876,6 @@ window.ShinryoApp = window.ShinryoApp || {};
           descriptions['__status__' + deptName] = newStatus;
           
           await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings);
-          console.log(`ConfigManager: Department ${deptName} status updated to ${newStatus}`);
         }
       } catch (e) {
         console.error('ConfigManager: Failed to update department status.', e);
@@ -967,7 +896,6 @@ window.ShinryoApp = window.ShinryoApp || {};
           descriptions['__schedule_link__' + deptName] = newStatus;
           
           await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings);
-          console.log(`ConfigManager: Department ${deptName} schedule link updated to ${newStatus}`);
         }
       } catch (e) {
         console.error('ConfigManager: Failed to update department schedule link.', e);
@@ -992,7 +920,6 @@ window.ShinryoApp = window.ShinryoApp || {};
         }
         
         await saveConfig(currentPublished.records, currentPublished.descriptions, settings, currentPublished.commonSettings, currentPublished.labelSettings, currentPublished.labelVisibility);
-        console.log(`ConfigManager: Department ${deptName} term updated.`);
       }
     } catch (e) {
       console.error('ConfigManager: Failed to update department term.', e);
@@ -1016,7 +943,6 @@ window.ShinryoApp = window.ShinryoApp || {};
         }
         
         await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, labelSettings, currentPublished.labelVisibility);
-        console.log(`ConfigManager: Department ${deptName} description updated.`);
       }
     } catch (e) {
       console.error('ConfigManager: Failed to update department description.', e);
@@ -1040,7 +966,6 @@ window.ShinryoApp = window.ShinryoApp || {};
                 }
                 
                 await saveConfig(currentPublished.records, currentPublished.descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings, labelVisibility);
-                console.log(`ConfigManager: Label visibility for ${key} updated to ${isVisible}.`);
             }
         } catch (e) {
             console.error('ConfigManager: Failed to update label visibility.', e);
@@ -1112,7 +1037,6 @@ window.ShinryoApp = window.ShinryoApp || {};
         common.centerName = centerName;
         common.phoneNumber = phoneNumber;
       });
-      console.log(`ConfigManager: Common center info updated directly to production.`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common center info.', e);
       throw e;
@@ -1128,7 +1052,6 @@ window.ShinryoApp = window.ShinryoApp || {};
         common.start = start;
         common.duration = duration;
       });
-      console.log(`ConfigManager: Common term updated directly to production.`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common term.', e);
       throw e;
@@ -1147,7 +1070,6 @@ window.ShinryoApp = window.ShinryoApp || {};
         common.start = start;
         common.duration = duration;
       });
-      console.log(`ConfigManager: Common calendar settings updated directly to production.`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common calendar settings.', e);
       throw e;
@@ -1162,7 +1084,6 @@ window.ShinryoApp = window.ShinryoApp || {};
       await _updateCommonSettingField((common) => {
         common.facilities = facilities;
       });
-      console.log(`ConfigManager: Common facilities updated directly to production. Count: ${facilities ? facilities.length : 0}`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common facilities.', e);
       throw e;
@@ -1191,7 +1112,6 @@ window.ShinryoApp = window.ShinryoApp || {};
         common.crmHistoryCount = historyCount;
         if (finishedLimit !== undefined) common.finishedTicketLimit = finishedLimit;
       });
-      console.log(`ConfigManager: CRM settings updated directly to production. History: ${historyCount}, FinishedLimit: ${finishedLimit}`);
     } catch (e) {
       console.error('ConfigManager: Failed to update CRM settings.', e);
       throw e;
@@ -1206,7 +1126,6 @@ window.ShinryoApp = window.ShinryoApp || {};
       await _updateCommonSettingField((common) => {
         common.staffs = staffs;
       });
-      console.log(`ConfigManager: Common staffs updated directly to production. Count: ${staffs ? staffs.length : 0}`);
     } catch (e) {
       console.error('ConfigManager: Failed to update common staffs.', e);
       throw e;
@@ -1273,8 +1192,6 @@ window.ShinryoApp = window.ShinryoApp || {};
       await kintone.api(kintone.api.url('/k/v1/preview/app/deploy.json', true), 'POST', {
           apps: [{ app: appId }]
       });
-
-      console.log('ConfigManager: App dropdown synced and deploy requested.');
     } catch (e) {
       console.error('ConfigManager: Failed to sync app dropdown.', e);
       throw e;
@@ -1334,8 +1251,6 @@ window.ShinryoApp = window.ShinryoApp || {};
       await kintone.api(kintone.api.url('/k/v1/preview/app/deploy.json', true), 'POST', {
           apps: [{ app: targetAppId }]
       });
-
-      console.log(`ConfigManager: App ${targetAppId} dropdown synced and deploy requested.`);
     } catch (e) {
       console.error(`ConfigManager: Failed to sync app ${targetAppId} dropdown.`, e);
       throw e;
@@ -1351,7 +1266,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     const pubRec = publishedRecordsMap.get(recId);
     if (!pubRec) return true; // 新規レコードは変更扱い
 
-    return isDiff(currentRecord, pubRec, columnDef, true); // ★変更: ログ出力を有効化
+    return isDiff(currentRecord, pubRec, columnDef, false);
   }
   
   /**
@@ -1359,36 +1274,34 @@ window.ShinryoApp = window.ShinryoApp || {};
    */
   function hasUnsavedChanges(currentRecords) {
     if (publishedRecordsMap.size === 0) {
-        return currentRecords.length > 0;
+      return currentRecords.length > 0;
     }
 
     // 1. 削除されたレコードのチェック
     const currentIds = new Set(currentRecords.map(r => String(r.$id.value))); // ★変更: IDを文字列に統一
     for (const pubId of publishedRecordsMap.keys()) {
-        if (!currentIds.has(pubId)) {
-            console.warn(`[ConfigManager] Detected DELETED record: ID ${pubId}`);
-            return true;
-        }
+      if (!currentIds.has(pubId)) {
+        return true;
+      }
     }
 
     // 2. 変更・追加のチェック
     const simpleFields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '表示順', '着任日', '離任日', '集合'];
     
     for (const rec of currentRecords) {
-        const recId = String(rec.$id.value); // ★変更: IDを文字列に統一
-        const pubRec = publishedRecordsMap.get(recId);
-        if (!pubRec) {
-            console.warn(`[ConfigManager] Detected NEW record: ID ${recId}`);
-            return true; // 新規レコード
-        }
+      const recId = String(rec.$id.value); // ★変更: IDを文字列に統一
+      const pubRec = publishedRecordsMap.get(recId);
+      if (!pubRec) {
+        return true; // 新規レコード
+      }
 
-        if (isDiff(rec, pubRec, { type: 'schedule' }, true)) return true;
-        if (isDiff(rec, pubRec, { type: 'term' }, true)) return true;
-        if (isDiff(rec, pubRec, { type: 'info' }, true)) return true;
-        
-        for (const field of simpleFields) {
-            if (isDiff(rec, pubRec, { field: field }, true)) return true;
-        }
+      if (isDiff(rec, pubRec, { type: 'schedule' }, false)) return true;
+      if (isDiff(rec, pubRec, { type: 'term' }, false)) return true;
+      if (isDiff(rec, pubRec, { type: 'info' }, false)) return true;
+      
+      for (const field of simpleFields) {
+        if (isDiff(rec, pubRec, { field: field }, false)) return true;
+      }
     }
     return false;
   }
@@ -1400,11 +1313,11 @@ window.ShinryoApp = window.ShinryoApp || {};
 
     // ★変更: 正規化ヘルパー (強化版: 空白文字の完全正規化)
     const normalize = (val) => {
-        if (val === null || val === undefined) return '';
-        return String(val)
-            .replace(/\r\n/g, '\n').replace(/\r/g, '\n') // 改行コード統一
-            .replace(/[\s\u3000]+/g, ' ') // 全角・半角スペース、タブ等を「1つの半角スペース」に置換
-            .trim();
+      if (val === null || val === undefined) return '';
+      return String(val)
+        .replace(/\r\n/g, '\n').replace(/\r/g, '\n') // 改行コード統一
+        .replace(/[\s\u3000]+/g, ' ') // 全角・半角スペース、タブ等を「1つの半角スペース」に置換
+        .trim();
     };
 
     // スケジュール比較
@@ -1417,8 +1330,7 @@ window.ShinryoApp = window.ShinryoApp || {};
           const v1 = (rec1[key]?.value || []).slice().sort();
           const v2 = (rec2[key]?.value || []).slice().sort();
           if (JSON.stringify(v1) !== JSON.stringify(v2)) {
-              if(logDiff) console.warn(`[Diff] Schedule ${key} (ID:${rec1.$id.value}):`, v1, v2);
-              return true;
+            return true;
           }
         }
       }
@@ -1435,8 +1347,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       const v1 = normalize(rec1['留意案内']?.value);
       const v2 = normalize(rec2['留意案内']?.value);
       if (v1 !== v2) {
-          if(logDiff) console.warn(`[Diff] Info (ID:${rec1.$id.value}):`, v1, v2);
-          return true;
+        return true;
       }
     }
 
@@ -1446,13 +1357,10 @@ window.ShinryoApp = window.ShinryoApp || {};
       const v2 = normalize(rec2[field]?.value);
 
       if (v1 !== v2) {
-          if(logDiff) console.warn(`[Diff] Field ${field} (ID:${rec1.$id.value}):`, v1, v2);
-          return true;
+        return true;
       }
     }
 
     return false;
   }
-
-  console.log('ConfigManager.js: Loaded successfully.');
 })();

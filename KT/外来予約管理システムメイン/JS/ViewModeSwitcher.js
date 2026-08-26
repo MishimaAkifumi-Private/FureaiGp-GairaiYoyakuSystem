@@ -4,7 +4,6 @@
  */
 (function () {
     'use strict';
-    console.log('ViewModeSwitcher.js: Loading...');
 
     const APP_VERSION = '0.92'; // システムのバージョン番号
     let isRecordView = false; // レコード詳細・編集・作成画面かどうか
@@ -29,7 +28,6 @@
     }
 
     const currentMode = determineViewMode();
-    console.log('ViewModeSwitcher.js: Current mode is', currentMode);
 
     const INITIAL_HIDE_STYLE_ID = 'kintone-initial-hide-style';
 
@@ -227,7 +225,6 @@
 
     kintone.events.on('app.record.index.show', async function (event) {
         isRecordView = false;
-        console.log('ViewModeSwitcher.js: app.record.index.show triggered.');
 
         // ShinryoViewerが読み込まれているかチェック (他アプリへ誤登録された場合は安全にスキップ)
         if (!window.ShinryoApp || !window.ShinryoApp.Viewer || !window.ShinryoApp.Viewer.renderOverview) {

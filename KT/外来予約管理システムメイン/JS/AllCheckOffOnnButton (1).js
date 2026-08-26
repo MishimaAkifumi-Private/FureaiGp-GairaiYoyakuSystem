@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2024 Akifumi Mishima
  * Released under the MIT license
  * https://opensource.org/licenses/mit-license.php
@@ -30,7 +30,6 @@
     // スペースフィールドの要素を取得
     const spaceElement = kintone.app.record.getSpaceElement(spaceFieldCode);
     if (!spaceElement) {
-      console.log('スペースフィールド ' + spaceFieldCode + ' が見つかりません。');
       return event;
     }
 

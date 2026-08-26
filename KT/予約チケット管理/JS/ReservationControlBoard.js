@@ -254,29 +254,6 @@
         header.appendChild(staffDiv);
       }
 
-      // 用件別バッジ (右端)
-      let purposeLabel = '';
-      let purposeBg = '';
-
-      if (purpose === '変更') {
-          purposeLabel = '予約変更';
-          purposeBg = '#3498db'; // 青
-      } else if (purpose === '取消') {
-          purposeLabel = '予約取消';
-          purposeBg = '#e74c3c'; // 赤
-      } else if (purpose === '初診') {
-          purposeLabel = '初診/再診 予約';
-          purposeBg = '#27ae60'; // 緑
-      }
-
-      if (purposeLabel) {
-          const purposeBadge = document.createElement('div');
-          purposeBadge.id = 'rcb-purpose-badge';
-          purposeBadge.textContent = purposeLabel;
-          purposeBadge.style.cssText = `margin-left: auto; background-color: ${purposeBg}; color: #fff; padding: 6px 16px; border-radius: 4px; font-size: 16px; font-weight: bold; box-shadow: none; border: 1px solid rgba(0,0,0,0.1); cursor: default;`;
-          header.appendChild(purposeBadge);
-      }
-
       container.appendChild(header);
   
       // --- 2. コンテンツ分岐 ---
@@ -4244,28 +4221,6 @@
                         rcbContent.appendChild(titleBar);
                         rcbContent.appendChild(rcbBody);
                     }
-
-                    // ★確実なタイミングで用件バッジ（初診予約など）をヘッダーメニューの左端に配置
-                    const purposeBadge = document.getElementById('rcb-purpose-badge');
-                    const resetSpace = kintone.app.record.getSpaceElement(CONFIG.RESET_SPACE_ID);
-                    if (purposeBadge && resetSpace) {
-                        const rowEl = resetSpace.closest('.row-gaia');
-                        if (rowEl) {
-                            purposeBadge.style.margin = '0 10px 0 0';
-                            purposeBadge.style.fontSize = '15px';
-                            purposeBadge.style.padding = '0 16px';
-                            purposeBadge.style.height = '35px';
-                            purposeBadge.style.display = 'inline-flex';
-                            purposeBadge.style.alignItems = 'center';
-                            purposeBadge.style.justifyContent = 'center';
-                            purposeBadge.style.borderRadius = '6px';
-                            purposeBadge.style.boxShadow = 'none';
-                            purposeBadge.style.border = 'none';
-                            purposeBadge.style.cursor = 'default';
-                            
-                            rowEl.insertBefore(purposeBadge, rowEl.firstChild);
-                        }
-                    }
                 }, 100);
             });
         });
@@ -4295,6 +4250,34 @@
                       el.style.minHeight = 'auto';
                       el.style.marginBottom = '0';
                   });
+
+                  // 用件バッジ（初診/再診 予約、予約変更、予約取消）を直接生成して先頭に配置
+                  const purpose = event.record['用件']?.value;
+                  let purposeLabel = '';
+                  let purposeBg = '';
+                  if (purpose === '変更') {
+                      purposeLabel = '予約変更';
+                      purposeBg = '#3498db'; // 青
+                  } else if (purpose === '取消') {
+                      purposeLabel = '予約取消';
+                      purposeBg = '#e74c3c'; // 赤
+                  } else if (purpose === '初診' || purpose === '再診') {
+                      purposeLabel = '初診/再診 予約';
+                      purposeBg = '#27ae60'; // 緑
+                  }
+
+                  if (purposeLabel) {
+                      let purposeBadge = document.getElementById('rcb-purpose-badge');
+                      if (!purposeBadge) {
+                          purposeBadge = document.createElement('div');
+                          purposeBadge.id = 'rcb-purpose-badge';
+                      }
+                      purposeBadge.textContent = purposeLabel;
+                      purposeBadge.style.cssText = `margin: 0 10px 0 0; background-color: ${purposeBg}; color: #fff; font-size: 15px; padding: 0 16px; height: 35px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; box-shadow: none; border: none; cursor: default; font-weight: bold;`;
+                      if (purposeBadge.parentNode !== rowEl) {
+                          rowEl.insertBefore(purposeBadge, rowEl.firstChild);
+                      }
+                  }
 
                   // コロンを表示するためのCSSをヘッダーに動的に追加
                   if (!document.getElementById('rcb-toolbar-custom-style')) {

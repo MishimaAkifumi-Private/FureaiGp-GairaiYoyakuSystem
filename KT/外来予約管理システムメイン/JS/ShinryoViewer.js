@@ -7,7 +7,6 @@ window.ShinryoApp = window.ShinryoApp || {};
 
 (function() {
   'use strict';
-  console.log('ShinryoViewer.js: Loading...');
 
   // 外部公開メソッド
   window.ShinryoApp.Viewer = window.ShinryoApp.Viewer || {};
@@ -961,11 +960,6 @@ window.ShinryoApp = window.ShinryoApp || {};
             if (doctorKey) publishedMap.set(doctorKey, r);
         });
 
-        // ★デバッグ: マージ後のレコード数比較
-        console.log(`[Viewer Debug] Merged Records Count - Local: ${mergedRecords.length}, Published: ${mergedPublishedRecords.length}`);
-        console.log(`[Viewer Debug] Published Map Keys:`, Array.from(publishedMap.keys()));
-        console.log(`[Viewer Debug] Local Merged Keys:`, mergedRecords.map(r => String(r.$id.value)));
-
         renderTable(mergedRecords, descriptions, container, publishedMap, deptSettings, commonSettings, validRecords); // ★変更: validRecords(ソース)も渡す
     }).catch(err => {
         console.error('Overview load error:', err);
@@ -1137,7 +1131,6 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const v1 = (rec1[key]?.value || []).slice().sort();
                     const v2 = (rec2[key]?.value || []).slice().sort();
                     if (JSON.stringify(v1) !== JSON.stringify(v2)) {
-                        console.warn(`[Viewer Diff] Schedule ${key} (ID:${rec1.$id.value}):`, v1, v2);
                         return true;
                     }
                 }
@@ -1152,7 +1145,6 @@ window.ShinryoApp = window.ShinryoApp || {};
              const v1 = normalize(rec1['留意案内']?.value);
              const v2 = normalize(rec2['留意案内']?.value);
              if (v1 !== v2) {
-                 console.warn(`[Viewer Diff] Info (ID:${rec1.$id.value}):`, v1, v2);
                  return true;
              }
         }
@@ -1160,7 +1152,6 @@ window.ShinryoApp = window.ShinryoApp || {};
              const v1 = normalize(rec1[field]?.value);
              const v2 = normalize(rec2[field]?.value);
              if (v1 !== v2) {
-                 console.warn(`[Viewer Diff] Field ${field} (ID:${rec1.$id.value}):`, v1, v2);
                  return true;
              }
         }
@@ -2145,6 +2136,4 @@ window.ShinryoApp = window.ShinryoApp || {};
   function hideTooltip() {
       hideTimer = setTimeout(() => { tooltipEl.style.display = 'none'; }, 200);
   }
-
-  console.log('ShinryoViewer.js: Loaded successfully.');
 })();

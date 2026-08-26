@@ -1,9 +1,6 @@
 (function() {
   'use strict';
 
-  // [DEBUG LOG] スクリプト読み込み確認
-  console.log('[Tooltip Custom] Script loaded.');
-
   // 各フィールド・列ヘッダーの説明テキストマッピング（ラベル名およびフィールドID対応）
   const TOOLTIP_TEXT_MAP = {
     // ★ ラベル名（ヘッダー名）ベースのマッピング
