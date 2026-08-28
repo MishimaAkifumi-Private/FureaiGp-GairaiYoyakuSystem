@@ -146,6 +146,7 @@
               SCHEDULE_MAP_SUFFIX: '週診療日',
               CHART_CARD_IMAGE: '診察券イメージ',
               PUBLICATION_STATUS: '掲載',
+              PHONE_GUIDE_MESSAGE: '電話誘導メッセージ',
           },
 
           uiIds: {
@@ -162,6 +163,7 @@
               REASON_TEXTAREA: 'gemini-reason-textarea',
               GUIDANCE_AREA: 'gemini-guidance-area',
               DOCTOR_GUIDANCE_AREA: 'gemini-doctor-guidance-area',
+              PHONE_GUIDE_AREA: 'gemini-phone-guide-area',
               FIXED_DATE_AREA: 'gemini-fixed-date-area',
               NEW_RESERVATION_AREA: 'gemini-new-reservation-area',
               MULTI_STAGE_AREA: 'gemini-multistage-select-area',
@@ -222,8 +224,8 @@
           YOYAKU_METHOD_AUTO: 'おまかせ',
           YOYAKU_METHOD_SPECIFIC: '希望日を指定',
           TOOLTIPS: {
-              omakase: '最も早く予約できる日時を当院で調整し、ご連絡します。',
-              specific: 'ご希望の予約日や時間帯を、第5希望まで指定できます。'
+              omakase: 'なるべく早く予約できる日時を当院で調整し、ご連絡します。',
+              specific: 'ご希望の予約日や時間帯を、第5希望まで指定できます。ご希望の範囲では予約がお取りできない場合には、別途お電話にてご連絡させていただきます。'
           }
       };
 
@@ -520,23 +522,29 @@
           if (requirement !== '取消') {
             html += createSummaryRow('担当医師', rec[config.fbFields.DOCTOR]);
             
-            const yoyakuMethod = rec[config.fbFields.YOYAKU_METHOD] || '';
-            html += createSummaryRow('予約方法', yoyakuMethod);
-
-            if(yoyakuMethod === config.YOYAKU_METHOD_SPECIFIC) {
-                let wishHtml = '<ul>';
-                let hasWish = false;
-                for(let i = 1; i <= config.MAX_WISH_DATES; i++){
-                    const wishValue = rec[config.fbFields['WISH_' + i]];
-                    if(wishValue) {
-                        wishHtml += `<li>第${i}希望: ${wishValue}</li>`;
-                        hasWish = true;
-                    }
-                }
-                wishHtml += '</ul>';
-                if(hasWish) html += createSummaryRow('希望日時', `_WISH_HTML_${wishHtml}`);
+            if (isPhoneGuideSelected()) {
+                const phoneMsg = getPhoneGuideMessage();
+                html += createSummaryRow('予約受付方法', '<span style="color: #c53030; font-weight: bold;">電話でのお問い合わせ</span>');
+                html += createSummaryRow('ご案内', phoneMsg);
             } else {
-                 html += createSummaryRow('希望時間帯', rec[config.fbFields.WISH_TIME_OMAKASE]);
+                const yoyakuMethod = rec[config.fbFields.YOYAKU_METHOD] || '';
+                html += createSummaryRow('予約方法', yoyakuMethod);
+
+                if(yoyakuMethod === config.YOYAKU_METHOD_SPECIFIC) {
+                    let wishHtml = '<ul>';
+                    let hasWish = false;
+                    for(let i = 1; i <= config.MAX_WISH_DATES; i++){
+                        const wishValue = rec[config.fbFields['WISH_' + i]];
+                        if(wishValue) {
+                            wishHtml += `<li>第${i}希望: ${wishValue}</li>`;
+                            hasWish = true;
+                        }
+                    }
+                    wishHtml += '</ul>';
+                    if(hasWish) html += createSummaryRow('希望日時', `_WISH_HTML_${wishHtml}`);
+                } else {
+                     html += createSummaryRow('希望時間帯', rec[config.fbFields.WISH_TIME_OMAKASE]);
+                }
             }
           }
           
@@ -1498,21 +1506,23 @@
           }
 
           if (req === '初診' || req === '変更') {
-              const yoyakuMethod = config.state.yoyakuMethod;
-              if (yoyakuMethod === config.YOYAKU_METHOD_SPECIFIC) {
-                  const wishArea = document.getElementById(config.uiIds.WISH_DATES_AREA);
-                  if (wishArea && window.getComputedStyle(wishArea).display !== 'none') {
-                      const hasWish = Object.values(config.state.selectedWishDateTimes).some(v => v && v.date && v.time);
-                      if (!hasWish) {
-                          errors.push({ element: wishArea, message: '「希望日を指定」を選択した場合は、第1～5希望のうち少なくとも1つの日時を選択してください。' });
+              if (!isPhoneGuideSelected()) {
+                  const yoyakuMethod = config.state.yoyakuMethod;
+                  if (yoyakuMethod === config.YOYAKU_METHOD_SPECIFIC) {
+                      const wishArea = document.getElementById(config.uiIds.WISH_DATES_AREA);
+                      if (wishArea && window.getComputedStyle(wishArea).display !== 'none') {
+                          const hasWish = Object.values(config.state.selectedWishDateTimes).some(v => v && v.date && v.time);
+                          if (!hasWish) {
+                              errors.push({ element: wishArea, message: '「希望日を指定」を選択した場合は、第1～5希望のうち少なくとも1つの日時を選択してください。' });
+                          }
                       }
-                  }
-              } else if (yoyakuMethod === config.YOYAKU_METHOD_AUTO) {
-                  const omakaseArea = document.getElementById(config.uiIds.OMAKASE_TIME_AREA);
-                  if (omakaseArea && window.getComputedStyle(omakaseArea).display !== 'none') {
-                      const omakaseTimeRadio = document.querySelector('input[name="time_omakase"]:checked');
-                      if (!omakaseTimeRadio) {
-                          errors.push({ element: omakaseArea, message: '希望の時間帯を選択してください。' });
+                  } else if (yoyakuMethod === config.YOYAKU_METHOD_AUTO) {
+                      const omakaseArea = document.getElementById(config.uiIds.OMAKASE_TIME_AREA);
+                      if (omakaseArea && window.getComputedStyle(omakaseArea).display !== 'none') {
+                          const omakaseTimeRadio = document.querySelector('input[name="time_omakase"]:checked');
+                          if (!omakaseTimeRadio) {
+                              errors.push({ element: omakaseArea, message: '希望の時間帯を選択してください。' });
+                          }
                       }
                   }
               }
@@ -1687,7 +1697,7 @@
           createRequirementSection();
       }
 
-      function isAvailable(date, time, records) {
+      function hasScheduleSlot(date, time, records) {
           if (!records || records.length === 0) return false;
           
           let isScheduleLinkOn = true;
@@ -1730,14 +1740,27 @@
               return schedule && schedule.includes(time);
           });
       }
+
+      function isAvailable(date, time, records) {
+          if (!records || records.length === 0) return false;
+          
+          // 「空枠無し」または「電話誘導」が設定されているレコードは予約枠としては利用不可
+          const isBlocked = records.every(r => {
+              const pubStatus = r[config.jsonKeys.PUBLICATION_STATUS]?.value;
+              return pubStatus === '空枠無し' || pubStatus === '電話誘導';
+          });
+          if (isBlocked) return false;
+
+          return hasScheduleSlot(date, time, records);
+      }
       
       function getFilteredRecords() {
           let records = config.state.kintoneRecords;
 
           records = records.filter(r => {
               const val = r[config.jsonKeys.PUBLICATION_STATUS]?.value;
-              const isStopped = val === '停止' || val === 'Off' || val === 'false';
-              return !isStopped;
+              const isHidden = val === '非表示' || val === '停止' || val === 'Off' || val === 'false';
+              return !isHidden;
           });
 
           if (config.state.descriptions) {
@@ -1745,7 +1768,7 @@
                   const dept = r[config.jsonKeys.DEPARTMENT]?.value;
                   const statusKey = '__status__' + dept;
                   const statusVal = config.state.descriptions[statusKey];
-                  const isStopped = statusVal === '停止' || statusVal === 'Off' || statusVal === 'false';
+                  const isStopped = statusVal === '停止' || statusVal === '非表示' || statusVal === 'Off' || statusVal === 'false';
                   return !isStopped;
               });
           }
@@ -1757,6 +1780,29 @@
               records = records.filter(r => r[config.jsonKeys.DOCTOR]?.value === config.state.selectedDoctor);
           }
           return records;
+      }
+
+      function getSelectedDoctorRecord() {
+          const filtered = getFilteredRecords();
+          if (filtered.length === 1) return filtered[0];
+          if (config.state.selectedDoctor && config.state.selectedDoctor !== config.DEFAULT_DOCTOR_OPTION && config.state.selectedDoctor !== config.SAME_DOCTOR_OPTION) {
+              return filtered.find(r => r[config.jsonKeys.DOCTOR]?.value === config.state.selectedDoctor) || null;
+          }
+          return null;
+      }
+
+      function isPhoneGuideSelected() {
+          const rec = getSelectedDoctorRecord();
+          if (!rec) return false;
+          const status = rec[config.jsonKeys.PUBLICATION_STATUS]?.value;
+          return status === '電話誘導';
+      }
+
+      function getPhoneGuideMessage() {
+          const rec = getSelectedDoctorRecord();
+          if (!rec) return '別途お電話にてお問い合わせください';
+          const msg = rec[config.jsonKeys.PHONE_GUIDE_MESSAGE]?.value || rec['電話誘導メッセージ']?.value;
+          return (msg && msg.trim()) ? msg.trim() : '別途お電話にてお問い合わせください';
       }
 
       function normalizeKintoneFontSize(htmlString) {
@@ -2134,6 +2180,7 @@
           
           const guidanceArea = document.createElement('div');
           guidanceArea.id = config.uiIds.GUIDANCE_AREA;
+          guidanceArea.className = 'gemini-rich-text';
           guidanceArea.style.display = 'none';
           area.appendChild(guidanceArea);
 
@@ -2145,6 +2192,7 @@
           
           const doctorGuidanceArea = document.createElement('div');
           doctorGuidanceArea.id = config.uiIds.DOCTOR_GUIDANCE_AREA;
+          doctorGuidanceArea.className = 'gemini-rich-text';
           doctorGuidanceArea.style.display = 'none';
           area.appendChild(doctorGuidanceArea);
 
@@ -2443,7 +2491,50 @@
           updateMethodSection();
       }
 
+      function updatePhoneGuideSection(show) {
+          const area = document.getElementById(config.uiIds.PHONE_GUIDE_AREA);
+          if (!area) return;
+          if (!show) {
+              area.innerHTML = '';
+              area.style.display = 'none';
+              return;
+          }
+
+          const messageText = getPhoneGuideMessage();
+          area.style.display = 'block';
+          area.innerHTML = `
+              <div style="background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%); border: 2px solid #ffeeba; border-left: 6px solid #f39c12; border-radius: 8px; padding: 18px 20px; margin-top: 15px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);">
+                  <div style="display: flex; align-items: flex-start; gap: 12px;">
+                      <span style="font-size: 28px; line-height: 1; flex-shrink: 0;">📞</span>
+                      <div>
+                          <div style="font-size: 15px; font-weight: bold; color: #856404; margin-bottom: 6px;">
+                              お電話での予約受付・お問い合わせのご案内
+                          </div>
+                          <div style="font-size: 14px; color: #533f03; line-height: 1.6; font-weight: 500;">
+                              ${messageText.replace(/\n/g, '<br>')}
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          `;
+      }
+
       function updateMethodSection() {
+          if (isPhoneGuideSelected()) {
+              updatePhoneGuideSection(true);
+              toggleSection(config.uiIds.METHOD_AREA, false);
+              toggleSection(config.uiIds.WISH_DATES_AREA, false);
+              toggleSection(config.uiIds.OMAKASE_TIME_AREA, false);
+              config.state.yoyakuMethod = null;
+              updateFbField(config.fbFields.YOYAKU_METHOD, '');
+              for (let i = 1; i <= config.MAX_WISH_DATES; i++) {
+                  updateFbField(config.fbFields['WISH_' + i], '');
+              }
+              updateFbField(config.fbFields.WISH_TIME_OMAKASE, '');
+              return;
+          }
+
+          updatePhoneGuideSection(false);
           toggleSection(config.uiIds.METHOD_AREA, true);
           const area = document.getElementById(config.uiIds.METHOD_AREA);
           area.innerHTML = '';
@@ -2465,15 +2556,18 @@
           area.appendChild(radioContainer);
 
           const explanationContainer = document.createElement('div');
-          explanationContainer.style.cssText = 'font-size: 11px; color: #555; margin-top: 10px; line-height: 1.5; padding-left: 5px;';
-          const omakaseExplanation = document.createElement('p');
-          omakaseExplanation.style.margin = '0 0 5px 0';
-          omakaseExplanation.textContent = `※${config.YOYAKU_METHOD_AUTO}：${config.TOOLTIPS.omakase}`;
-          const specificExplanation = document.createElement('p');
-          specificExplanation.style.margin = '0';
-          specificExplanation.textContent = `※${config.YOYAKU_METHOD_SPECIFIC}：${config.TOOLTIPS.specific}`;
-          explanationContainer.appendChild(omakaseExplanation);
-          explanationContainer.appendChild(specificExplanation);
+          explanationContainer.style.cssText = 'font-size: 11px; color: #555; margin-top: 10px; line-height: 1.6; padding-left: 5px;';
+          explanationContainer.innerHTML = `
+              <p style="margin: 0 0 6px 0;">
+                  ※「おまかせ」を指定した場合<br>
+                  &emsp;なるべく早く予約できる日時を当院で調整し、ご連絡します。
+              </p>
+              <p style="margin: 0;">
+                  ※「希望日」を指定した場合<br>
+                  &emsp;ご希望の予約日や時間帯を、第5希望まで指定できます。<br>
+                  &emsp;ご希望の範囲では予約がお取りできない場合には、別途お電話にてご連絡させていただきます。
+              </p>
+          `;
           area.appendChild(explanationContainer);
           
           radioContainer.addEventListener('change', (e) => {
@@ -2644,7 +2738,14 @@
                   if (remainingSlots.length === 2) timeDisplayText = '(午前/午後)';
                   else if (remainingSlots.length === 1) timeDisplayText = `(${remainingSlots[0]})`;
                   const baseDisplay = `${String(dateObj.getMonth() + 1)}月${dateObj.getDate()}日 (${config.WEEKDAYS_JP[dateObj.getDay()]})`;
-                  const optionText = isFullyBooked ? `${baseDisplay} 選択済み` : `${baseDisplay} ${timeDisplayText}`;
+                  let optionText = '';
+                  if (isFullyBooked) {
+                      const isNoSlotsDoctor = records.length > 0 && records.every(r => r[config.jsonKeys.PUBLICATION_STATUS]?.value === '空枠無し');
+                      const suffix = isNoSlotsDoctor ? '空枠無し' : (availableSlots.length === 0 ? '空枠無し' : '選択済み');
+                      optionText = `${baseDisplay} ${suffix}`;
+                  } else {
+                      optionText = `${baseDisplay} ${timeDisplayText}`;
+                  }
                   select.appendChild(createSelectorOption(dateStr, optionText, isFullyBooked));
               });
               select.value = currentValue;
@@ -2850,9 +2951,9 @@
           endDate.setDate(startDate.getDate() + duration);
           let currentDate = new Date(startDate);
           while(currentDate <= endDate) {
-              const am_ok = isAvailable(currentDate, '午前', records);
-              const pm_ok = isAvailable(currentDate, '午後', records);
-              if(am_ok || pm_ok) {
+              const am_has = hasScheduleSlot(currentDate, '午前', records);
+              const pm_has = hasScheduleSlot(currentDate, '午後', records);
+              if(am_has || pm_has) {
                   const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
                   const display = `${String(currentDate.getMonth() + 1)}月${currentDate.getDate()}日 (${config.WEEKDAYS_JP[currentDate.getDay()]})`;
                   options.push({ value: dateStr, display: display });
@@ -3022,6 +3123,7 @@
                 <div id="${config.uiIds.NEW_RESERVATION_AREA}" style="display: none; margin-top: 35px; margin-bottom: 35px;">
                     <div id="${config.uiIds.MULTI_STAGE_AREA}"></div>
                     <div id="${config.uiIds.FIXED_DATE_AREA}" style="display: none; margin-top: 35px; margin-bottom: 35px;"></div>
+                    <div id="${config.uiIds.PHONE_GUIDE_AREA}" style="display: none; margin-top: 20px;"></div>
                     <div id="${config.uiIds.METHOD_AREA}" style="display: none; margin-top: 20px;"></div>
                     <div id="${config.uiIds.WISH_DATES_AREA}" style="display: none; margin-top: 20px;"></div>
                     <div id="${config.uiIds.OMAKASE_TIME_AREA}" style="display: none; margin-top: 20px;"></div>
@@ -3456,6 +3558,50 @@
             .g-wish-container > label { flex-shrink: 0; font-weight: bold; margin-bottom: 0; }
             .g-wish-container > .g-form-control { flex-grow: 1; flex-shrink: 1; width: auto; min-width: 240px; max-width: 300px; }
             .g-wish-time-options { display: flex; flex-wrap: wrap; align-items: center; }
+            
+            /* --- リッチテキスト表示用スタイル（案内文・共通ラベル） --- */
+            .gemini-rich-text {
+                line-height: 1.6;
+                color: #333;
+                word-break: break-word;
+            }
+            .gemini-rich-text h1 { font-size: 1.6em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+            .gemini-rich-text h2 { font-size: 1.4em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+            .gemini-rich-text h3 { font-size: 1.2em; font-weight: bold; margin: 0.5em 0; line-height: 1.2; }
+            .gemini-rich-text p { margin: 0 0 0.4em 0; line-height: 1.6; }
+            .gemini-rich-text ul {
+                margin: 0.4em 0 0.6em 0 !important;
+                padding-left: 24px !important;
+                list-style-type: disc !important;
+            }
+            .gemini-rich-text ol {
+                margin: 0.4em 0 0.6em 0 !important;
+                padding-left: 24px !important;
+                list-style-type: decimal !important;
+            }
+            .gemini-rich-text li {
+                display: list-item !important;
+                list-style-type: inherit !important;
+                margin-bottom: 0.3em;
+                line-height: 1.6;
+            }
+            .gemini-rich-text li[data-list="bullet"] {
+                list-style-type: disc !important;
+            }
+            .gemini-rich-text li[data-list="ordered"] {
+                list-style-type: decimal !important;
+            }
+            .gemini-rich-text strong { font-weight: bold; }
+            .gemini-rich-text em { font-style: italic; }
+            .gemini-rich-text u { text-decoration: underline; }
+            .gemini-rich-text blockquote { border-left: 4px solid #ccc; margin: 5px 0; padding-left: 10px; color: #666; }
+            .gemini-rich-text pre { background-color: #f0f0f0; padding: 5px; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
+            
+            /* フォントサイズ変換クラス */
+            .fb-font-small { font-size: 11px; }
+            .fb-font-normal { font-size: 14px; }
+            .fb-font-large { font-size: 18px; font-weight: bold; }
+            .fb-font-huge { font-size: 24px; font-weight: bold; }
             
             .gemini-nav-btn, form .fb-submit, .fb-custom--button--submit button {
                 justify-content: center !important;

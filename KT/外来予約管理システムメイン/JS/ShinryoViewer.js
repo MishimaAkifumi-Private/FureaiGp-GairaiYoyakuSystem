@@ -331,8 +331,9 @@ window.ShinryoApp = window.ShinryoApp || {};
           background-color: #fff;
           height: 1px;
       }
-      .doctor-name-wrapper, .updated-date-wrapper {
+      .doctor-name-wrapper, .updated-date-wrapper, .publish-status-wrapper {
           background-color: #fff;
+          color: #333;
           padding: 6px 10px;
           display: flex;
           align-items: center;
@@ -770,6 +771,8 @@ window.ShinryoApp = window.ShinryoApp || {};
             if (rec['診療選択']?.value) baseRec._selections.add(rec['診療選択'].value);
             baseRec._facilities = new Set(); // 施設名を保持するSet
             if (rec['施設名']?.value) baseRec._facilities.add(rec['施設名'].value);
+            baseRec._publishStatuses = new Set(); // 掲載ステータスを保持するSet
+            if (rec['掲載']?.value) baseRec._publishStatuses.add(rec['掲載'].value);
             
             // ★追加: 最終更新日時の初期化
             baseRec._latestUpdatedTime = rec['更新日時']?.value || rec['$updatedTime']?.value || '';
@@ -806,6 +809,8 @@ window.ShinryoApp = window.ShinryoApp || {};
             if (rec['診療選択']?.value) baseRec._selections.add(rec['診療選択'].value);
             // 施設名のマージ
             if (rec['施設名']?.value) baseRec._facilities.add(rec['施設名'].value);
+            // 掲載ステータスの収集
+            if (rec['掲載']?.value) baseRec._publishStatuses.add(rec['掲載'].value);
 
             // スケジュールマージ (和集合) ＆ 詳細情報収集
             scheduleFields.forEach(field => {
@@ -830,9 +835,9 @@ window.ShinryoApp = window.ShinryoApp || {};
                 }
             });
 
-            // 掲載ステータスマージ (どれか一つでも「受付」なら「受付」とする)
-            if (rec['掲載']?.value === '受付') {
-                baseRec['掲載'].value = '受付';
+            // 掲載ステータスマージ (どれか一つでも「通常表示」または「受付」なら有効とする)
+            if (rec['掲載']?.value === '通常表示' || rec['掲載']?.value === '受付') {
+                baseRec['掲載'].value = rec['掲載'].value;
             }
             
             // 予約開始・期間・案内などはベースレコード(先に処理されたもの)を優先
@@ -851,6 +856,11 @@ window.ShinryoApp = window.ShinryoApp || {};
             // 施設名を結合して表示用に更新
             const sortedFacs = Array.from(rec._facilities).sort().filter(s => s);
             if (sortedFacs.length > 0) rec['施設名'].value = sortedFacs.join(',');
+        }
+        if (rec._publishStatuses && rec._publishStatuses.size > 0) {
+            // 掲載ステータスを結合して表示用に保持
+            const sortedStatuses = Array.from(rec._publishStatuses).filter(Boolean);
+            if (sortedStatuses.length > 0) rec._displayPublishStatus = sortedStatuses.join('、');
         }
     });
 
@@ -1016,13 +1026,14 @@ window.ShinryoApp = window.ShinryoApp || {};
     table.className = 'shinryo-config-table';
     
     const columns = [
-      { header: '診療分野', field: '診療分野', width: '8%', merge: true, cls: 'large-font-cell align-top', tooltip: '診療分野です' },
-      { header: '診療科', field: '診療科', width: '12%', merge: true, cls: 'large-font-cell', tooltip: '診療分野に属する個別の診療科です' },
+      { header: '診療分野', field: '診療分野', width: '7%', merge: true, cls: 'large-font-cell align-top', tooltip: '診療分野です' },
+      { header: '診療科', field: '診療科', width: '11%', merge: true, cls: 'large-font-cell', tooltip: '診療分野に属する個別の診療科です' },
       { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: '診療科全体の予約を受け付け可否を設定します。例えば一時的に予約受付を停止する場合に使います。' },
       { header: '予約受付期間', type: 'term_group', width: '12%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療受け付ける期間の設定になります。病院全体の期間とは異なる期間を設定する場合に指定します' },
       { header: '診療予定連動', field: '診療科', type: 'schedule_link_toggle', width: '8%', merge: true, cls: 'large-font-cell', tooltip: 'OffにするとWebフォーム上では患者は担当医師を選択できません。また医師の診療予定外の希望日時でも受け付けるため、ミスマッチになりやすく、スタッフから患者への架電の頻度が高まります。' },
-      { header: '診療予定表', type: 'calendar_icon', width: '8%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
-      { header: '医師', field: '医師名', width: '24%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' },
+      { header: '診療予定表', type: 'calendar_icon', width: '7%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
+      { header: '医師', field: '医師名', width: '25%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' },
+      { header: '掲載状況', type: 'publish_status', width: '12%', merge: true, mergeKey: '診療科', cls: 'publish-status-cell align-top', tooltip: '各医師のWeb予約フォームへの掲載状況（通常表示／非表示／空枠無し／電話誘導）です。同一医師で複数レコードがある場合はそれぞれの状況を表示します。' },
       { header: '更新日', type: 'updated_date', width: '12%', merge: true, mergeKey: '診療科', cls: 'updated-date-cell align-top', tooltip: '医師の診療予定レコードの最終更新日です（同一医師の複数レコードがある場合は最新の更新日を表示します）' }
     ];
 
@@ -1110,7 +1121,7 @@ window.ShinryoApp = window.ShinryoApp || {};
             }
         }
         // 主要フィールド比較
-        const fields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '留意案内', '着任日', '離任日', '担当者'];
+        const fields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '電話誘導メッセージ', '施設名', '留意案内', '着任日', '離任日', '担当者'];
         for (const f of fields) {
             if (normalize(rec1[f]?.value) !== normalize(rec2[f]?.value)) return true;
         }
@@ -1163,7 +1174,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     const tbody = table.createTBody();
     records.forEach((rec, idx) => {
         const row = tbody.insertRow();
-        const isSuspended = rec['掲載']?.value === '停止';
+        const isSuspended = rec['掲載']?.value === '非表示' || rec['掲載']?.value === '停止';
         const currentDept = rec['診療科']?.value;
         // 診療科全体のステータスを確認 (descriptions内の特殊キー __status__診療科名)
         const deptStatus = descriptions['__status__' + currentDept];
@@ -1189,7 +1200,7 @@ window.ShinryoApp = window.ShinryoApp || {};
             
             cell.dataset.field = col.field || '';
 
-            // 行のグレーアウト判定
+            // 行のグレーアウト判定 (診療科全体のステータスに基づく)
             if (isDeptStopped) {
                 // 診療科停止: 診療分野以外はグレーアウト
                 if (col.field !== '診療分野') cell.classList.add('gray-out-cell');
@@ -1210,11 +1221,6 @@ window.ShinryoApp = window.ShinryoApp || {};
                         }
                     }
                     if (allStopped) cell.classList.add('gray-out-cell');
-                }
-            } else if (isSuspended) {
-                // 個別停止: 診療分野、診療科(toggle含む)、予定表は除外
-                if (col.field !== '診療分野' && col.field !== '診療科' && col.type !== 'calendar_icon') {
-                    cell.classList.add('gray-out-cell');
                 }
             } else if (isScheduleLinkOff) {
                 // 診療予定連動がOffの場合: 診療予定表、医師、更新日 をグレーアウト
@@ -1424,6 +1430,62 @@ window.ShinryoApp = window.ShinryoApp || {};
                     // 更新後のコールバック: 再描画
                     window.ShinryoApp.Viewer.renderOverview();
                 });
+            } else if (col.type === 'publish_status') {
+                // ★追加: 掲載状況セル（医師・更新日と同期マージ）
+                cell.classList.add('doctor-cell-filled');
+
+                // ★追加: 診療科停止または予定連動Off時はセルの背景色を上書き
+                if (isDeptStopped || isScheduleLinkOff) {
+                    cell.style.backgroundColor = '#888888';
+                }
+
+                const rowSpan = rec[`_rowspan_publish_status`] || 1;
+                for (let i = 0; i < rowSpan; i++) {
+                    const targetRec = records[idx + i];
+                    const targetPubRec = getPublishedRecord(targetRec);
+                    
+                    const containerDiv = document.createElement('div');
+                    containerDiv.className = 'publish-status-wrapper';
+                    
+                    const isDoctorSuspended = targetRec['掲載']?.value === '非表示' || targetRec['掲載']?.value === '停止';
+                    const isChanged = hasRecordChange(targetRec, targetPubRec);
+
+                    // ★追加: 診療科停止、予定連動Off、または個別医師停止/非表示時はラッパーもグレーアウト
+                    if (isDeptStopped || isScheduleLinkOff || isDoctorSuspended) {
+                        containerDiv.classList.add('gray-out-cell');
+                        containerDiv.style.backgroundColor = '#888888';
+                        containerDiv.style.color = '#fff';
+                    } else if (isChanged) {
+                        containerDiv.classList.add('cell-changed');
+                        hasAnyChanges = true;
+                    }
+
+                    // ★追加: 1人の場合は高さを100%、複数人の場合はrowSpan分で等分する
+                    if (rowSpan === 1) {
+                        containerDiv.style.height = '100%';
+                        containerDiv.style.borderBottom = 'none';
+                    } else {
+                        containerDiv.style.height = `calc(100% / ${rowSpan})`;
+                    }
+
+                    // 掲載状況のテキスト抽出 (複数レコードで異なる場合は列挙、同じなら1つ)
+                    let statusText = '';
+                    if (targetRec._publishStatuses && targetRec._publishStatuses.size > 0) {
+                        const statuses = Array.from(targetRec._publishStatuses).filter(Boolean);
+                        statusText = statuses.join('、');
+                    } else {
+                        statusText = targetRec['掲載']?.value || '通常表示';
+                    }
+
+                    const statusSpan = document.createElement('span');
+                    statusSpan.textContent = statusText;
+                    statusSpan.style.flex = '1';
+                    statusSpan.style.textAlign = 'center';
+                    statusSpan.style.fontSize = '14px';
+                    containerDiv.appendChild(statusSpan);
+
+                    cell.appendChild(containerDiv);
+                }
             } else if (col.field === '医師名') {
                 // ★修正: 斜線背景クラスをTDにのみ適用
                 cell.classList.add('doctor-cell-filled');
@@ -1443,8 +1505,10 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'doctor-name-wrapper';
                     
-                    // ★追加: 診療科停止または予定連動Off時はラッパーもグレーアウト
-                    if (isDeptStopped || isScheduleLinkOff) {
+                    const isDoctorSuspended = targetRec['掲載']?.value === '非表示' || targetRec['掲載']?.value === '停止';
+
+                    // ★追加: 診療科停止、予定連動Off、または個別医師停止/非表示時はラッパーもグレーアウト
+                    if (isDeptStopped || isScheduleLinkOff || isDoctorSuspended) {
                         containerDiv.classList.add('gray-out-cell');
                         containerDiv.style.backgroundColor = '#888888';
                         containerDiv.style.color = '#fff';
@@ -1474,24 +1538,17 @@ window.ShinryoApp = window.ShinryoApp || {};
                     // ★追加: 編集ボタン
                     const searchBtn = document.createElement('button');
                     searchBtn.className = 'btn-detail';
-                    searchBtn.textContent = '個別編集';
+                    searchBtn.textContent = '予定編集';
                     searchBtn.title = 'この医師で絞り込んで編集';
                     searchBtn.onclick = (e) => {
-                       e.stopPropagation();
-                       try {
-                           sessionStorage.setItem('return_view_mode', 'overview');
-                       } catch (err) {}
-                       const targetRec = records[idx + i];
-                       const recId = (targetRec && targetRec._mergedIds && targetRec._mergedIds.length > 0)
-                           ? targetRec._mergedIds[0]
-                           : (targetRec && targetRec.$id ? targetRec.$id.value : null);
-                       if (recId) {
-                           const appRoot = location.protocol + '//' + location.host + location.pathname.replace(/\/(show|edit).*/, '/');
-                           window.location.href = `${appRoot}show#record=${recId}&mode=edit`;
-                       } else {
-                           const query = `診療科 in ("${currentDept}") and 医師名 in ("${doctorName}")`;
-                           window.location.href = `?view_mode=input&from_view=overview&query=${encodeURIComponent(query)}`;
-                       }
+                        e.stopPropagation();
+                        try {
+                            sessionStorage.setItem('return_view_mode', 'overview');
+                        } catch (err) {}
+                        const query = doctorName
+                            ? `診療科 in ("${currentDept}") and 医師名 in ("${doctorName}")`
+                            : `診療科 in ("${currentDept}")`;
+                        window.location.href = `?view_mode=input&from_view=overview&query=${encodeURIComponent(query)}`;
                     };
                     containerDiv.appendChild(searchBtn);
 
@@ -1557,8 +1614,10 @@ window.ShinryoApp = window.ShinryoApp || {};
                     
                     const isChanged = hasRecordChange(targetRec, targetPubRec);
 
-                    // ★追加: 診療科停止または予定連動Off時はラッパーもグレーアウト
-                    if (isDeptStopped || isScheduleLinkOff) {
+                    const isDoctorSuspended = targetRec['掲載']?.value === '非表示' || targetRec['掲載']?.value === '停止';
+
+                    // ★追加: 診療科停止、予定連動Off、または個別医師停止/非表示時はラッパーもグレーアウト
+                    if (isDeptStopped || isScheduleLinkOff || isDoctorSuspended) {
                         containerDiv.classList.add('gray-out-cell');
                         containerDiv.style.backgroundColor = '#888888';
                         containerDiv.style.color = '#fff';

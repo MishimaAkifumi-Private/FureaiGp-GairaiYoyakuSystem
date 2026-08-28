@@ -384,7 +384,7 @@
             // ※行全体を塗った後に、特定のセルだけ上書きする
             if (elPublish && elPublish[index]) {
                 const publishVal = record['掲載'] ? record['掲載'].value : '';
-                if (publishVal === '停止') {
+                if (publishVal === '停止' || publishVal === '非表示') {
                     const pubCell = elPublish[index].closest('td');
                     if (pubCell) {
                         // ここだけは確実に上書きするためimportantを使用

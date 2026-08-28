@@ -681,7 +681,7 @@ window.ShinryoApp = window.ShinryoApp || {};
               if (JSON.stringify(v1) !== JSON.stringify(v2)) return true;
           }
       }
-      const fields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '留意案内', '着任日', '離任日', '担当者'];
+      const fields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '電話誘導メッセージ', '施設名', '留意案内', '着任日', '離任日', '担当者'];
       for (const f of fields) {
           if (normalizeStr(rec1[f]?.value) !== normalizeStr(rec2[f]?.value)) return true;
       }
@@ -1286,7 +1286,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     }
 
     // 2. 変更・追加のチェック
-    const simpleFields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '施設名', '表示順', '着任日', '離任日', '集合'];
+    const simpleFields = ['診療分野', '診療科', '医師名', '診療選択', '掲載', '電話誘導メッセージ', '施設名', '表示順', '着任日', '離任日', '集合'];
     
     for (const rec of currentRecords) {
       const recId = String(rec.$id.value); // ★変更: IDを文字列に統一
