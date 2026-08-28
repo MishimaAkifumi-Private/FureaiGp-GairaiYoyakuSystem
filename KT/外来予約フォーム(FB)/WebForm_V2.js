@@ -2312,17 +2312,17 @@
           if (setting === 'first_visit' && req !== '初診') return;
           if (setting === 'change' && req !== '変更') return;
 
-          const guidanceText = config.state.descriptions[dept];
+          const guidanceText = config.state.descriptions ? config.state.descriptions[dept] : null;
           if (guidanceText) {
+              const normalized = normalizeKintoneFontSize(guidanceText);
               const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = guidanceText;
+              tempDiv.innerHTML = normalized;
               if (tempDiv.textContent.trim().length > 0 || tempDiv.querySelector('img')) {
-                  area.style.cssText = 'margin-top: 15px; padding: 10px; border: 1px solid #e0e0e0; background-color: #f9f9f9; font-size: 13px; border-radius: 4px;';
+                  area.style.cssText = 'margin-top: 15px; padding: 12px 15px; border: 1px solid #e0e0e0; background-color: #f9f9f9; font-size: 13px; border-radius: 4px; display: block;';
                   const div = document.createElement('div');
                   div.className = 'gemini-rich-text';
-                  div.innerHTML = guidanceText;
+                  div.innerHTML = normalized;
                   area.appendChild(div);
-                  area.style.display = 'block';
               }
           }
       }
@@ -2503,18 +2503,8 @@
           const messageText = getPhoneGuideMessage();
           area.style.display = 'block';
           area.innerHTML = `
-              <div style="background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%); border: 2px solid #ffeeba; border-left: 6px solid #f39c12; border-radius: 8px; padding: 18px 20px; margin-top: 15px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);">
-                  <div style="display: flex; align-items: flex-start; gap: 12px;">
-                      <span style="font-size: 28px; line-height: 1; flex-shrink: 0;">📞</span>
-                      <div>
-                          <div style="font-size: 15px; font-weight: bold; color: #856404; margin-bottom: 6px;">
-                              お電話での予約受付・お問い合わせのご案内
-                          </div>
-                          <div style="font-size: 14px; color: #533f03; line-height: 1.6; font-weight: 500;">
-                              ${messageText.replace(/\n/g, '<br>')}
-                          </div>
-                      </div>
-                  </div>
+              <div style="color: #0056b3; font-size: 14px; font-weight: 500; margin-top: 10px; margin-bottom: 15px; padding-left: 2px;">
+                  ※${messageText.replace(/\n/g, '<br>')}
               </div>
           `;
       }
@@ -2900,23 +2890,34 @@
               switch (level) {
                   case 'bunya':
                       config.state.selectedBunya = null;
+                      break;
                   case 'department':
                       config.state.selectedDepartment = null;
+                      area = document.getElementById(config.uiIds.GUIDANCE_AREA);
+                      if (area) area.innerHTML = '';
+                      toggleSection(config.uiIds.GUIDANCE_AREA, false);
+                      break;
                   case 'final':
                       config.state.selectedTokuteiShinryo = null;
+                      break;
                   case 'doctor':
                       config.state.selectedDoctor = null;
                       area = document.getElementById(config.uiIds.DOCTOR_AREA);
                       if (area) area.innerHTML = '';
                       toggleSection(config.uiIds.DOCTOR_AREA, false);
-                      area = document.getElementById(config.uiIds.GUIDANCE_AREA);
+                      area = document.getElementById(config.uiIds.DOCTOR_GUIDANCE_AREA);
                       if (area) area.innerHTML = '';
-                      toggleSection(config.uiIds.GUIDANCE_AREA, false);
+                      toggleSection(config.uiIds.DOCTOR_GUIDANCE_AREA, false);
+                      break;
                   case 'method':
                       config.state.yoyakuMethod = null;
                       area = document.getElementById(config.uiIds.METHOD_AREA);
                       if (area) area.innerHTML = '';
                       toggleSection(config.uiIds.METHOD_AREA, false);
+                      area = document.getElementById(config.uiIds.PHONE_GUIDE_AREA);
+                      if (area) area.innerHTML = '';
+                      toggleSection(config.uiIds.PHONE_GUIDE_AREA, false);
+                      break;
                   case 'wishes':
                       config.state.selectedWishDateTimes = {1:null, 2:null, 3:null, 4:null, 5:null};
                       area = document.getElementById(config.uiIds.WISH_DATES_AREA);
