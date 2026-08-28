@@ -48,6 +48,30 @@
     // HTMLタグ除去ヘルパー
     const stripHtml = (html) => { const t = document.createElement('div'); t.innerHTML = html || ''; return t.textContent || t.innerText || ''; };
 
+    // 第W週 曜日D の実日付を計算するヘルパー関数
+    const getActualDateForCell = (year, month, weekStr, dayStr) => {
+        if (!year || !month) return null;
+        const dayMap = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 };
+        const targetDayOfWeek = dayMap[dayStr];
+        if (targetDayOfWeek === undefined) return null;
+        const weekNum = parseInt(weekStr, 10);
+        if (isNaN(weekNum) || weekNum < 1 || weekNum > 5) return null;
+
+        const lastDayOfMonth = new Date(year, month, 0).getDate();
+        let firstDate = null;
+        for (let day = 1; day <= 7; day++) {
+            const testDate = new Date(year, month - 1, day);
+            if (testDate.getDay() === targetDayOfWeek) {
+                firstDate = day;
+                break;
+            }
+        }
+        if (firstDate === null) return null;
+        const actualDayNum = firstDate + (weekNum - 1) * 7;
+        if (actualDayNum > lastDayOfMonth) return null;
+        return new Date(year, month - 1, actualDayNum);
+    };
+
     // ShinryoViewer.js と同等のHTML生成関数
     const createScheduleTableHtml = (rec, isMerged = false, commonSettings = null, targetYear = null, targetMonth = null) => {
         const days = ['月','火','水','木','金','土'];
@@ -60,18 +84,23 @@
                     const field = `${d}${w}`;
                     if (rec._scheduleInfo[field]) {
                         const infoList = rec._scheduleInfo[field];
+                        const cellActualDate = (targetYear && targetMonth)
+                            ? getActualDateForCell(targetYear, targetMonth, w, d)
+                            : null;
+
                         infoList.forEach(item => {
                             // 着任日・離任日によるフィルタリング
                             if (targetYear && targetMonth) {
-                                const monthFirstDay = new Date(targetYear, targetMonth - 1, 1);
-                                const monthLastDay = new Date(targetYear, targetMonth, 0);
+                                if (!cellActualDate) return;
                                 if (item.start) {
-                                    const startD = new Date(item.start);
-                                    if (startD > monthLastDay) return; // まだ着任していない
+                                    const parts = item.start.split('-');
+                                    const sDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                                    if (cellActualDate < sDate) return; // まだ着任していない
                                 }
                                 if (item.end) {
-                                    const endD = new Date(item.end);
-                                    if (endD < monthFirstDay) return; // 既に離任している
+                                    const parts = item.end.split('-');
+                                    const eDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                                    if (cellActualDate > eDate) return; // 既に離任している
                                 }
                             }
                             if (item.guidance && stripHtml(item.guidance).trim() !== '') {
@@ -114,6 +143,10 @@
                 let cellContent = '';
                 let cellClass = '';
                 
+                const cellActualDate = (targetYear && targetMonth)
+                    ? getActualDateForCell(targetYear, targetMonth, w, d)
+                    : null;
+
                 if (rec._scheduleInfo && rec._scheduleInfo[field]) {
                     const infoList = rec._scheduleInfo[field];
                     if (infoList.length > 0) {
@@ -123,17 +156,35 @@
                         infoList.forEach(sch => {
                             // 着任日・離任日によるフィルタリング
                             if (targetYear && targetMonth) {
-                                const monthFirstDay = new Date(targetYear, targetMonth - 1, 1);
-                                const monthLastDay = new Date(targetYear, targetMonth, 0);
+                                if (!cellActualDate) return;
                                 if (sch.start) {
-                                    const startD = new Date(sch.start);
-                                    if (startD > monthLastDay) return; // まだ着任していない
+                                    const parts = sch.start.split('-');
+                                    const startD = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                                    if (cellActualDate < startD) return; // まだ着任していない
                                 }
                                 if (sch.end) {
-                                    const endD = new Date(sch.end);
-                                    if (endD < monthFirstDay) return; // 既に離任している
+                                    const parts = sch.end.split('-');
+                                    const endD = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                                    if (cellActualDate > endD) return; // 既に離任している
                                 }
                             }
+
+                            // 直近NG日指定チェック
+                            let isAmNg = false;
+                            let isPmNg = false;
+                            if (cellActualDate && sch.ngDates) {
+                                const targetDateStr = `${cellActualDate.getFullYear()}-${String(cellActualDate.getMonth() + 1).padStart(2, '0')}-${String(cellActualDate.getDate()).padStart(2, '0')}`;
+                                if (Array.isArray(sch.ngDates)) {
+                                    for (const row of sch.ngDates) {
+                                        if (row.value && row.value['日付']?.value === targetDateStr) {
+                                            const ngTimes = row.value['NG時間帯']?.value || [];
+                                            if (ngTimes.includes('AM')) isAmNg = true;
+                                            if (ngTimes.includes('PM')) isPmNg = true;
+                                        }
+                                    }
+                                }
+                            }
+
                             const defaultColors = ['#007bff', '#28a745', '#e67e22', '#9b59b6', '#e74c3c'];
                             const facObj = facilities.find(f => f.name === sch.facility);
                             let symbolHtml = '';
@@ -150,8 +201,8 @@
                                 selectionHtml = `<div style="font-size:0.65em;color:#003366;line-height:1.1;margin-top:1px;">${sch.selection}</div>`;
                             }
 
-                            if (sch.times.includes('午前')) amParts.push({ symbol: symbolHtml, selection: selectionHtml });
-                            if (sch.times.includes('午後')) pmParts.push({ symbol: symbolHtml, selection: selectionHtml });
+                            if (sch.times.includes('午前') && !isAmNg) amParts.push({ symbol: symbolHtml, selection: selectionHtml });
+                            if (sch.times.includes('午後') && !isPmNg) pmParts.push({ symbol: symbolHtml, selection: selectionHtml });
                         });
 
                         const buildContent = (label, parts) => {
@@ -425,41 +476,6 @@
                     }
                 }
             }
-
-            // --- E. 行ホバー時のツールチップ表示 (担当パターン) ---
-            if (targetCellEl) {
-                const row = targetCellEl.closest('tr');
-                if (row) {
-                    // 全レコードキャッシュから詳細情報（スケジュール）を取得
-                    const fullRecord = allRecordsCache.find(r => r.$id.value === record.$id.value);
-                    if (fullRecord) {
-                        row.onclick = (e) => {
-                            // 詳細画面（編集画面）へのリンク列がクリックされた場合はポップアップを表示しない
-                            if (e.target.closest('.recordlist-action-gaia')) {
-                                return;
-                            }
-                            // ツールチップ表示用に _scheduleInfo を構築
-                            fullRecord._scheduleInfo = buildScheduleInfo(fullRecord, commonSettings ? commonSettings.facilities : []);
-                            const tip = getTooltipElement();
-                            tip.innerHTML = createScheduleTableHtml(fullRecord, false, commonSettings, selectedYear, selectedMonth);
-                            tip.style.display = 'block';
-                            tip.style.top = (e.pageY + 15) + 'px';
-                            tip.style.left = (e.pageX + 15) + 'px';
-                        };
-                        row.onmousemove = (e) => {
-                            const tip = getTooltipElement();
-                            if (tip.style.display === 'block') {
-                                tip.style.top = (e.pageY + 15) + 'px';
-                                tip.style.left = (e.pageX + 15) + 'px';
-                            }
-                        };
-                        row.onmouseleave = () => {
-                            const tip = getTooltipElement();
-                            tip.style.display = 'none';
-                        };
-                    }
-                }
-            }
         });
 
         isProcessing = false;
@@ -568,45 +584,58 @@
         container.innerHTML = ''; // クリア
 
         const doctorName = Array.from(doctorNames)[0];
-
-        // マージレコード作成
         const facilities = commonSettings ? (commonSettings.facilities || []) : [];
-        const mergedRec = {
-            '施設名': { value: Array.from(new Set(records.map(r => r['施設名'].value).filter(v => v))).join(', ') },
-            '診療科': { value: Array.from(new Set(records.map(r => r['診療科'].value).filter(v => v))).join(', ') },
-            '診療選択': { value: Array.from(new Set(records.map(r => r['診療選択'].value).filter(v => v))).join(', ') },
-            '医師名': { value: doctorName },
-            '_scheduleInfo': {}
-        };
 
-        scheduleFields.forEach(field => {
-            const values = new Set();
-            const infoList = [];
-            records.forEach(r => {
-                const val = r[field]?.value || [];
-                if (val.length > 0) {
-                    let facName = r['施設名']?.value || '';
-                    if (facilities) {
-                        const found = facilities.find(fac => facName.includes(fac.name));
-                        if (found) facName = found.name;
-                    }
-                    infoList.push({
-                        times: val,
-                        facility: facName,
-                        selection: r['診療選択']?.value || '',
-                        guidance: r['留意案内']?.value || '',
-                        start: r['着任日']?.value || '',
-                        end: r['離任日']?.value || '',
-                        ngDates: r['直近NG日指定']?.value || ''
-                    });
-                }
-                val.forEach(v => values.add(v));
-            });
-            if (infoList.length > 0) {
-                mergedRec._scheduleInfo[field] = infoList;
+        // 診療科単位でグループ化
+        const deptGroupMap = new Map();
+        records.forEach(r => {
+            const dept = r['診療科']?.value || '未設定';
+            if (!deptGroupMap.has(dept)) {
+                deptGroupMap.set(dept, []);
             }
-            mergedRec[field] = { value: Array.from(values) };
+            deptGroupMap.get(dept).push(r);
         });
+
+        // 診療科ごとのマージレコード作成関数
+        const createDeptMergedRec = (deptName, deptRecords) => {
+            const mergedRec = {
+                '施設名': { value: Array.from(new Set(deptRecords.map(r => r['施設名']?.value).filter(Boolean))).join(', ') },
+                '診療科': { value: deptName },
+                '診療選択': { value: Array.from(new Set(deptRecords.map(r => r['診療選択']?.value).filter(Boolean))).join(', ') },
+                '医師名': { value: doctorName },
+                '_scheduleInfo': {}
+            };
+
+            scheduleFields.forEach(field => {
+                const values = new Set();
+                const infoList = [];
+                deptRecords.forEach(r => {
+                    const val = r[field]?.value || [];
+                    if (val.length > 0) {
+                        let facName = r['施設名']?.value || '';
+                        if (facilities) {
+                            const found = facilities.find(fac => facName.includes(fac.name));
+                            if (found) facName = found.name;
+                        }
+                        infoList.push({
+                            times: val,
+                            facility: facName,
+                            selection: r['診療選択']?.value || '',
+                            guidance: r['留意案内']?.value || '',
+                            start: r['着任日']?.value || '',
+                            end: r['離任日']?.value || '',
+                            ngDates: r['直近NG日指定']?.value || ''
+                        });
+                    }
+                    val.forEach(v => values.add(v));
+                });
+                if (infoList.length > 0) {
+                    mergedRec._scheduleInfo[field] = infoList;
+                }
+                mergedRec[field] = { value: Array.from(values) };
+            });
+            return mergedRec;
+        };
 
         // タイトル & 月めくりコンテナ (Flexレイアウト)
         const headerRow = document.createElement('div');
@@ -618,7 +647,7 @@
         headerRow.appendChild(title);
 
         const monthSelector = document.createElement('div');
-        monthSelector.style.cssText = "display: inline-flex; align-items: center; gap: 10px; user-select: none;";
+        monthSelector.style.cssText = "display: inline-flex; align-items: center; gap: 8px; user-select: none;";
 
         const prevBtn = document.createElement('button');
         prevBtn.textContent = '◀ 前月';
@@ -632,6 +661,19 @@
                 selectedMonth = 12;
                 selectedYear--;
             }
+            renderMergedSchedule(cachedRecords, commonSettingsCache);
+        };
+
+        const todayBtn = document.createElement('button');
+        todayBtn.textContent = '今月';
+        todayBtn.title = '当月へ戻る';
+        todayBtn.style.cssText = "background: #2ecc71; color: #fff; border: none; border-radius: 4px; padding: 4px 10px; font-weight: bold; cursor: pointer; font-size: 13px; height: 28px; transition: background-color 0.2s;";
+        todayBtn.onmouseover = () => todayBtn.style.background = '#27ae60';
+        todayBtn.onmouseout = () => todayBtn.style.background = '#2ecc71';
+        todayBtn.onclick = () => {
+            const now = new Date();
+            selectedYear = now.getFullYear();
+            selectedMonth = now.getMonth() + 1;
             renderMergedSchedule(cachedRecords, commonSettingsCache);
         };
 
@@ -655,20 +697,30 @@
         };
 
         monthSelector.appendChild(prevBtn);
+        monthSelector.appendChild(todayBtn);
         monthSelector.appendChild(monthDisplay);
         monthSelector.appendChild(nextBtn);
         headerRow.appendChild(monthSelector);
 
         container.appendChild(headerRow);
 
-        // スケジュール表
-        const content = document.createElement('div');
-        content.innerHTML = createScheduleTableHtml(mergedRec, true, commonSettings, selectedYear, selectedMonth);
-        // 背景色を白にして見やすく
-        const table = content.querySelector('table');
-        if (table) table.style.backgroundColor = '#fff';
-        
-        container.appendChild(content);
+        // 診療科ごとのスケジュール表コンテナ
+        const schedulesContainer = document.createElement('div');
+        schedulesContainer.style.cssText = "display: flex; flex-direction: column; gap: 20px; width: 100%;";
+
+        deptGroupMap.forEach((deptRecords, deptName) => {
+            const deptMergedRec = createDeptMergedRec(deptName, deptRecords);
+            const content = document.createElement('div');
+            content.style.cssText = "background-color: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);";
+            content.innerHTML = createScheduleTableHtml(deptMergedRec, true, commonSettings, selectedYear, selectedMonth);
+            
+            const table = content.querySelector('table');
+            if (table) table.style.backgroundColor = '#fff';
+
+            schedulesContainer.appendChild(content);
+        });
+
+        container.appendChild(schedulesContainer);
 
         // 幅調整: 下の一覧表に合わせる
         const listTable = document.querySelector('.recordlist-gaia');

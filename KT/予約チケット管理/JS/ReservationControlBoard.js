@@ -1166,10 +1166,20 @@
                 methodSection.style.display = 'block'; // 再設定時に表示
                 const radios = methodSection.querySelectorAll('input[name="rcb-method-select"]');
                 radios.forEach(radio => {
-                    radio.disabled = false;
-                    if (radio.parentElement) {
-                        radio.parentElement.style.opacity = '1';
-                        radio.parentElement.style.cursor = 'pointer';
+                    if (isConfirmed || !staffName || currentStatus === '未着手' || isAssignedToOther) {
+                        radio.disabled = true;
+                        if (radio.parentElement) {
+                            radio.parentElement.style.opacity = '0.6';
+                            radio.parentElement.style.cursor = 'not-allowed';
+                            if (isAssignedToOther) radio.parentElement.title = `担当者（${staffName}さん）のみ操作可能です`;
+                        }
+                    } else {
+                        radio.disabled = false;
+                        if (radio.parentElement) {
+                            radio.parentElement.style.opacity = '1';
+                            radio.parentElement.style.cursor = 'pointer';
+                            radio.parentElement.title = '';
+                        }
                     }
                 });
             }
@@ -1286,16 +1296,24 @@
                 confirmActionBtn.textContent = '確定案内をする';
                 confirmActionBtn.style.cssText = 'padding: 12px 28px; font-size: 16px; background-color: #007bff; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 5px;';
 
-                confirmActionBtn.onclick = () => {
-                    if (window._rcbPhoneCountTimer) {
-                        clearInterval(window._rcbPhoneCountTimer);
-                        window._rcbPhoneCountTimer = null;
-                    }
-                    isSelectingConfirmDate = true;
-                    selectedNoticeMailType = 'confirm';
-                    noticeMsgSection.remove();
-                    renderEditorView();
-                };
+                if (isAssignedToOther) {
+                    confirmActionBtn.disabled = true;
+                    confirmActionBtn.style.opacity = '0.5';
+                    confirmActionBtn.style.cursor = 'not-allowed';
+                    confirmActionBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                    confirmActionBtn.style.backgroundColor = '#78909c';
+                } else {
+                    confirmActionBtn.onclick = () => {
+                        if (window._rcbPhoneCountTimer) {
+                            clearInterval(window._rcbPhoneCountTimer);
+                            window._rcbPhoneCountTimer = null;
+                        }
+                        isSelectingConfirmDate = true;
+                        selectedNoticeMailType = 'confirm';
+                        noticeMsgSection.remove();
+                        renderEditorView();
+                    };
+                }
 
                 waitCard.appendChild(msgP);
                 waitCard.appendChild(confirmActionBtn);
@@ -1343,21 +1361,30 @@
                 sendMailBtn.textContent = '案内を送信する';
                 sendMailBtn.style.cssText = 'width: 100%; max-width: 400px; padding: 12px; font-size: 16px; background-color: #27ae60; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;';
 
-                sendMailBtn.onclick = async () => {
+                if (isAssignedToOther) {
+                    sendMsgInput.readOnly = true;
                     sendMailBtn.disabled = true;
-                    const originalText = sendMailBtn.textContent;
-                    sendMailBtn.textContent = '送信中...';
-                    try {
-                        const ok = await processSendMail(currentDate, currentTime, sendMsgInput.value);
-                        if (!ok) {
+                    sendMailBtn.style.opacity = '0.5';
+                    sendMailBtn.style.cursor = 'not-allowed';
+                    sendMailBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                    sendMailBtn.style.backgroundColor = '#78909c';
+                } else {
+                    sendMailBtn.onclick = async () => {
+                        sendMailBtn.disabled = true;
+                        const originalText = sendMailBtn.textContent;
+                        sendMailBtn.textContent = '送信中...';
+                        try {
+                            const ok = await processSendMail(currentDate, currentTime, sendMsgInput.value);
+                            if (!ok) {
+                                sendMailBtn.disabled = false;
+                                sendMailBtn.textContent = originalText;
+                            }
+                        } catch (e) {
                             sendMailBtn.disabled = false;
                             sendMailBtn.textContent = originalText;
                         }
-                    } catch (e) {
-                        sendMailBtn.disabled = false;
-                        sendMailBtn.textContent = originalText;
-                    }
-                };
+                    };
+                }
 
                 msgEditor.appendChild(sendMailBtn);
                 noticeMsgSection.appendChild(msgEditor);
@@ -1444,21 +1471,34 @@
             sendMailBtn.textContent = '案内を送信する';
             sendMailBtn.style.cssText = 'width: 100%; max-width: 400px; padding: 12px; font-size: 16px; background-color: #27ae60; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;';
             
-            sendMailBtn.onclick = async () => {
+            if (isAssignedToOther) {
+                if (noAnswerTimeoutSelect) {
+                    noAnswerTimeoutSelect.disabled = true;
+                    noAnswerTimeoutSelect.style.cursor = 'not-allowed';
+                }
+                sendMsgInput.readOnly = true;
                 sendMailBtn.disabled = true;
-                const originalText = sendMailBtn.textContent;
-                sendMailBtn.textContent = '送信中...';
-                try {
-                    const ok = await processSendMail(currentDate, currentTime, sendMsgInput.value);
-                    if (!ok) {
+                sendMailBtn.style.opacity = '0.5';
+                sendMailBtn.style.cursor = 'not-allowed';
+                sendMailBtn.title = `担当者（${staffName}さん）のみ操作可能です`;
+                sendMailBtn.style.backgroundColor = '#78909c';
+            } else {
+                sendMailBtn.onclick = async () => {
+                    sendMailBtn.disabled = true;
+                    const originalText = sendMailBtn.textContent;
+                    sendMailBtn.textContent = '送信中...';
+                    try {
+                        const ok = await processSendMail(currentDate, currentTime, sendMsgInput.value);
+                        if (!ok) {
+                            sendMailBtn.disabled = false;
+                            sendMailBtn.textContent = originalText;
+                        }
+                    } catch (e) {
                         sendMailBtn.disabled = false;
                         sendMailBtn.textContent = originalText;
                     }
-                } catch (e) {
-                    sendMailBtn.disabled = false;
-                    sendMailBtn.textContent = originalText;
-                }
-            };
+                };
+            }
 
             msgEditor.appendChild(sendMailBtn);
             noticeMsgSection.appendChild(msgEditor);
@@ -1865,6 +1905,13 @@
             radioInput.value = opt.value;
             if (isSelected) radioInput.checked = true;
             radioInput.style.cssText = 'cursor: pointer; width: 16px; height: 16px; accent-color: #007bff;';
+
+            if (isConfirmed || !staffName || currentStatus === '未着手' || isAssignedToOther) {
+                radioInput.disabled = true;
+                labelEl.style.opacity = '0.6';
+                labelEl.style.cursor = 'not-allowed';
+                if (isAssignedToOther) labelEl.title = `担当者（${staffName}さん）のみ操作可能です`;
+            }
 
             radioInput.onchange = () => {
                 selectedNoticeMailType = opt.value;
@@ -3210,7 +3257,7 @@
                     let remainingMinutes = (endOfBusiness.getTime() - now.getTime()) / (1000 * 60);
                     if (remainingMinutes < 0) remainingMinutes = 0; // 17時以降は時間指定を出さない
                     
-                    const filteredOptions = allTimeOptions.filter(opt => opt.min <= remainingMinutes);
+                    const filteredOptions = allTimeOptions.filter(opt => opt.label.includes('テスト用') || opt.min <= remainingMinutes);
                     const fixedOptions = [
                         { label: '今日中', min: null },
                         { label: '明日午前中', min: null },
