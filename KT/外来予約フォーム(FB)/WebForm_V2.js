@@ -3650,6 +3650,39 @@
             form .fb-submit + .gemini-injected-back-btn { margin-left: 30px !important; }
             .gemini-nav-btn:disabled { opacity: 0.65 !important; cursor: not-allowed !important; }
             @media (max-width: 768px) {
+                /* スマホ・モバイル表示時：最外殻コンテナから本文・ヘッダーまで確実に左右16pxの余白を設ける */
+                body,
+                #app,
+                .form-body,
+                .ui.container,
+                .ui.form,
+                .fb-main,
+                .fb-main-container,
+                .fb-content,
+                .fb-container,
+                .fb-custom--header,
+                .fb-custom--header-layout,
+                .fb-custom--title-layout,
+                .fb-custom--content,
+                .fb-custom--content-layout,
+                #${config.uiIds.WIZARD_CONTAINER} {
+                    padding-left: 16px !important;
+                    padding-right: 16px !important;
+                    box-sizing: border-box !important;
+                }
+                
+                /* ヘッダー画像・ロゴの横幅がはみ出さないように制御 */
+                .fb-custom--header-layout img,
+                .fb-custom--header img,
+                .fb-custom--content img {
+                    max-width: 100% !important;
+                    height: auto !important;
+                }
+
+                .fb-custom--title { 
+                    font-size: 1.5rem !important; 
+                    word-break: break-word !important;
+                }
                 .g-address-container { flex-direction: column; gap: 0; }
                 .g-multistage-container, .g-fixed-resv-container, .g-wish-container, .g-name-fields, .g-dob-fields { flex-direction: column; align-items: stretch; gap: 8px; }
                 .g-address-container > div, .g-multistage-container > div, .g-multistage-container .g-form-control, .g-fixed-resv-container > div, .g-wish-container > .g-form-control, .g-name-fields > .g-form-control, .g-dob-fields > .g-form-control { width: 100%; max-width: none; }

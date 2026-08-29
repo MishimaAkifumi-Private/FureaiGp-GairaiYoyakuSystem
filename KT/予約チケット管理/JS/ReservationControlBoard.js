@@ -2897,6 +2897,34 @@
 
             dateTimeDisplay.appendChild(dateRow);
             dateTimeDisplay.appendChild(timeRow);
+
+            // ★ 受診予定日時超過（当日中）の案内表示
+            if (displayDateVal) {
+                let timeStr = "23:59:00";
+                if (displayTimeVal) {
+                    const parts = displayTimeVal.includes(':') ? displayTimeVal.split(':') : [displayTimeVal.slice(0, 2), displayTimeVal.slice(2)];
+                    const hh = String(parts[0] || '0').padStart(2, '0');
+                    const mm = String(parts[1] || '00').padStart(2, '0');
+                    timeStr = `${hh}:${mm}:00`;
+                }
+                const appointmentTime = new Date(`${displayDateVal}T${timeStr}`);
+                const nextDayOfAppointment = new Date(displayDateVal);
+                nextDayOfAppointment.setDate(nextDayOfAppointment.getDate() + 1);
+                nextDayOfAppointment.setHours(0, 0, 0, 0);
+
+                const now = new Date();
+                if (!isNaN(appointmentTime.getTime()) && now >= appointmentTime && now < nextDayOfAppointment) {
+                    const pastNotice = document.createElement('div');
+                    pastNotice.style.cssText = 'padding: 10px 18px; background-color: #e3f2fd; border: 1.5px solid #90caf9; border-radius: 6px; margin-top: 10px; width: 100%; max-width: 550px; box-sizing: border-box; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
+                    pastNotice.innerHTML = `
+                        <div style="font-size: 13.5px; font-weight: bold; color: #1565c0; display: flex; align-items: center; justify-content: center; gap: 8px; line-height: 1.5;">
+                            <span style="font-size: 16px;">⏳</span>
+                            <span>患者の診療予定日時が過ぎました。このチケットは明日以降に操作が可能になります。</span>
+                        </div>
+                    `;
+                    dateTimeDisplay.appendChild(pastNotice);
+                }
+            }
         }
 
         // 日時表示エリアのスタイル適用
