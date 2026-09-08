@@ -190,6 +190,89 @@ window.ShinryoApp = window.ShinryoApp || {};
       .toggle-switch.large input:checked + .toggle-slider:before {
         transform: translateX(24px);
       }
+
+      /* --- 予約受付方式セレクト --- */
+      .reception-mode-select {
+        width: 100%;
+        max-width: 175px;
+        padding: 5px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        outline: none;
+        box-sizing: border-box;
+        text-align: center;
+        text-align-last: center;
+        transition: all 0.2s ease;
+        line-height: 1.3;
+      }
+      .reception-mode-select:focus {
+        box-shadow: 0 0 0 2px rgba(25, 103, 210, 0.2);
+      }
+      .reception-mode-select.mode-doctor {
+        background-color: #e8f0fe;
+        color: #1967d2;
+        border-color: #aecbfa;
+      }
+      .reception-mode-select.mode-dept {
+        background-color: #e6f4ea;
+        color: #137333;
+        border-color: #ceead6;
+      }
+      .reception-mode-select.mode-off {
+        background-color: #f1f3f4;
+        color: #5f6368;
+        border-color: #dadce0;
+      }
+      .reception-mode-select option {
+        background-color: #ffffff;
+        color: #333333;
+        font-weight: normal;
+        text-align: left;
+      }
+
+      /* --- 医師指名ボタンスタイル --- */
+      .doctor-select-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 62px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: bold;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        box-sizing: border-box;
+      }
+      .doctor-select-btn.mode-allowed {
+        background-color: #e8f0fe;
+        color: #1967d2;
+        border-color: #aecbfa;
+      }
+      .doctor-select-btn.mode-allowed:hover {
+        background-color: #d2e3fc;
+      }
+      .doctor-select-btn.mode-denied {
+        background-color: #e6f4ea;
+        color: #137333;
+        border-color: #ceead6;
+      }
+      .doctor-select-btn.mode-denied:hover {
+        background-color: #c4ebd0;
+      }
+      .doctor-select-btn.mode-disabled {
+        background-color: #f1f3f4;
+        color: #9aa0a6;
+        border-color: #dadce0;
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
       
       /* 診療科ヘッダーコンテナ */
       .dept-header-container { display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -1030,9 +1113,10 @@ window.ShinryoApp = window.ShinryoApp || {};
       { header: '診療科', field: '診療科', width: '11%', merge: true, cls: 'large-font-cell', tooltip: '診療分野に属する個別の診療科です' },
       { header: '予約受付', field: '診療科', type: 'dept_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: '診療科全体の予約を受け付け可否を設定します。例えば一時的に予約受付を停止する場合に使います。' },
       { header: '予約受付期間', type: 'term_group', width: '12%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療受け付ける期間の設定になります。病院全体の期間とは異なる期間を設定する場合に指定します' },
-      { header: '診療予定連動', field: '診療科', type: 'schedule_link_toggle', width: '8%', merge: true, cls: 'large-font-cell', tooltip: 'OffにするとWebフォーム上では患者は担当医師を選択できません。また医師の診療予定外の希望日時でも受け付けるため、ミスマッチになりやすく、スタッフから患者への架電の頻度が高まります。' },
-      { header: '診療予定表', type: 'calendar_icon', width: '7%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
-      { header: '医師', field: '医師名', width: '25%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' },
+      { header: '診療予定連動', field: '診療科', type: 'schedule_link_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: '医師の診療予定（時間割）とWebフォームの予約枠を連動させるかを設定します。Offにすると医師の予定に関わらず全開院日を受け付けます。' },
+      { header: '医師指名', field: '診療科', type: 'doctor_select_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: 'Webフォーム上で患者に医師を選択させるかを設定します。\n【青（左）】指名可：各医師を選択可能。\n【グレー（右）】指名不可：医師名は非表示となり、診療科おまかせとして受け付けます（診療予定連動がOnの時のみ有効）。' },
+      { header: '診療予定表', type: 'calendar_icon', width: '6%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
+      { header: '医師', field: '医師名', width: '22%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' },
       { header: '掲載状況', type: 'publish_status', width: '12%', merge: true, mergeKey: '診療科', cls: 'publish-status-cell align-top', tooltip: '各医師のWeb予約フォームへの掲載状況（通常表示／非表示／空枠無し／電話誘導）です。同一医師で複数レコードがある場合はそれぞれの状況を表示します。' },
       { header: '更新日', type: 'updated_date', width: '12%', merge: true, mergeKey: '診療科', cls: 'updated-date-cell align-top', tooltip: '医師の診療予定レコードの最終更新日です（同一医師の複数レコードがある場合は最新の更新日を表示します）' }
     ];
@@ -1223,8 +1307,8 @@ window.ShinryoApp = window.ShinryoApp || {};
                     if (allStopped) cell.classList.add('gray-out-cell');
                 }
             } else if (isScheduleLinkOff) {
-                // 診療予定連動がOffの場合: 診療予定表、医師、更新日 をグレーアウト
-                if (col.type === 'calendar_icon' || col.field === '医師名' || col.type === 'updated_date') {
+                // 診療予定連動がOffの場合: 医師指名、診療予定表、医師、更新日 をグレーアウト
+                if (col.type === 'doctor_select_toggle' || col.type === 'calendar_icon' || col.field === '医師名' || col.type === 'updated_date') {
                     cell.classList.add('gray-out-cell');
                 }
             }
@@ -1239,7 +1323,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const deptVal = rec['診療科']?.value;
                     if (col.field === '診療分野' && existingBunyas.has(val)) {
                         isChanged = false;
-                    } else if ((col.field === '診療科' || col.type === 'dept_toggle' || col.type === 'calendar_icon') && existingDepts.has(deptVal)) {
+                    } else if ((col.field === '診療科' || col.type === 'dept_toggle' || col.type === 'schedule_link_toggle' || col.type === 'doctor_select_toggle' || col.type === 'calendar_icon') && existingDepts.has(deptVal)) {
                         isChanged = false;
                     } else {
                         isChanged = true; // 新規グループの場合は点滅
@@ -1324,9 +1408,20 @@ window.ShinryoApp = window.ShinryoApp || {};
                 const linkSlider = document.createElement('span');
                 linkSlider.className = 'toggle-slider';
                 
+                if (isDeptStopped) {
+                    linkInput.disabled = true;
+                }
+                
                 linkInput.onchange = async function() {
-                    const newState = linkInput.checked ? 'Off' : 'On';
-                    const msg = `診療科「${currentDept}」の診療予定連動を【${newState}】に変更しますか？\n※Webフォームへの反映には少し時間がかかる場合があります。`;
+                    const willBeOff = linkInput.checked;
+                    const newState = willBeOff ? 'Off' : 'On';
+                    
+                    let msg = '';
+                    if (willBeOff) {
+                        msg = `診療科「${currentDept}」の診療予定連動を【Off】に変更しますか？\n\n・医師の診療予定（時間割）と連動しなくなります。\n・医師指名は一時的に無効化されます（連動を再開した際に前回の設定が復元されます）。\n・医師の予定外の日時でも予約を受け付けるため、ミスマッチ（架電調整）が発生しやすくなります。\n※Webフォームへの反映には少し時間がかかる場合があります。`;
+                    } else {
+                        msg = `診療科「${currentDept}」の診療予定連動を【On】に変更しますか？\n\n・各医師の診療予定（時間割）と連動します。\n※Webフォームへの反映には少し時間がかかる場合があります。`;
+                    }
                     
                     const confirmed = await showCustomDialog(msg, 'confirm', { ok: '変更する', cancel: 'キャンセル' });
                     if (!confirmed) {
@@ -1348,6 +1443,65 @@ window.ShinryoApp = window.ShinryoApp || {};
                 linkLabel.appendChild(linkInput);
                 linkLabel.appendChild(linkSlider);
                 cell.appendChild(linkLabel);
+
+            } else if (col.type === 'doctor_select_toggle') {
+                const scheduleLinkStatus = descriptions['__schedule_link__' + currentDept] || 'On';
+                const isScheduleLinkOff = scheduleLinkStatus === 'Off';
+                // 医師指名設定を独立して取得（旧DeptOnly互換も含む）
+                const doctorSelectStatus = descriptions['__doctor_select__' + currentDept] || (scheduleLinkStatus === 'DeptOnly' ? 'Off' : 'On');
+                const isDoctorDenied = doctorSelectStatus === 'Off';
+                
+                const docLabel = document.createElement('label');
+                docLabel.className = 'toggle-switch large';
+                
+                const docInput = document.createElement('input');
+                docInput.type = 'checkbox';
+                // 指名可(青: 左)なら checked=false、指名不可(グレー: 右)なら checked=true
+                docInput.checked = isDoctorDenied;
+                
+                const docSlider = document.createElement('span');
+                docSlider.className = 'toggle-slider';
+                
+                if (isDeptStopped || isScheduleLinkOff) {
+                    docInput.disabled = true;
+                    docLabel.title = isDeptStopped ? '診療科が停止中のため設定できません' : '診療予定連動がOffのため設定できません';
+                } else {
+                    docLabel.title = isDoctorDenied ? '医師指名: 不可（診療科おまかせ）' : '医師指名: 可能';
+                }
+                
+                docInput.onchange = async function() {
+                    if (isDeptStopped || isScheduleLinkOff) return;
+                    
+                    const willBeDenied = docInput.checked;
+                    const newMode = willBeDenied ? 'Off' : 'On';
+                    
+                    let msg = '';
+                    if (willBeDenied) {
+                        msg = `診療科「${currentDept}」の医師指名を【不可（診療科おまかせ）】に変更しますか？\n\n・Webフォーム上で医師名は非表示になります。\n・科内のいずれかの医師が診療している日時のみ予約を受け付けます。\n※Webフォームへの反映には少し時間がかかる場合があります。`;
+                    } else {
+                        msg = `診療科「${currentDept}」の医師指名を【可能】に変更しますか？\n\n・Webフォーム上で患者が医師を選択できるようになります。\n・選択した医師の診療予定と連動します。\n※Webフォームへの反映には少し時間がかかる場合があります。`;
+                    }
+                    
+                    const confirmed = await showCustomDialog(msg, 'confirm', { ok: '変更する', cancel: 'キャンセル' });
+                    if (!confirmed) {
+                        docInput.checked = !docInput.checked;
+                        return;
+                    }
+                    docInput.disabled = true;
+                    try {
+                        await window.ShinryoApp.ConfigManager.updateDepartmentDoctorSelect(currentDept, newMode);
+                        descriptions['__doctor_select__' + currentDept] = newMode;
+                        renderTable(records, descriptions, container, publishedMap, deptSettings, commonSettings, sourceRecords); // 再描画
+                    } catch(e) {
+                        await showCustomDialog('更新に失敗しました', 'alert');
+                        docInput.checked = !docInput.checked;
+                        docInput.disabled = false;
+                    }
+                };
+                
+                docLabel.appendChild(docInput);
+                docLabel.appendChild(docSlider);
+                cell.appendChild(docLabel);
 
             } else if (col.type === 'calendar_icon') {
                 const groupRecs = records.filter(r => r['診療科']?.value === currentDept);

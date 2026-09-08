@@ -51,6 +51,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     updateStatusBatch: updateStatusBatch,
     updateDepartmentStatus: updateDepartmentStatus,
     updateDepartmentScheduleLink: updateDepartmentScheduleLink, // ★追加
+    updateDepartmentDoctorSelect: updateDepartmentDoctorSelect, // ★追加: 医師指名設定の更新
     updateDepartmentTerm: updateDepartmentTerm, // ★追加
     updateDepartmentDescription: updateDepartmentDescription, // ★追加
     updateCommonCenterInfo: updateCommonCenterInfo, // ★追加
@@ -899,6 +900,26 @@ window.ShinryoApp = window.ShinryoApp || {};
         }
       } catch (e) {
         console.error('ConfigManager: Failed to update department schedule link.', e);
+        throw e;
+      }
+    });
+  }
+
+  /**
+   * ★追加: 診療科ごとの医師指名設定を更新し、公開データに保存する
+   */
+  async function updateDepartmentDoctorSelect(deptName, newStatus) {
+    return enqueueUpdate(async () => {
+      try {
+        const currentPublished = await fetchPublishedData();
+        if (currentPublished) {
+          const descriptions = currentPublished.descriptions || {};
+          descriptions['__doctor_select__' + deptName] = newStatus;
+          
+          await saveConfig(currentPublished.records, descriptions, currentPublished.departmentSettings, currentPublished.commonSettings, currentPublished.labelSettings);
+        }
+      } catch (e) {
+        console.error('ConfigManager: Failed to update department doctor select.', e);
         throw e;
       }
     });

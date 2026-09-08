@@ -520,7 +520,9 @@
           }
 
           if (requirement !== '取消') {
-            html += createSummaryRow('担当医師', rec[config.fbFields.DOCTOR]);
+            if (rec[config.fbFields.DOCTOR]) {
+              html += createSummaryRow('担当医師', rec[config.fbFields.DOCTOR]);
+            }
             
             if (isPhoneGuideSelected()) {
                 const phoneMsg = getPhoneGuideMessage();
@@ -1700,12 +1702,9 @@
       function hasScheduleSlot(date, time, records) {
           if (!records || records.length === 0) return false;
           
-          let isScheduleLinkOn = true;
+          let linkStatus = 'On';
           if (config.state.selectedDepartment && config.state.descriptions) {
-              const linkStatus = config.state.descriptions['__schedule_link__' + config.state.selectedDepartment];
-              if (linkStatus === 'Off') {
-                  isScheduleLinkOn = false;
-              }
+              linkStatus = config.state.descriptions['__schedule_link__' + config.state.selectedDepartment] || 'On';
           }
 
           const dateStrYMD = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -1714,7 +1713,9 @@
           if (dateStrYMD in config.state.publicHolidays) return false;
           if (config.state.companyHolidays.some(d => d.getTime() === date.getTime())) return false;
           
-          if (!isScheduleLinkOn) {
+          // 'Off'（連動なし・フリー受付）の場合のみ、無条件で全開院日を予約可能とする
+          // ※'On'（個別医師）および 'DeptOnly'（診療科おまかせ）は時間割連動チェック（records.some）へ進む
+          if (linkStatus === 'Off') {
               return true;
           }
           
@@ -2393,18 +2394,29 @@
               return;
           }
 
-          let isScheduleLinkOn = true;
+          let linkStatus = 'On';
+          let doctorSelectStatus = 'On';
           if (config.state.selectedDepartment && config.state.descriptions) {
-              const linkStatus = config.state.descriptions['__schedule_link__' + config.state.selectedDepartment];
-              if (linkStatus === 'Off') {
-                  isScheduleLinkOn = false;
-              }
+              linkStatus = config.state.descriptions['__schedule_link__' + config.state.selectedDepartment] || 'On';
+              doctorSelectStatus = config.state.descriptions['__doctor_select__' + config.state.selectedDepartment] || (linkStatus === 'DeptOnly' ? 'Off' : 'On');
           }
 
-          if (!isScheduleLinkOn) {
+          // 連動なし（フリー受付）の場合: 医師選択非表示、医師は空文字
+          if (linkStatus === 'Off') {
               config.state.selectedDoctor = null;
               updateFbField(config.fbFields.DOCTOR, '');
-              area.innerHTML = '';
+              if (area) area.innerHTML = '';
+              toggleSection(config.uiIds.DOCTOR_AREA, false);
+              updateDoctorGuidance();
+              updateMethodSection();
+              return;
+          }
+
+          // 医師指名不可（診療科おまかせ）の場合: 医師選択非表示、医師は「おまかせ」としてセット（全医師の合算時間割で予約受付）
+          if (doctorSelectStatus === 'Off' || linkStatus === 'DeptOnly') {
+              config.state.selectedDoctor = config.DEFAULT_DOCTOR_OPTION;
+              updateFbField(config.fbFields.DOCTOR, config.DEFAULT_DOCTOR_OPTION);
+              if (area) area.innerHTML = '';
               toggleSection(config.uiIds.DOCTOR_AREA, false);
               updateDoctorGuidance();
               updateMethodSection();
