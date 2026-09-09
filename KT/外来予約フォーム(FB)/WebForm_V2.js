@@ -1720,6 +1720,11 @@
           }
           
           return records.some(record => {
+              // ★追加: Web予約対象外（「通常表示」以外：非表示など）の医師は枠計算から完全除外
+              const pubVal = record[config.jsonKeys.PUBLICATION_STATUS]?.value;
+              const isWebDisabled = pubVal && pubVal !== '通常表示';
+              if (isWebDisabled) return false;
+
               const ngDates = record[config.jsonKeys.NG_DATES]?.value;
               if (Array.isArray(ngDates)) {
                   for (const row of ngDates) {
@@ -1745,10 +1750,10 @@
       function isAvailable(date, time, records) {
           if (!records || records.length === 0) return false;
           
-          // 「空枠無し」または「電話誘導」が設定されているレコードは予約枠としては利用不可
+          // 「通常表示」以外のレコードは予約枠としては利用不可
           const isBlocked = records.every(r => {
               const pubStatus = r[config.jsonKeys.PUBLICATION_STATUS]?.value;
-              return pubStatus === '空枠無し' || pubStatus === '電話誘導';
+              return pubStatus && pubStatus !== '通常表示';
           });
           if (isBlocked) return false;
 
@@ -1760,7 +1765,7 @@
 
           records = records.filter(r => {
               const val = r[config.jsonKeys.PUBLICATION_STATUS]?.value;
-              const isHidden = val === '非表示' || val === '停止' || val === 'Off' || val === 'false';
+              const isHidden = val && val !== '通常表示';
               return !isHidden;
           });
 
@@ -2472,6 +2477,18 @@
               if (opt === config.SAME_DOCTOR_OPTION && config.state.requirement !== '変更') return;
               select.appendChild(createSelectorOption(opt, opt));
           });
+
+          // ★追加: 担当医師「おまかせ」指定時の注記
+          const doctorOmakaseNote = document.createElement('div');
+          doctorOmakaseNote.className = 'doctor-omakase-note';
+          doctorOmakaseNote.style.cssText = 'font-size: 11px; color: #555; margin-top: 6px; line-height: 1.6; padding-left: 5px;';
+          doctorOmakaseNote.innerHTML = `
+              <p style="margin: 0;">
+                  ※「おまかせ」を指定した場合<br>
+                  &emsp;選択肢にない医師にも広げて当院で調整し、ご連絡します。
+              </p>
+          `;
+          selectWrapper.appendChild(doctorOmakaseNote);
           
           select.addEventListener('change', (e) => {
               const selectedValue = e.target.value;

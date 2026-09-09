@@ -3294,6 +3294,34 @@
         setupInfobarNavButtons();
         setTimeout(setupInfobarNavButtons, 200);
         setTimeout(setupInfobarNavButtons, 600);
+
+        // ★追加: 「掲載」フィールドの直接編集禁止・案内メッセージ追加
+        if (event.record && event.record['掲載']) {
+            event.record['掲載'].disabled = true;
+            if (!event.record['掲載'].value) {
+                event.record['掲載'].value = '通常表示';
+            }
+        }
+
+        setTimeout(() => {
+            const fieldEl = kintone.app.record.getFieldElement('掲載');
+            if (fieldEl && !fieldEl.querySelector('.publish-notice-msg')) {
+                const notice = document.createElement('div');
+                notice.className = 'publish-notice-msg';
+                notice.style.cssText = 'margin-top: 6px; font-size: 12px; color: #0284c7; background: #f0f9ff; padding: 6px 10px; border-radius: 4px; border-left: 3px solid #0284c7; line-height: 1.4;';
+                notice.innerHTML = '<i class="fa-solid fa-circle-info" style="margin-right: 4px;"></i><strong>Web予約対象の設定について:</strong><br>同一医師の全レコード間で設定の食い違いを防ぐため、Web予約対象（対象にする／対象にしない）の変更は「予約待ち受け制御」画面から行ってください。';
+                fieldEl.appendChild(notice);
+            }
+        }, 100);
+
+        return event;
+    });
+
+    // ★追加: 一覧画面インライン編集時も「掲載」フィールドを編集不可に
+    kintone.events.on('app.record.index.edit.show', function (event) {
+        if (event.record && event.record['掲載']) {
+            event.record['掲載'].disabled = true;
+        }
         return event;
     });
 

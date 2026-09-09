@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 520" width="1020" height="520" style="background:#ffffff; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;">
+  <defs>
+    <!-- ドロップシャドウ -->
+    <filter id="card-shadow" x="-6%" y="-10%" width="112%" height="125%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08" />
+    </filter>
+    <filter id="badge-shadow" x="-10%" y="-15%" width="120%" height="135%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.06" />
+    </filter>
+
+    <!-- 矢印マーカー -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#64748b" />
+    </marker>
+    <marker id="arrow-phone" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#e11d48" />
+    </marker>
+    <marker id="arrow-mail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#9333ea" />
+    </marker>
+
+    <!-- アイコングラデーション -->
+    <linearGradient id="phone-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb7185" />
+      <stop offset="100%" stop-color="#e11d48" />
+    </linearGradient>
+    <linearGradient id="mail-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="100%" stop-color="#9333ea" />
+    </linearGradient>
+  </defs>
+
+  <!-- タイトル -->
+  <text x="40" y="44" font-size="22" font-weight="bold" fill="#0f172a" letter-spacing="0.5">電話対応かメール対応かの判断</text>
+  <text x="40" y="68" font-size="12" fill="#64748b">受付・初期設定における患者対応チャネル（架電 / メール連絡）の選定フロー</text>
+
+  <!-- ==================== コネクタ（接続線） ==================== -->
+  <g fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 用件は？ -> 取消ルート -->
+    <path d="M 150 255 C 190 255, 190 145, 250 145" marker-end="url(#arrow)" />
+
+    <!-- 用件は？ -> 変更ルート -->
+    <path d="M 150 270 C 190 270, 200 270, 250 270" marker-end="url(#arrow)" />
+
+    <!-- 用件は？ -> 初診/再診ルート -->
+    <path d="M 150 285 C 190 285, 200 295, 250 295" marker-end="url(#arrow)" />
+
+    <!-- 取消 -> 電話対応（上） -->
+    <path d="M 355 115 L 355 70" stroke="#e11d48" marker-end="url(#arrow-phone)" />
+
+    <!-- 取消 -> メール対応（右） -->
+    <path d="M 460 145 L 530 145" stroke="#9333ea" marker-end="url(#arrow-mail)" />
+
+    <!-- 枠がある？ -> 電話対応（下） -->
+    <path d="M 355 315 L 355 375" stroke="#e11d48" marker-end="url(#arrow-phone)" />
+
+    <!-- 枠がある？ -> 初めての依頼である？（右） -->
+    <path d="M 460 285 L 520 285" marker-end="url(#arrow)" />
+
+    <!-- 初めての依頼 -> メール対応（右上） -->
+    <path d="M 690 270 C 725 270, 725 200, 765 200" stroke="#9333ea" marker-end="url(#arrow-mail)" />
+
+    <!-- 初めての依頼 -> 過去依頼歴（右下） -->
+    <path d="M 690 295 C 715 295, 715 325, 735 325" marker-end="url(#arrow)" />
+
+    <!-- 過去依頼歴 -> メール対応（右上） -->
+    <path d="M 945 310 C 970 310, 970 235, 955 205 C 945 190, 915 185, 895 185" stroke="#9333ea" marker-end="url(#arrow-mail)" />
+
+    <!-- 過去依頼歴 -> 電話対応（下） -->
+    <path d="M 840 365 L 840 415" stroke="#e11d48" marker-end="url(#arrow-phone)" />
+  </g>
+
+  <!-- ==================== 分岐ラベル（テキストバッジ） ==================== -->
+  <!-- 用件分岐ラベル -->
+  <g font-size="11" font-weight="bold">
+    <!-- 取消 -->
+    <rect x="180" y="170" width="38" height="22" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" filter="url(#badge-shadow)"/>
+    <text x="199" y="185" fill="#334155" text-anchor="middle">取消</text>
+
+    <!-- 変更 -->
+    <rect x="180" y="244" width="38" height="22" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" filter="url(#badge-shadow)"/>
+    <text x="199" y="259" fill="#334155" text-anchor="middle">変更</text>
+
+    <!-- 初診/再診 -->
+    <rect x="168" y="302" width="62" height="22" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" filter="url(#badge-shadow)"/>
+    <text x="199" y="317" fill="#334155" text-anchor="middle">初診/再診</text>
+
+    <!-- 取消後の分岐ラベル -->
+    <rect x="365" y="80" width="48" height="20" rx="4" fill="#fff1f2" stroke="#fecdd3" stroke-width="1" />
+    <text x="389" y="94" fill="#be123c" text-anchor="middle">Y (矛盾)</text>
+
+    <rect x="475" y="135" width="40" height="20" rx="4" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1" />
+    <text x="495" y="149" fill="#7e22ce" text-anchor="middle">N (正常)</text>
+
+    <!-- 枠がある？の分岐ラベル -->
+    <rect x="365" y="333" width="44" height="20" rx="4" fill="#fff1f2" stroke="#fecdd3" stroke-width="1" />
+    <text x="387" y="347" fill="#be123c" text-anchor="middle">N (枠無)</text>
+
+    <rect x="475" y="275" width="32" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+    <text x="491" y="289" fill="#475569" text-anchor="middle">Y</text>
+
+    <!-- 初めての依頼？の分岐ラベル -->
+    <rect x="702" y="218" width="46" height="20" rx="4" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1" />
+    <text x="725" y="232" fill="#7e22ce" text-anchor="middle">Y (初回)</text>
+
+    <rect x="696" y="315" width="28" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+    <text x="710" y="329" fill="#475569" text-anchor="middle">N</text>
+
+    <!-- 過去依頼歴？の分岐ラベル -->
+    <rect x="915" y="250" width="54" height="20" rx="4" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1" />
+    <text x="942" y="264" fill="#7e22ce" text-anchor="middle">Y (低リスク)</text>
+
+    <rect x="850" y="380" width="44" height="20" rx="4" fill="#fff1f2" stroke="#fecdd3" stroke-width="1" />
+    <text x="872" y="394" fill="#be123c" text-anchor="middle">N (懸念)</text>
+  </g>
+
+  <!-- ==================== 質問ノード（水色カード） ==================== -->
+  <!-- 1. 用件は？ -->
+  <g filter="url(#card-shadow)">
+    <rect x="40" y="240" width="110" height="60" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="2" />
+    <text x="95" y="276" font-size="15" font-weight="bold" fill="#0369a1" text-anchor="middle">用件は？</text>
+  </g>
+
+  <!-- 2. 取消情報に矛盾がある？ -->
+  <g filter="url(#card-shadow)">
+    <rect x="250" y="115" width="210" height="60" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.8" />
+    <text x="355" y="142" font-size="13" font-weight="bold" fill="#0369a1" text-anchor="middle">入力された取消情報に</text>
+    <text x="355" y="161" font-size="13" font-weight="bold" fill="#0369a1" text-anchor="middle">矛盾がある？</text>
+  </g>
+
+  <!-- 3. 患者の希望の枠がある？ -->
+  <g filter="url(#card-shadow)">
+    <rect x="250" y="255" width="210" height="60" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.8" />
+    <text x="355" y="282" font-size="13" font-weight="bold" fill="#0369a1" text-anchor="middle">患者の希望の</text>
+    <text x="355" y="301" font-size="13" font-weight="bold" fill="#0369a1" text-anchor="middle">枠がある？</text>
+  </g>
+
+  <!-- 4. 初めての依頼である？ -->
+  <g filter="url(#card-shadow)">
+    <rect x="520" y="255" width="170" height="60" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.8" />
+    <text x="605" y="282" font-size="13" font-weight="bold" fill="#0369a1" text-anchor="middle">初めての依頼</text>
+    <text x="605" y="301" font-size="13" font-weight="bold" fill="#0369a1" text-anchor="middle">である？</text>
+  </g>
+
+  <!-- 5. 過去依頼歴からメールで混乱する可能性が低い？ -->
+  <g filter="url(#card-shadow)">
+    <rect x="735" y="295" width="210" height="70" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.8" />
+    <text x="840" y="322" font-size="12.5" font-weight="bold" fill="#0369a1" text-anchor="middle">過去依頼歴からメールで</text>
+    <text x="840" y="342" font-size="12.5" font-weight="bold" fill="#0369a1" text-anchor="middle">混乱する可能性が低い？</text>
+  </g>
+
+  <!-- ==================== 終端ノード（電話対応：赤系） ==================== -->
+  <!-- 電話①（取消矛盾） -->
+  <g filter="url(#card-shadow)">
+    <rect x="295" y="16" width="120" height="48" rx="24" fill="#fff1f2" stroke="#f43f5e" stroke-width="2" />
+    <!-- 受話器アイコン -->
+    <path d="M 318 34 C 316 31 316 27 320 24 C 322 23 324 24 326 26 L 328 29 C 329 30 329 32 328 33 L 326 35 C 328 38 330 40 333 42 L 335 40 C 336 39 338 39 339 40 L 342 42 C 344 44 345 46 344 48 C 341 52 337 52 334 50 C 327 46 322 41 318 34 Z" fill="url(#phone-grad)" transform="translate(-5, -6) scale(0.9)"/>
+    <text x="368" y="46" font-size="14" font-weight="bold" fill="#be123c" text-anchor="middle">電話対応</text>
+  </g>
+
+  <!-- 電話②（空枠なし） -->
+  <g filter="url(#card-shadow)">
+    <rect x="295" y="380" width="120" height="48" rx="24" fill="#fff1f2" stroke="#f43f5e" stroke-width="2" />
+    <path d="M 318 34 C 316 31 316 27 320 24 C 322 23 324 24 326 26 L 328 29 C 329 30 329 32 328 33 L 326 35 C 328 38 330 40 333 42 L 335 40 C 336 39 338 39 339 40 L 342 42 C 344 44 345 46 344 48 C 341 52 337 52 334 50 C 327 46 322 41 318 34 Z" fill="url(#phone-grad)" transform="translate(-5, 358) scale(0.9)"/>
+    <text x="368" y="410" font-size="14" font-weight="bold" fill="#be123c" text-anchor="middle">電話対応</text>
+  </g>
+
+  <!-- 電話③（混乱懸念） -->
+  <g filter="url(#card-shadow)">
+    <rect x="780" y="420" width="120" height="48" rx="24" fill="#fff1f2" stroke="#f43f5e" stroke-width="2" />
+    <path d="M 318 34 C 316 31 316 27 320 24 C 322 23 324 24 326 26 L 328 29 C 329 30 329 32 328 33 L 326 35 C 328 38 330 40 333 42 L 335 40 C 336 39 338 39 339 40 L 342 42 C 344 44 345 46 344 48 C 341 52 337 52 334 50 C 327 46 322 41 318 34 Z" fill="url(#phone-grad)" transform="translate(480, 398) scale(0.9)"/>
+    <text x="853" y="450" font-size="14" font-weight="bold" fill="#be123c" text-anchor="middle">電話対応</text>
+  </g>
+
+  <!-- ==================== 終端ノード（メール対応：紫系） ==================== -->
+  <!-- メール①（取消正常） -->
+  <g filter="url(#card-shadow)">
+    <rect x="535" y="121" width="125" height="48" rx="24" fill="#faf5ff" stroke="#a855f7" stroke-width="2" />
+    <!-- メールアイコン -->
+    <g transform="translate(547, 134) scale(0.85)">
+      <rect x="2" y="4" width="22" height="15" rx="3" fill="none" stroke="url(#mail-grad)" stroke-width="2.2"/>
+      <path d="M 3 6 L 13 13 L 23 6" fill="none" stroke="url(#mail-grad)" stroke-width="2.2" stroke-linejoin="round"/>
+    </g>
+    <text x="612" y="151" font-size="14" font-weight="bold" fill="#6b21a8" text-anchor="middle">メール対応</text>
+  </g>
+
+  <!-- メール②（初回・低リスク集約） -->
+  <g filter="url(#card-shadow)">
+    <rect x="770" y="161" width="125" height="48" rx="24" fill="#faf5ff" stroke="#a855f7" stroke-width="2" />
+    <g transform="translate(782, 174) scale(0.85)">
+      <rect x="2" y="4" width="22" height="15" rx="3" fill="none" stroke="url(#mail-grad)" stroke-width="2.2"/>
+      <path d="M 3 6 L 13 13 L 23 6" fill="none" stroke="url(#mail-grad)" stroke-width="2.2" stroke-linejoin="round"/>
+    </g>
+    <text x="847" y="191" font-size="14" font-weight="bold" fill="#6b21a8" text-anchor="middle">メール対応</text>
+  </g>
+
+</svg>

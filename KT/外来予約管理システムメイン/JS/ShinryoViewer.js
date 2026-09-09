@@ -16,6 +16,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   window.ShinryoApp.Viewer.showTooltip = showTooltip;
   window.ShinryoApp.Viewer.hideTooltip = hideTooltip;
   window.ShinryoApp.Viewer.showLabelEditor = showLabelEditor;
+  window.ShinryoApp.Viewer.showPublishStatusDialog = showPublishStatusDialog;
 
   // --- CSS適用 ---
   function applyStyles() {
@@ -272,6 +273,69 @@ window.ShinryoApp = window.ShinryoApp || {};
         border-color: #dadce0;
         cursor: not-allowed;
         opacity: 0.7;
+      }
+
+      /* --- 掲載状況バッジ・UIスタイル --- */
+      .publish-status-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px;
+        box-sizing: border-box;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+      }
+      .publish-status-wrapper:hover {
+        background-color: rgba(0, 0, 0, 0.04);
+      }
+      .publish-status-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        border: 1px solid transparent;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.15s ease-in-out;
+        white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+        line-height: 1.2;
+      }
+      .publish-status-badge:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.12);
+      }
+      .publish-status-badge:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+      }
+      .publish-status-badge.badge-normal {
+        background-color: #e0f2fe;
+        color: #0369a1;
+        border-color: #bae6fd;
+      }
+      .publish-status-badge.badge-hidden {
+        background-color: #f1f5f9;
+        color: #475569;
+        border-color: #cbd5e1;
+      }
+      .publish-status-badge.badge-no-slot {
+        background-color: #ffedd5;
+        color: #c2410c;
+        border-color: #fed7aa;
+      }
+      .publish-status-badge.badge-phone {
+        background-color: #faf5ff;
+        color: #7e22ce;
+        border-color: #e9d5ff;
+      }
+      .publish-status-badge.badge-mixed {
+        background-color: #fef3c7;
+        color: #b45309;
+        border-color: #fde68a;
       }
       
       /* 診療科ヘッダーコンテナ */
@@ -550,7 +614,7 @@ window.ShinryoApp = window.ShinryoApp || {};
     return { isClosed: false, name: '' };
   }
 
-  function createCalendarHtml(targetDate, scheduleRecords, commonSettings) {
+  function createCalendarHtml(targetDate, scheduleRecords, commonSettings, filterOptions = { webEnabled: true, webDisabled: true }) {
     const year = targetDate.getFullYear();
     const month = targetDate.getMonth();
     const departmentName = scheduleRecords.length > 0 ? scheduleRecords[0]['診療科']?.value : '';
@@ -559,6 +623,9 @@ window.ShinryoApp = window.ShinryoApp || {};
     const startOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - startOffset);
+
+    const isWebEnabled = filterOptions.webEnabled !== false;
+    const isWebDisabled = filterOptions.webDisabled !== false;
 
     const specMap = new Map();
     let specCounter = 1;
@@ -585,6 +652,14 @@ window.ShinryoApp = window.ShinryoApp || {};
 
         if (d.getMonth() === month) {
             scheduleRecords.forEach(rec => {
+                // Web予約対象かどうかの判定（「通常表示」以外はすべて対象外）
+                const pubVal = rec['掲載']?.value || '通常表示';
+                const isRecDisabled = pubVal !== '通常表示';
+
+                // チェックボックスのフィルタ適用
+                if (isRecDisabled && !isWebDisabled) return; // 「Web予約できない医師」OFFなら除外
+                if (!isRecDisabled && !isWebEnabled) return;  // 「Web予約できる医師」OFFなら除外
+
                 // 着任日・離任日のチェック
                 const startStr = rec['着任日']?.value;
                 const endStr = rec['離任日']?.value;
@@ -604,6 +679,11 @@ window.ShinryoApp = window.ShinryoApp || {};
                     let name = (rec['医師名']?.value || '〇') + getFacilityChar(rec['施設名']?.value, facilities);
                     const sel = rec['診療選択']?.value;
                     if (specMap.has(sel)) name += ` #${specMap.get(sel)}`;
+
+                    // Web予約できない医師の場合は識別表示を付加
+                    if (isRecDisabled) {
+                        name = `<span style="color: #64748b; font-weight: normal;">${name} <span style="font-size: 0.8em; opacity: 0.85;">(対象外)</span></span>`;
+                    }
 
                     let isAmNg = false;
                     let isPmNg = false;
@@ -628,7 +708,20 @@ window.ShinryoApp = window.ShinryoApp || {};
         }
     }
 
-    let html = `<div class="calendar-container" data-y="${year}" data-m="${month}"><div class="calendar-header"><div class="calendar-nav prev-month">◀</div><h3>${year}年 ${month + 1}月 ${departmentName ? '('+departmentName+')' : ''}</h3><div class="calendar-nav next-month">▶</div></div><table class="calendar-table"><thead><tr><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat-col">土</th></tr></thead><tbody>`;
+    const filterControlsHtml = `
+      <div class="calendar-filter-controls" onclick="event.stopPropagation();" style="display: flex; align-items: center; justify-content: center; gap: 20px; margin: 8px 0 12px; font-size: 13px; font-weight: 600; background: #f8fafc; padding: 6px 16px; border-radius: 6px; border: 1px solid #e2e8f0; user-select: none;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #0369a1;" onclick="event.stopPropagation();">
+              <input type="checkbox" class="cal-filter-web-enabled" ${isWebEnabled ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
+              <span>Web予約できる医師</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #475569;" onclick="event.stopPropagation();">
+              <input type="checkbox" class="cal-filter-web-disabled" ${isWebDisabled ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
+              <span>Web予約できない医師</span>
+          </label>
+      </div>
+    `;
+
+    let html = `<div class="calendar-container" data-y="${year}" data-m="${month}"><div class="calendar-header"><div class="calendar-nav prev-month">◀</div><h3>${year}年 ${month + 1}月 ${departmentName ? '('+departmentName+')' : ''}</h3><div class="calendar-nav next-month">▶</div></div>${filterControlsHtml}<table class="calendar-table"><thead><tr><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat-col">土</th></tr></thead><tbody>`;
     let current = new Date(startDate);
     
     // 祝日データ（キャッシュ済みと仮定、なければ空）
@@ -1117,7 +1210,7 @@ window.ShinryoApp = window.ShinryoApp || {};
       { header: '医師指名', field: '診療科', type: 'doctor_select_toggle', width: '6%', merge: true, cls: 'large-font-cell', tooltip: 'Webフォーム上で患者に医師を選択させるかを設定します。\n【青（左）】指名可：各医師を選択可能。\n【グレー（右）】指名不可：医師名は非表示となり、診療科おまかせとして受け付けます（診療予定連動がOnの時のみ有効）。' },
       { header: '診療予定表', type: 'calendar_icon', width: '6%', merge: true, mergeKey: '診療科', cls: 'large-font-cell', tooltip: '対象の診療科の診療予定表です。対象診療科に属する全医師を統合した予定表になります。' },
       { header: '医師', field: '医師名', width: '22%', merge: true, mergeKey: '診療科', cls: 'doctor-name-cell align-top', tooltip: '個別の医師毎の予定を編集します。全医師を俯瞰してみる場合は表の上部にある「全編集」のボタンから入ります' },
-      { header: '掲載状況', type: 'publish_status', width: '12%', merge: true, mergeKey: '診療科', cls: 'publish-status-cell align-top', tooltip: '各医師のWeb予約フォームへの掲載状況（通常表示／非表示／空枠無し／電話誘導）です。同一医師で複数レコードがある場合はそれぞれの状況を表示します。' },
+      { header: 'Web予約対象', type: 'publish_status', width: '12%', merge: true, mergeKey: '診療科', cls: 'publish-status-cell align-top', tooltip: '各医師をWeb予約の対象にするか（対象にする／対象にしない）を設定します。' },
       { header: '更新日', type: 'updated_date', width: '12%', merge: true, mergeKey: '診療科', cls: 'updated-date-cell align-top', tooltip: '医師の診療予定レコードの最終更新日です（同一医師の複数レコードがある場合は最新の更新日を表示します）' }
     ];
 
@@ -1601,7 +1694,7 @@ window.ShinryoApp = window.ShinryoApp || {};
                     const containerDiv = document.createElement('div');
                     containerDiv.className = 'publish-status-wrapper';
                     
-                    const isDoctorSuspended = targetRec['掲載']?.value === '非表示' || targetRec['掲載']?.value === '停止';
+                    const isDoctorSuspended = targetRec['掲載']?.value !== '通常表示';
                     const isChanged = hasRecordChange(targetRec, targetPubRec);
 
                     // ★追加: 診療科停止、予定連動Off、または個別医師停止/非表示時はラッパーもグレーアウト
@@ -1622,22 +1715,28 @@ window.ShinryoApp = window.ShinryoApp || {};
                         containerDiv.style.height = `calc(100% / ${rowSpan})`;
                     }
 
-                    // 掲載状況のテキスト抽出 (複数レコードで異なる場合は列挙、同じなら1つ)
-                    let statusText = '';
-                    if (targetRec._publishStatuses && targetRec._publishStatuses.size > 0) {
-                        const statuses = Array.from(targetRec._publishStatuses).filter(Boolean);
-                        statusText = statuses.join('、');
-                    } else {
-                        statusText = targetRec['掲載']?.value || '通常表示';
-                    }
+                    // Web予約対象の判定（対象にする／対象にしない の2択）
+                    const rawVal = targetRec['掲載']?.value || '通常表示';
+                    const isTargetDisabled = rawVal !== '通常表示';
+                    const statusText = isTargetDisabled ? '対象にしない' : '対象にする';
+                    const statusClass = isTargetDisabled ? 'hidden' : 'normal';
 
-                    const statusSpan = document.createElement('span');
-                    statusSpan.textContent = statusText;
-                    statusSpan.style.flex = '1';
-                    statusSpan.style.textAlign = 'center';
-                    statusSpan.style.fontSize = '14px';
-                    containerDiv.appendChild(statusSpan);
+                    const badge = document.createElement('button');
+                    badge.type = 'button';
+                    badge.className = `publish-status-badge badge-${statusClass}`;
+                    badge.innerHTML = `<span>${statusText}</span><i class="fa-solid fa-pen-to-square" style="font-size: 10px; margin-left: 5px; opacity: 0.7;"></i>`;
+                    badge.title = 'クリックしてWeb予約対象の設定を変更';
 
+                    const openPublishDialog = (e) => {
+                        e.stopPropagation();
+                        showPublishStatusDialog(targetRec, currentDept);
+                    };
+
+                    badge.onclick = openPublishDialog;
+                    containerDiv.onclick = openPublishDialog;
+                    containerDiv.title = 'クリックしてWeb予約対象の設定を変更';
+
+                    containerDiv.appendChild(badge);
                     cell.appendChild(containerDiv);
                 }
             } else if (col.field === '医師名') {
@@ -2263,6 +2362,235 @@ window.ShinryoApp = window.ShinryoApp || {};
       return { overlay, box, content };
   }
 
+  // ★追加: 医師のWeb予約対象設定ダイアログ (対象にする / 対象にしない の2択・同一医師全レコード自動同期)
+  async function showPublishStatusDialog(targetRec, currentDept) {
+      if (!targetRec) return;
+
+      const doctorName = targetRec['医師名']?.value || '（医師名未設定）';
+      const deptName = currentDept || targetRec['診療科']?.value || '';
+      const mergedIds = targetRec._mergedIds && targetRec._mergedIds.length > 0 
+          ? targetRec._mergedIds 
+          : [targetRec.$id?.value].filter(Boolean);
+
+      // 初期ステータスの取得
+      const rawStatus = targetRec['掲載']?.value || '通常表示';
+      const isCurrentlyDisabled = rawStatus !== '通常表示';
+      let selectedStatus = isCurrentlyDisabled ? '非表示' : '通常表示';
+      const initialStatus = selectedStatus; // 初期値を記録（変更がある時のみ更新ボタンを有効化）
+
+      let saveBtn = null;
+      const updateSaveButtonState = () => {
+          if (!saveBtn) return;
+          const isChanged = (selectedStatus !== initialStatus);
+          saveBtn.disabled = !isChanged;
+          if (isChanged) {
+              saveBtn.style.background = '#2563eb';
+              saveBtn.style.color = '#fff';
+              saveBtn.style.cursor = 'pointer';
+              saveBtn.style.opacity = '1';
+              saveBtn.style.boxShadow = '0 2px 4px rgba(37, 99, 235, 0.2)';
+          } else {
+              saveBtn.style.background = '#94a3b8';
+              saveBtn.style.color = '#ffffff';
+              saveBtn.style.cursor = 'not-allowed';
+              saveBtn.style.opacity = '0.6';
+              saveBtn.style.boxShadow = 'none';
+          }
+      };
+
+      const { overlay, box, content } = createModalBase({ closeOnOverlayClick: true });
+      box.style.position = 'relative';
+      box.style.maxWidth = '500px';
+      box.style.padding = '24px 28px';
+      box.style.borderRadius = '12px';
+      box.style.textAlign = 'left';
+      box.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.18)';
+
+      // ヘッダー部
+      const headerDiv = document.createElement('div');
+      headerDiv.style.cssText = 'border-bottom: 2px solid #e2e8f0; padding-bottom: 14px; margin-bottom: 18px;';
+      headerDiv.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <span style="font-size: 20px; color: #2563eb;"><i class="fa-solid fa-user-doctor"></i></span>
+              <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #1e293b;">Web予約対象の設定</h3>
+          </div>
+          <div style="font-size: 13px; color: #64748b; line-height: 1.5;">
+              対象医師: <strong style="color: #0f172a; font-size: 14px;">${doctorName}</strong>
+              ${deptName ? `<span style="margin: 0 6px; color: #cbd5e1;">|</span>所属科: <strong style="color: #0f172a;">${deptName}</strong>` : ''}
+          </div>
+      `;
+      content.appendChild(headerDiv);
+
+      // 2つの選択肢定義
+      const statusOptions = [
+          {
+              value: '通常表示',
+              title: '対象にする',
+              desc: 'Web予約の対象とし、この医師の診療シフトをWeb予約枠として組み立てます。',
+              badgeColor: '#e0f2fe',
+              textColor: '#0369a1',
+              borderColor: '#bae6fd',
+              icon: 'fa-circle-check'
+          },
+          {
+              value: '非表示',
+              title: '対象にしない',
+              desc: 'Web予約の対象外とします。',
+              badgeColor: '#f1f5f9',
+              textColor: '#475569',
+              borderColor: '#cbd5e1',
+              icon: 'fa-ban'
+          }
+      ];
+
+      const optionsContainer = document.createElement('div');
+      optionsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;';
+
+      const optionCardMap = new Map();
+
+      statusOptions.forEach(opt => {
+          const card = document.createElement('div');
+          card.className = 'publish-option-card';
+          card.style.cssText = `
+              display: flex;
+              align-items: flex-start;
+              gap: 12px;
+              padding: 12px 16px;
+              border: 2px solid ${opt.value === selectedStatus ? '#3b82f6' : '#e2e8f0'};
+              background: ${opt.value === selectedStatus ? '#eff6ff' : '#ffffff'};
+              border-radius: 8px;
+              cursor: pointer;
+              transition: all 0.15s ease-in-out;
+          `;
+
+          const radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'publish_status_select';
+          radio.value = opt.value;
+          radio.checked = (opt.value === selectedStatus);
+          radio.style.marginTop = '3px';
+          radio.style.cursor = 'pointer';
+
+          const textWrapper = document.createElement('div');
+          textWrapper.style.flex = '1';
+
+          const titleRow = document.createElement('div');
+          titleRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 4px;';
+          titleRow.innerHTML = `
+              <span style="font-size: 15px; font-weight: 700; color: #1e293b;">${opt.title}</span>
+              <span style="padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: ${opt.badgeColor}; color: ${opt.textColor}; border: 1px solid ${opt.borderColor};">
+                  <i class="fa-solid ${opt.icon}" style="font-size: 10px; margin-right: 3px;"></i>${opt.title}
+              </span>
+          `;
+
+          const desc = document.createElement('div');
+          desc.style.cssText = 'font-size: 12px; color: #64748b; line-height: 1.4;';
+          desc.textContent = opt.desc;
+
+          textWrapper.appendChild(titleRow);
+          textWrapper.appendChild(desc);
+
+          card.appendChild(radio);
+          card.appendChild(textWrapper);
+
+          const selectCard = () => {
+              selectedStatus = opt.value;
+              radio.checked = true;
+              statusOptions.forEach(o => {
+                  const c = optionCardMap.get(o.value);
+                  if (c) {
+                      const isSelected = (o.value === selectedStatus);
+                      c.style.borderColor = isSelected ? '#3b82f6' : '#e2e8f0';
+                      c.style.background = isSelected ? '#eff6ff' : '#ffffff';
+                  }
+              });
+              updateSaveButtonState();
+          };
+
+          card.onclick = selectCard;
+          radio.onchange = selectCard;
+
+          optionsContainer.appendChild(card);
+          optionCardMap.set(opt.value, card);
+      });
+
+      content.appendChild(optionsContainer);
+
+      // エラーメッセージ用エリア
+      const errorMsgArea = document.createElement('div');
+      errorMsgArea.style.cssText = 'display: none; padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #b91c1c; font-size: 12px; margin-bottom: 12px;';
+      content.appendChild(errorMsgArea);
+
+      // ボタンエリア
+      const btnGroup = document.createElement('div');
+      btnGroup.className = 'custom-modal-btn-group';
+      btnGroup.style.cssText = 'display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'custom-modal-btn custom-modal-btn-cancel';
+      cancelBtn.textContent = 'キャンセル';
+      cancelBtn.onclick = () => {
+          if (document.body.contains(overlay)) document.body.removeChild(overlay);
+      };
+
+      saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'custom-modal-btn custom-modal-btn-ok';
+      saveBtn.style.cssText = 'padding: 10px 22px; border-radius: 6px; border: none; font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease;';
+      saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 更新する';
+      updateSaveButtonState(); // 初期状態を設定（未変更なら無効化）
+
+      saveBtn.onclick = async () => {
+          if (selectedStatus === initialStatus) return; // 変更がなければ何もしない
+          saveBtn.disabled = true;
+          cancelBtn.disabled = true;
+          saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 更新中...';
+          errorMsgArea.style.display = 'none';
+
+          try {
+              if (mergedIds.length === 0) {
+                  throw new Error('更新対象のレコードIDが見つかりません。');
+              }
+
+              // Kintone REST API 一括更新ペイロード構築（通常表示 / 非表示）
+              const recordsPayload = mergedIds.map(id => {
+                  return {
+                      id: id,
+                      record: {
+                          '掲載': { value: selectedStatus }
+                      }
+                  };
+              });
+
+              // PUT /k/v1/records.json で一括更新
+              await kintone.api(kintone.api.url('/k/v1/records.json', true), 'PUT', {
+                  app: kintone.app.getId(),
+                  records: recordsPayload
+              });
+
+              // モーダルを閉じる
+              if (document.body.contains(overlay)) document.body.removeChild(overlay);
+
+              // 画面再描画
+              window.ShinryoApp.Viewer.renderOverview();
+
+          } catch (err) {
+              console.error('Failed to batch update Web reservation target:', err);
+              cancelBtn.disabled = false;
+              saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 更新する';
+              updateSaveButtonState();
+              errorMsgArea.style.display = 'block';
+              errorMsgArea.textContent = '更新に失敗しました: ' + (err.message || '通信エラーが発生しました');
+          }
+      };
+
+      btnGroup.appendChild(cancelBtn);
+      btnGroup.appendChild(saveBtn);
+      content.appendChild(btnGroup);
+      document.body.appendChild(overlay);
+  }
+
   let tooltipEl = document.getElementById('customHtmlTooltip');
   if (!tooltipEl) {
       tooltipEl = document.createElement('div');
@@ -2299,6 +2627,8 @@ window.ShinryoApp = window.ShinryoApp || {};
       adjustTooltipPosition(e);
   }
 
+  let currentCalendarFilter = { webEnabled: true, webDisabled: true };
+
   function showCalendarTooltip(e, records, isPersistent = false, commonSettings = null) {
       clearTimeout(hideTimer);
       
@@ -2306,6 +2636,9 @@ window.ShinryoApp = window.ShinryoApp || {};
           document.removeEventListener('click', currentCloseHandler);
           currentCloseHandler = null;
       }
+
+      // ポップアップを開くたびに初期状態（両方チェック）にリセット
+      currentCalendarFilter = { webEnabled: true, webDisabled: true };
 
       const today = new Date();
       updateCalendarTooltip(today.getFullYear(), today.getMonth(), records, commonSettings);
@@ -2315,6 +2648,11 @@ window.ShinryoApp = window.ShinryoApp || {};
       tooltipEl.style.pointerEvents = 'auto';
       adjustTooltipPosition(e);
       
+      // ポップアップ内部のクリックイベントがdocumentへ伝播して誤って閉じるのを防ぐ
+      tooltipEl.onclick = (ev) => {
+          ev.stopPropagation();
+      };
+
       if (isPersistent) {
           tooltipEl.onmouseenter = null;
           tooltipEl.onmouseleave = null;
@@ -2333,7 +2671,7 @@ window.ShinryoApp = window.ShinryoApp || {};
   }
   
   function updateCalendarTooltip(year, month, records, commonSettings) {
-      tooltipEl.innerHTML = createCalendarHtml(new Date(year, month, 1), records, commonSettings);
+      tooltipEl.innerHTML = createCalendarHtml(new Date(year, month, 1), records, commonSettings, currentCalendarFilter);
       const prev = tooltipEl.querySelector('.prev-month');
       const next = tooltipEl.querySelector('.next-month');
       if(prev) prev.onclick = (e) => {
@@ -2344,6 +2682,26 @@ window.ShinryoApp = window.ShinryoApp || {};
           e.stopPropagation();
           updateCalendarTooltip(month===11?year+1:year, month===11?0:month+1, records, commonSettings);
       };
+
+      // ★追加: フィルタチェックボックスのイベントリスナー
+      const chkEnabled = tooltipEl.querySelector('.cal-filter-web-enabled');
+      const chkDisabled = tooltipEl.querySelector('.cal-filter-web-disabled');
+      if (chkEnabled) {
+          chkEnabled.onclick = (e) => e.stopPropagation();
+          chkEnabled.onchange = (e) => {
+              e.stopPropagation();
+              currentCalendarFilter.webEnabled = chkEnabled.checked;
+              updateCalendarTooltip(year, month, records, commonSettings);
+          };
+      }
+      if (chkDisabled) {
+          chkDisabled.onclick = (e) => e.stopPropagation();
+          chkDisabled.onchange = (e) => {
+              e.stopPropagation();
+              currentCalendarFilter.webDisabled = chkDisabled.checked;
+              updateCalendarTooltip(year, month, records, commonSettings);
+          };
+      }
   }
 
   function hideTooltip() {
